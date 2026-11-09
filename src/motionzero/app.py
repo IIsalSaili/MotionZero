@@ -24,7 +24,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, PreviewWindow, QApplication
+from .ui import Bridge, GlassOverlay, PreviewWindow, QApplication
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
@@ -74,6 +74,8 @@ def main(argv=None):
     view_win.closed.connect(stop.set)          # fenêtre fermée = STOP
     bridge = Bridge()
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
+    glass = GlassOverlay()                     # verre plein écran : curseur et anneau, clics traversants
+    bridge.state.connect(glass.set_state)
     bridge.done.connect(qt.quit)
 
     def show(img):
@@ -149,6 +151,13 @@ def main(argv=None):
                     shown = render(view, core, tracker.tracks if pts is not None else [], fps, args.simulation,
                                    status, tracker.active_id, voice_on=listener is not None)
                     show(shown)
+                    prog = core.progress()
+                    bridge.state.emit({
+                        "show_cursor": core.mode == Mode.MOUSE,
+                        "cursor": core.cursor,
+                        "progress": prog[1] if prog else 0.0,
+                        "lost": pts is None,
+                    })
                 else:
                     time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
                 if args.duration and t - t0 >= args.duration:
@@ -166,6 +175,7 @@ def main(argv=None):
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
     view_win.show()
+    glass.show()
     qt.exec()
     stop.set()
     worker.join(timeout=3)
