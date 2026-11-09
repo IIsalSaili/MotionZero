@@ -1,0 +1,148 @@
+"""Commandes vocales, sans micro : filtrage des résultats Vosk et logique mot + geste."""
+from synth import Clock
+
+from motionzero.config import Config
+from motionzero.core import Core, Mode
+from motionzero.output import Controller, FakeBackend
+from motionzero.voice import accepted_words
+
+
+def res(*words):
+    return {"result": [{"word": w, "conf": c, "start": 0.0, "end": 0.3} for w, c in words]}
+
+
+# --- filtrage -----------------------------------------------------------------
+def test_mot_dit_seul_accepte():
+    assert [w["word"] for w in accepted_words(res(("clic", 1.0)))] == ["clic"]
+
+
+def test_phrase_avec_mots_inconnus_ignoree():
+    assert accepted_words(res(("[unk]", 0.5), ("iris", 0.87), ("[unk]", 0.6))) == []
+
+
+def test_plusieurs_commandes_d_affilee_ignorees():
+    """« arrête de faire défiler » donnait annule + défile + défile : refusé."""
+    assert accepted_words(res(("annule", 0.72), ("défile", 0.97), ("défile", 1.0))) == []
+
+
+def test_confiance_faible_ignoree():
+    assert accepted_words(res(("clic", 0.4))) == []
+
+
+# --- écoute ---------------------------------------------------------------------
+def test_commande_ignoree_sans_iris():
+    core = Core(Config())
+    assert core.voice("clic", 1.0) == []
+    assert core.last_word == ("clic", 1.0, False)
+
+
+def test_iris_puis_clic():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.listening(2.0)
+    assert core.voice("clic", 2.0) == [("click", "left")]
+
+
+def test_ecoute_dure_8_s_puis_se_referme():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("clic", 7.0) == [("click", "left")]   # encore ouverte, et prolongée
+    assert core.voice("clic", 16.0) == []                    # 9 s après le dernier mot : fermée
+
+
+def test_page_n_est_plus_un_mot_vocal():
+    """La voix ne double pas les gestes : les pages se tournent avec la paume au bord."""
+    from motionzero.voice import WORDS
+    assert "page" not in WORDS and "retour" not in WORDS
+
+
+def test_main_immobile_ouvre_l_ecoute_sans_iris():
+    """Le menu (main immobile) ouvre l'écoute : on peut dire « menu » au lieu de bouger."""
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 1.7, cx=0.5, cy=0.6)
+    assert core.bubble is not None and core.listening(clk.t)
+    assert core.voice("menu", clk.t) == [("click", "right")]
+
+
+def test_stop_toujours_ecoute_et_prioritaire():
+    core = Core(Config())
+    core.mode = Mode.MOUSE
+    acts = core.voice("stop", 1.0)
+    assert ("release_all",) in acts and core.mode == Mode.READING
+
+
+def test_pause_puis_iris_reprend():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("pause", 1.5)
+    assert core.mode == Mode.DISABLED
+    assert core.voice("clic", 2.0) == []
+    core.voice("iris", 3.0)
+    assert core.mode == Mode.READING
+
+
+def test_raccourcis_clavier_vocaux():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("copie", 1.5) == [("hotkey", ["ctrl", "c"])]
+    fake = FakeBackend()
+    Controller(fake, Config()).execute([("hotkey", ["ctrl", "c"])], 0.0)
+    assert fake.events == [("key", "ctrl", True), ("key", "c", True), ("key", "c", False), ("key", "ctrl", False)]
+
+
+def test_glisse_lache_et_securite():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    fake = FakeBackend()
+    ctl = Controller(fake, Config())
+    ctl.execute(core.voice("glisse", 1.2), 1.2)
+    assert ("button", "left", True) in fake.events
+    ctl.execute(core.voice("lâche", 2.0), 2.0)
+    assert fake.events[-1] == ("button", "left", False)
+
+
+# --- mot + geste : « défile » ------------------------------------------------------
+def test_defile_main_qui_descend_defile_vers_le_bas():
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.3, cx=0.5, cy=0.6)
+    core.voice("iris", clk.t)
+    core.voice("défile", clk.t)
+    acts = clk.run(core, 0.3, cx=0.5, cy=0.6, to_cy=0.75) + clk.run(core, 1.0, cx=0.5, cy=0.75)
+    scrolls = [a for a in acts if a[0] == "scroll"]
+    assert len(scrolls) >= 3 and all(s[1] < 0 for s in scrolls)
+    assert not [a for a in acts if a[0] == "key"]  # pas de page pendant le défilement vocal
+
+
+def test_defile_main_immobile_ne_defile_pas():
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.3, cx=0.5, cy=0.6)
+    core.voice("iris", clk.t)
+    core.voice("défile", clk.t)
+    acts = clk.run(core, 1.0, cx=0.5, cy=0.6)
+    assert not [a for a in acts if a[0] == "scroll"]
+
+
+def test_iris_et_commande_d_une_traite():
+    from motionzero.voice import accepted_words, rejection
+    w = lambda *ws: {"result": [{"word": x, "conf": c, "start": 0, "end": 1} for x, c in ws]}
+    assert [x["word"] for x in accepted_words(w(("iris", 1.0), ("claude", 1.0)))] == ["iris", "claude"]
+    assert accepted_words(w(("claude", 1.0), ("iris", 1.0))) == []          # ordre inverse : non
+    assert accepted_words(w(("iris", 1.0), ("claude", 1.0), ("clic", 1.0))) == []
+    assert accepted_words(w(("iris", 0.4), ("claude", 1.0))) == []
+    assert rejection(w(("iris", 0.4), ("claude", 1.0))) == "iris(0.40) claude(1.00)"
+
+
+def test_iris_claude_d_une_traite_lance_la_dictee():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    assert core.voice("iris", 1.0) == []
+    assert core.voice("claude", 1.0) == [("vscode_dictation",)]
+
+
+def test_bruit_avant_iris_commande_tolere_mais_pas_avant_iris_seul():
+    from motionzero.voice import accepted_words
+    w = lambda *ws: {"result": [{"word": x, "conf": 1.0, "start": 0, "end": 1} for x in ws]}
+    assert [x["word"] for x in accepted_words(w("[unk]", "iris", "claude"))] == ["iris", "claude"]
+    assert accepted_words(w("[unk]", "iris")) == []
+    assert accepted_words(w("[unk]", "[unk]", "iris", "claude")) == []

@@ -1,0 +1,137 @@
+"""Réglages. Tout est modifiable via config.json (mêmes noms de clés)."""
+import json
+import os
+from dataclasses import asdict, dataclass, fields
+
+
+@dataclass
+class Config:
+    # caméra
+    camera_index: int = 0
+    width: int = 640
+    height: int = 480
+
+    # reconnaissance des poses (distances normalisées par la taille de la main)
+    finger_ext_ratio: float = 1.1      # doigt tendu si bout-poignet > articulation-poignet * ratio
+    thumb_ext_dist: float = 0.45       # pouce sorti si bout du pouce - base de l'index > seuil
+    thumb_up_margin: float = 0.2       # pouce levé : bout du pouce au-dessus de la base de l'index
+    pose_tolerance_s: float = 0.15     # micro-coupures de pose ignorées (tremblements)
+
+    # changements de mode
+    hold_open_s: float = 0.8           # paume ouverte -> lecture
+    hold_point_s: float = 0.6          # index pointé -> souris
+    hold_fist_s: float = 1.0           # poing -> repos
+    transition_cooldown_s: float = 0.8
+    absent_reading_s: float = 60.0     # main absente -> repos (lecture) : pas besoin de réarmer à chaque page
+    absent_mouse_s: float = 2.0        # main absente -> repos (souris)
+    release_absent_s: float = 0.5      # main absente -> on relâche tout
+
+    # balayage (mode lecture), en fraction de largeur d'image
+    swipe_window_s: float = 0.4
+    swipe_min_dx: float = 0.18
+    swipe_min_speed: float = 0.6
+    swipe_max_dy_ratio: float = 0.6
+    swipe_still_speed: float = 0.15
+    swipe_still_s: float = 0.3
+    swipe_cooldown_s: float = 0.7
+    key_next: str = "right"
+    key_prev: str = "left"
+
+    # souris
+    active_rect: tuple = (0.2, 0.2, 0.8, 0.75)   # zone de l'image étirée sur tout l'écran
+    euro_min_cutoff: float = 1.0
+    euro_beta: float = 0.01
+    deadzone_px: float = 4.0
+
+    # pincement
+    pinch_on: float = 0.25
+    pinch_off: float = 0.45            # mesuré : main ouverte ~0,72, pincée ~0,06
+    pinch_release_rise: float = 0.30   # ou remontée nette au-dessus du minimum
+    pinch_confirm_frames: int = 2
+    pinch_click_max_s: float = 2.0     # pincement lent et tenu (~1,3 s mesuré). Le poing annule le clic.
+    pinch_freeze_back_s: float = 0.15  # clic à la position d'avant le pincement
+    right_click_enabled: bool = True
+    right_click_margin: float = 0.08
+
+    # clic par survol prolongé
+    dwell_enabled: bool = True
+    dwell_s: float = 1.0
+    dwell_radius_px: float = 25.0
+
+    # ===== Gestes v2 : aucune pose de doigts, aucun pincement (coordonnées normalisées de l'image) =====
+    # pages : amener la paume au bord de l'image (bord droit = suivante)
+    page_band_right: float = 0.80
+    page_band_left: float = 0.20
+    page_hold_s: float = 0.35
+    page_rearm_lo: float = 0.30          # revenir au centre pour réarmer
+    page_rearm_hi: float = 0.70
+    page_refractory_s: float = 1.0
+
+    # défilement (lecture) : paume en haut / en bas de l'image
+    scroll_band_top: float = 0.25
+    scroll_band_bottom: float = 0.75
+    scroll_hold_s: float = 0.3           # avant de commencer à défiler
+    scroll_interval_s: float = 0.15      # un cran toutes les 0,15 s tant que la main y reste
+    scroll_notch: int = 120              # un cran de molette Windows
+
+    # immobilité (à calibrer sur la main posée de l'utilisateur)
+    still_window_s: float = 0.5
+    still_radius: float = 0.012
+
+    # entrer en souris : main immobile, bulle « SOURIS ? », petit mouvement vers le haut pour confirmer
+    mouse_enter_still_s: float = 1.5
+    bubble_confirm_dist: float = 0.05
+    bubble_cancel_dist: float = 0.08
+    bubble_timeout_s: float = 2.0
+
+    # curseur relatif (type pavé tactile), gain selon la vitesse de la main
+    gain_min: float = 1.5
+    gain_max: float = 5.0
+    gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
+    gain_speed_hi: float = 0.8           # au-dessus : gain_max
+    palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
+    palm_beta: float = 5.0
+
+    # clic : main immobile -> menu à 4 directions (gauche, droit, double, retour lecture)
+    dwell_menu_s: float = 0.8
+    menu_neutral: float = 0.03
+    menu_select: float = 0.06
+    menu_timeout_s: float = 1.5
+    rearm_px: float = 80.0               # bouger le curseur avant un nouveau menu
+    click_recovery_s: float = 0.5
+
+    # voix : « iris » (ou bulle / menu affichés) ouvre l'écoute
+    listen_s: float = 8.0                # durée de l'écoute après « iris » (prolongée à chaque commande)
+    voice_scroll_s: float = 8.0          # « défile » : la hauteur de la main règle le défilement
+    voice_scroll_dead: float = 0.04      # zone neutre autour de la hauteur de départ
+    voice_scroll_max_rate: float = 15.0  # crans par seconde au maximum
+
+    # « iris, claude » : micro du panneau Claude dans VS Code, coupé quand tu as fini de parler
+    dictation_silence_s: float = 3.5     # silence après ta dernière parole -> micro coupé
+    dictation_echo_s: float = 0.6        # on ignore la fin de « claude » juste après l'avoir dit
+    dictation_no_speech_s: float = 8.0   # rien dit du tout -> micro coupé
+    send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
+
+    # sécurité et confort
+    max_hold_s: float = 5.0
+    sounds: bool = True
+
+
+def load_config(path=None) -> Config:
+    cfg = Config()
+    if path and os.path.exists(path):
+        try:
+            with open(path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return cfg  # fichier illisible : valeurs par défaut
+        known = {f.name for f in fields(Config)}
+        for key, value in data.items():
+            if key in known:
+                setattr(cfg, key, tuple(value) if isinstance(value, list) else value)
+    return cfg
+
+
+def save_config(cfg: Config, path) -> None:
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(asdict(cfg), fh, indent=2, ensure_ascii=False)
