@@ -13,7 +13,7 @@ class Config:
 
     # reconnaissance des poses (distances normalisées par la taille de la main)
     finger_ext_ratio: float = 1.1      # doigt tendu si bout-poignet > articulation-poignet * ratio
-    thumb_ext_dist: float = 0.45       # pouce sorti si bout du pouce - base de l'index > seuil
+    thumb_ext_dist: float = 0.56       # pouce sorti si bout du pouce - base de l'index > seuil (0,45 avant correction largeur/hauteur, +25 % mesuré)
     thumb_up_margin: float = 0.2       # pouce levé : bout du pouce au-dessus de la base de l'index
     pose_tolerance_s: float = 0.15     # micro-coupures de pose ignorées (tremblements)
 

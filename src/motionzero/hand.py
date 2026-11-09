@@ -30,6 +30,11 @@ def _d(a, b):
     return math.hypot(a[0] - b[0], a[1] - b[1])
 
 
+def _dr(a, b, aspect):
+    """Distance réelle dans l'image : x est normalisé par la largeur, y par la hauteur.
+    Sans ce facteur, un même pincement mesure autrement main droite ou main de côté."""
+    return math.hypot((a[0] - b[0]) * aspect, a[1] - b[1])
+
 
 def palm_center(pts):
     return (sum(pts[i][0] for i in PALM_POINTS) / 5, sum(pts[i][1] for i in PALM_POINTS) / 5)
@@ -99,10 +104,12 @@ class HandTracker:
 
 def compute_features(pts, cfg) -> HandFeatures:
     wrist = pts[0]
-    size = _d(pts[0], pts[9]) or 1e-6
-    extended = {name: _d(pts[tip], wrist) > _d(pts[pip], wrist) * cfg.finger_ext_ratio
+    k = cfg.width / cfg.height
+    d = lambda a, b: _dr(a, b, k)
+    size = d(pts[0], pts[9]) or 1e-6
+    extended = {name: d(pts[tip], wrist) > d(pts[pip], wrist) * cfg.finger_ext_ratio
                 for name, (_, pip, tip) in FINGERS.items()}
-    thumb_ext = _d(pts[4], pts[5]) / size > cfg.thumb_ext_dist
+    thumb_ext = d(pts[4], pts[5]) / size > cfg.thumb_ext_dist
     palm = palm_center(pts)
     n =sum(extended.values())
     if n == 4 and thumb_ext:
@@ -116,4 +123,4 @@ def compute_features(pts, cfg) -> HandFeatures:
     else:
         pose = Pose.OTHER
     return HandFeatures(palm, size, extended, thumb_ext,
-                        _d(pts[4], pts[8]) / size, _d(pts[4], pts[12]) / size, pose)
+                        d(pts[4], pts[8]) / size, d(pts[4], pts[12]) / size, pose)
