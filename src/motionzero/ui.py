@@ -9,12 +9,13 @@ from PySide6.QtCore import QObject, QPointF, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
-__all__ = ["Bridge", "GlassOverlay", "PreviewWindow", "QApplication"]
+__all__ = ["Bridge", "GlassOverlay", "PreviewWindow", "QApplication", "StopButton"]
 
 
 class Bridge(QObject):
     frame = Signal(object)   # image BGR (numpy) déjà dessinée par overlay.render
     state = Signal(object)   # état pour le verre : curseur, progression, main perdue
+    stop_hover = Signal(float)  # survol du bouton STOP par la main (0..1)
     done = Signal()          # le moteur s'est arrêté
 
 
@@ -41,8 +42,9 @@ class PreviewWindow(QWidget):
             self._sized = True
 
     def closeEvent(self, event):
-        self.closed.emit()     # fenêtre fermée = STOP, comme avant
-        super().closeEvent(event)
+        # la croix n'arrête plus l'appli : seul le bouton STOP le fait. Elle réduit la fenêtre.
+        event.ignore()
+        self.showMinimized()
 
 
 # --- Étape 2 : verre plein écran, transparent aux clics -----------------------------------------
@@ -76,6 +78,7 @@ def apply_overlay_style(widget, click_through):
 class GlassOverlay(QWidget):
     """Fenêtre plein écran, transparente, au-dessus de tout, que les clics traversent.
     Dessine le curseur de la main et l'anneau de progression en mode souris."""
+    closed = Signal()
 
     def __init__(self):
         flags = (Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
@@ -94,6 +97,10 @@ class GlassOverlay(QWidget):
     def showEvent(self, event):
         super().showEvent(event)
         apply_overlay_style(self, click_through=True)
+
+    def closeEvent(self, event):
+        self.closed.emit()     # fermée par Windows (ex. taskkill) : on arrête tout
+        super().closeEvent(event)
 
     def _box(self, pos):
         r = RING_R + HALO_W + 4
@@ -140,3 +147,75 @@ class GlassOverlay(QWidget):
         p.setPen(QPen(QColor(0, 0, 0), 2))
         p.setBrush(QColor(255, 255, 255))
         p.drawEllipse(c, 5, 5)
+
+
+# --- Étape 3 : bouton STOP, petit overlay cliquable en bas à droite -----------------------------
+STOP_SIZE = 36      # px logiques : volontairement minuscule (demande de l'utilisateur)
+STOP_MARGIN = 6     # écart avec le bord de l'écran et la barre des tâches
+STOP_HAND_PAD = 20  # zone élargie pour la main seulement (invisible), sinon trop dur à viser
+STOP_RED = QColor(0xD7, 0x19, 0x21)
+
+
+class StopButton(QWidget):
+    """Arrêt d'urgence. Se déclenche au clic de la vraie souris, ou quand le curseur de la main
+    reste dessus (le moteur appelle alors directement l'arrêt, sans simuler de clic).
+    Ne prend jamais le focus : cliquer dessus ne retire pas le clavier à l'appli en cours."""
+    triggered = Signal()
+    closed = Signal()
+
+    def __init__(self):
+        flags = (Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                 | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
+        super().__init__(None, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        scr = QGuiApplication.primaryScreen()
+        area = scr.availableGeometry()          # sans la barre des tâches
+        self.dpr = scr.devicePixelRatio()
+        self.setGeometry(area.right() - STOP_SIZE - STOP_MARGIN, area.bottom() - STOP_SIZE - STOP_MARGIN,
+                         STOP_SIZE, STOP_SIZE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.hover = 0.0    # progression du survol par la main (0..1)
+
+    def physical_rect(self):
+        """Zone du bouton en pixels physiques (ceux du curseur de la main et de SendInput) : x0, y0, x1, y1."""
+        g, d, m = self.geometry(), self.dpr, STOP_HAND_PAD
+        return (int((g.x() - m) * d), int((g.y() - m) * d),
+                int((g.x() + g.width() + m) * d), int((g.y() + g.height() + m) * d))
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        apply_overlay_style(self, click_through=False)   # reçoit les clics, mais sans activation
+
+    def set_hover(self, progress):
+        if abs(progress - self.hover) > 0.01 or (progress == 0) != (self.hover == 0):
+            self.hover = progress
+            self.update()
+
+    def mousePressEvent(self, event):
+        self.triggered.emit()
+
+    def closeEvent(self, event):
+        self.closed.emit()
+        super().closeEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        m = 4
+        rect = self.rect().adjusted(m, m, -m, -m)
+        p.setPen(QPen(QColor(0, 0, 0, 160), 2))       # contour sombre : visible sur fond rouge ou clair
+        p.setBrush(STOP_RED)
+        p.drawEllipse(rect)
+        p.setPen(QColor(255, 255, 255))
+        f = p.font()
+        f.setFamilies(["Atkinson Hyperlegible", "Segoe UI"])
+        f.setPixelSize(8)
+        f.setBold(True)
+        p.setFont(f)
+        p.drawText(rect, Qt.AlignmentFlag.AlignCenter, "STOP")
+        if self.hover > 0:                                # anneau blanc qui se remplit sous la main
+            ring = self.rect().adjusted(2, 2, -2, -2)
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.setPen(QPen(QColor(255, 255, 255), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.drawArc(ring, 90 * 16, -int(360 * 16 * min(self.hover, 1.0)))
