@@ -88,7 +88,31 @@ def toggle_claude_dictation(send_hotkey):
 # --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
 _previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
-discord_muted = False   # True si c'est motionzero qui a coupé Discord (le raccourci inverse l'état)
+discord_muted = False   # état de Discord connu de motionzero (le raccourci inverse l'état à chaque appui)
+STATE_PATH = None       # fichier où cet état survit aux redémarrages (réglé par app.py)
+
+
+def load_discord_state():
+    """Relit l'état sauvegardé. Mesuré le 10/11 : sans ça, un redémarrage pendant que Discord était coupé
+    faisait ignorer « démute », puis « mute » rallumait au lieu de couper."""
+    global discord_muted
+    import json
+    try:
+        with open(STATE_PATH, encoding="utf-8") as fh:
+            discord_muted = bool(json.load(fh).get("discord_muted", False))
+    except (OSError, ValueError, TypeError):
+        discord_muted = False
+    log.info("discord : etat relu, coupe=%s", discord_muted)
+
+
+def _save_discord_state():
+    import json
+    if STATE_PATH:
+        try:
+            with open(STATE_PATH, "w", encoding="utf-8") as fh:
+                json.dump({"discord_muted": discord_muted}, fh)
+        except OSError:
+            log.warning("discord : etat non sauvegarde")
 
 
 def _title(hwnd):
@@ -134,19 +158,22 @@ def alt_tab():
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
-def discord_mute():
-    """Coupe Discord (une seule fois, même si « iris claude » est redit)."""
+def discord_mute(force=False):
+    """Coupe Discord. Automatique (« iris claude ») : une seule fois, même si redit.
+    force=True (« iris mute » dit exprès) : envoie toujours le raccourci, l'utilisateur sait où il en est."""
     global discord_muted
-    if not discord_muted and discord_mute_toggle():
+    if (force or not discord_muted) and discord_mute_toggle():
         discord_muted = True
+        _save_discord_state()
 
 
-def discord_unmute():
-    """Rallume Discord seulement si c'est motionzero qui l'avait coupé (le raccourci inverse l'état :
-    sans ce suivi, « démute » sur un Discord déjà allumé le couperait)."""
+def discord_unmute(force=False):
+    """Rallume Discord. Automatique (« iris retour ») : seulement si motionzero l'avait coupé.
+    force=True (« iris démute » dit exprès) : envoie toujours le raccourci."""
     global discord_muted
-    if discord_muted and discord_mute_toggle():
+    if (force or discord_muted) and discord_mute_toggle():
         discord_muted = False
+        _save_discord_state()
 
 
 def discord_mute_toggle():

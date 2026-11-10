@@ -220,6 +220,8 @@ def main(argv=None):
     sink.show()
     from . import vscode
     vscode.SINK_HWND = int(sink.winId())
+    vscode.STATE_PATH = os.path.join(ROOT, "logs", "discord_state.json")
+    vscode.load_discord_state()
     qt.exec()
     stop.set()
     worker.join(timeout=3)
@@ -258,10 +260,10 @@ def vscode_actions(acts, core, ctl, sounds, t):
         elif a[0] == "open_app":
             err = open_app(a[1])
         elif a[0] == "discord_mute":
-            discord_mute()
+            discord_mute(force=True)           # dit exprès : on envoie toujours le raccourci
             err = None
         elif a[0] == "discord_unmute":
-            discord_unmute()
+            discord_unmute(force=True)
             err = None
         elif a[0] == "vscode_dictation":
             # « iris claude » coupe Discord ; il reste coupé tant qu'on travaille sur VS Code et n'est
