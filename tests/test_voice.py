@@ -239,3 +239,15 @@ def test_iris_claude_colle_au_bruit_de_fond():
     from motionzero.voice import confirmed
     assert confirmed(got, "le grès n'attend pas iris claude et je voudrais")    # « iris » bien entendu
     assert not confirmed(got, "le grès n'attend pas le temps alors et des puzzles")
+
+
+def test_iris_claude_dit_vite_passe_sans_deuxieme_avis():
+    """Mesuré le 10/11 : dit vite, la reconnaissance libre entendait « la france » et bloquait la commande."""
+    from motionzero.voice import confirmed
+    fast = [{"word": "iris", "conf": 1.0}, {"word": "claude", "conf": 1.0}]
+    assert confirmed(fast, "la france", n_heard=2)
+    assert confirmed(fast, "les récents voyez", n_heard=3)
+    assert not confirmed(fast, "la france", n_heard=6)                    # collé à d'autres paroles : 2e avis
+    unsure = [{"word": "iris", "conf": 0.7}, {"word": "claude", "conf": 1.0}]
+    assert not confirmed(unsure, "la france", n_heard=2)                   # « iris » pas net : 2e avis
+    assert not confirmed([{"word": "discord", "conf": 1.0}], "d'accord mais du coup je", n_heard=1)

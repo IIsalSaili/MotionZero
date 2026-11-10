@@ -92,17 +92,26 @@ FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase
 ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
 
 
-def confirmed(words, free_text):
+IRIS_SURE_CONF = 0.9        # « iris » entendu net par la grammaire, dans une phrase courte : pas de 2e avis
+SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
+
+
+def confirmed(words, free_text, n_heard=None):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
-    - commande avec « iris » : « iris » vraiment prononcé (la phrase peut contenir du bruit autour) ;
-    - mot seul : phrase courte."""
+    - commande avec « iris » dite d'un trait (phrase courte, « iris » net) : acceptée telle quelle. Mesuré le
+      10/11 : dit vite, la reconnaissance libre entend « la france » au lieu de « iris claude » ;
+    - commande avec « iris » collée à d'autres paroles : « iris » vraiment prononcé ;
+    - mot seul : phrase courte (mesuré : 8 mots de conversation bloqués en 30 min, ex. « d'accord » -> discord).
+    n_heard : nombre de mots de la phrase entendue par la grammaire."""
     names = [w["word"] for w in words]
     if not names or set(names) & ALWAYS_HEARD:
         return True
     tokens = free_text.lower().split()
     if names[0] == WAKE_WORD:
+        if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= IRIS_SURE_CONF:
+            return True
         return any(tok.startswith("iri") for tok in tokens)
     return 0 < len(tokens) <= FREE_MAX_WORDS
 
@@ -228,7 +237,7 @@ class VoiceListener:
         words = accepted_words(res, self.min_conf)
         if not words:
             return
-        if free_text is not None and not confirmed(words, free_text):
+        if free_text is not None and not confirmed(words, free_text, len(res.get("result", []))):
             log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
             return
         # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
