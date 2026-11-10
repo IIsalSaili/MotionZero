@@ -13,7 +13,8 @@ from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiAppli
                            QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
-__all__ = ["Bridge", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton"]
+__all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton",
+           "set_capture_visible"]
 
 
 class Bridge(QObject):
@@ -71,23 +72,32 @@ RING_W = 5         # épaisseur
 HALO_W = 9         # contour noir sous l'anneau blanc : lisible sur fond clair comme sombre
 
 
-def apply_overlay_style(widget, click_through):
-    """Styles Windows posés à la main : Qt seul ne garantit ni « sans focus » ni l'exclusion des captures."""
+def set_capture_visible(widget, visible):
+    """Visible ou non dans les captures et partages d'écran (Discord, OBS…)."""
+    _u32.SetWindowDisplayAffinity(ctypes.c_void_p(int(widget.winId())), 0 if visible else _WDA_EXCLUDEFROMCAPTURE)
+
+
+def apply_overlay_style(widget, click_through, in_captures=True):
+    """Styles Windows posés à la main : Qt seul ne garantit pas « sans focus ». in_captures : visible ou non
+    dans les captures et partages (par défaut visible, demande de l'utilisateur)."""
     hwnd = ctypes.c_void_p(int(widget.winId()))
     ex = _u32.GetWindowLongPtrW(hwnd, _GWL_EXSTYLE)
     ex |= _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW | _WS_EX_TOPMOST
     if click_through:
         ex |= _WS_EX_TRANSPARENT
     _u32.SetWindowLongPtrW(hwnd, _GWL_EXSTYLE, ex)
-    _u32.SetWindowDisplayAffinity(hwnd, _WDA_EXCLUDEFROMCAPTURE)  # invisible dans captures et partages
+    set_capture_visible(widget, in_captures)
 
 
 class GlassOverlay(QWidget):
-    """Fenêtre plein écran, transparente, au-dessus de tout, que les clics traversent.
-    Dessine le curseur de la main et l'anneau de progression en mode souris."""
+    """Fenêtre plein écran, transparente, au-dessus de tout, que les clics traversent. Deux rôles :
+    - « ui » : l'île, le logo, la pastille Discord. Visible dans les partages (bouton œil pour masquer) ;
+    - « cursor » : le curseur de la main et la loupe. TOUJOURS exclue des captures : la loupe capture
+      l'écran autour du curseur, elle se filmerait elle-même sinon."""
     closed = Signal()
 
-    def __init__(self):
+    def __init__(self, role="ui"):
+        self.role = role
         flags = (Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
                  | Qt.WindowType.Tool | Qt.WindowType.WindowTransparentForInput
                  | Qt.WindowType.WindowDoesNotAcceptFocus)
@@ -101,11 +111,11 @@ class GlassOverlay(QWidget):
         self.loupe = None         # (centre de la loupe, image agrandie) ou None
         self.progress = 0.0
         self.lost = False
-        self.island = _IslandPainter(self.width())   # île Dot Iris (étape 4)
+        self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
 
     def showEvent(self, event):
         super().showEvent(event)
-        apply_overlay_style(self, click_through=True)
+        apply_overlay_style(self, click_through=True, in_captures=self.role == "ui")
 
     def closeEvent(self, event):
         self.closed.emit()     # fermée par Windows (ex. taskkill) : on arrête tout
@@ -125,8 +135,11 @@ class GlassOverlay(QWidget):
             self.cursor = None
         self.progress = st.get("progress", 0.0)
         self.lost = st.get("lost", False)
-        if self.island.update(st, _time.perf_counter()):
-            self.update(self.island.rect())
+        if self.island is not None:
+            if self.island.update(st, _time.perf_counter()):
+                self.update(self.island.rect())
+            self.cursor = None                # le curseur et la loupe sont dans la fenêtre « cursor »
+            return
         old_loupe = self._loupe_box()
         self._grab_loupe(st)
         for box in (old_loupe, self._loupe_box()):
@@ -188,7 +201,7 @@ class GlassOverlay(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         if self.loupe is not None and event.rect().intersects(self._loupe_box()):
             self._paint_loupe(p)
-        if event.rect().intersects(self.island.rect()):
+        if self.island is not None and event.rect().intersects(self.island.rect()):
             self.island.paint(p)
         if self.cursor is None:
             return
@@ -284,6 +297,55 @@ class StopButton(QWidget):
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.setPen(QPen(QColor(255, 255, 255), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.drawArc(ring, 90 * 16, -int(360 * 16 * min(self.hover, 1.0)))
+
+
+class EyeButton(QWidget):
+    """Petit bouton à gauche du STOP : un clic masque / démasque l'overlay dans les captures et partages.
+    Par défaut l'overlay est visible (œil ouvert). Le curseur et la loupe restent toujours masqués."""
+    toggled = Signal(bool)
+
+    def __init__(self, stop_btn):
+        flags = (Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                 | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
+        super().__init__(None, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        g = stop_btn.geometry()
+        self.setGeometry(g.x() - STOP_SIZE - STOP_MARGIN, g.y(), STOP_SIZE, STOP_SIZE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Montrer / masquer motionzero dans les partages d'écran")
+        self.visible_in_captures = True
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtSvg import QSvgRenderer
+        self.icons = {}
+        for name in ("eye", "eye-off"):
+            try:
+                svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
+                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", "#ffffff").encode()))
+            except OSError:
+                pass
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        apply_overlay_style(self, click_through=False, in_captures=self.visible_in_captures)
+
+    def mousePressEvent(self, event):
+        self.visible_in_captures = not self.visible_in_captures
+        set_capture_visible(self, self.visible_in_captures)
+        self.update()
+        self.toggled.emit(self.visible_in_captures)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(4, 4, -4, -4)
+        p.setPen(QPen(QColor(255, 255, 255, 160), 2))
+        p.setBrush(QColor(0, 0, 0, 220))
+        p.drawEllipse(rect)
+        r = self.icons.get("eye" if self.visible_in_captures else "eye-off")
+        if r is not None:
+            m = 9
+            r.render(p, QRectF(m, m, self.width() - 2 * m, self.height() - 2 * m))
 
 
 class KeySink(QWidget):

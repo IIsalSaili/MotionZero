@@ -25,7 +25,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton
+from .ui import Bridge, EyeButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
@@ -87,11 +87,21 @@ def main(argv=None):
     stop = threading.Event()
     bridge = Bridge()
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
-    glass = GlassOverlay()                     # verre plein écran : curseur et anneau, clics traversants
+    glass = GlassOverlay("ui")                 # île, logo, pastille Discord : visibles dans les partages
+    cursor_glass = GlassOverlay("cursor")      # curseur de la main + loupe : jamais dans les captures
     bridge.state.connect(glass.set_state)
+    bridge.state.connect(cursor_glass.set_state)
     stop_btn = StopButton()                    # arrêt d'urgence, en bas à droite
     stop_rect = stop_btn.physical_rect()
     bridge.stop_hover.connect(stop_btn.set_hover)
+    eye_btn = EyeButton(stop_btn)              # œil : montrer / masquer l'overlay dans les partages
+
+    def show_in_captures(visible):
+        for w in (glass, stop_btn):
+            set_capture_visible(w, visible)
+        log.info("overlay %s dans les partages d'ecran", "visible" if visible else "masque")
+
+    eye_btn.toggled.connect(show_in_captures)
     bridge.done.connect(qt.quit)
 
     def emergency(source):
@@ -103,6 +113,7 @@ def main(argv=None):
         qt.quit()
 
     glass.closed.connect(lambda: emergency("verre ferme"))
+    cursor_glass.closed.connect(lambda: emergency("verre ferme"))
     stop_btn.closed.connect(lambda: emergency("bouton ferme"))
     stop_btn.triggered.connect(lambda: emergency("bouton STOP"))
     qt.aboutToQuit.connect(stop.set)
@@ -250,7 +261,9 @@ def main(argv=None):
     worker.start()
     view_win.show()
     glass.show()
+    cursor_glass.show()
     stop_btn.show()
+    eye_btn.show()
     sink = KeySink()
     sink.show()
     from . import vscode
