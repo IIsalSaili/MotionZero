@@ -3,7 +3,7 @@
   python -m motionzero               normal
   python -m motionzero --simulation  n'envoie rien à Windows (affiche seulement)
 
-Pour arrêter : fermer la fenêtre d'aperçu (croix), à la souris ou en mode souris.
+Pour arrêter : uniquement le petit bouton STOP en bas à droite (clic, ou main tenue dessus).
 L'interface est en Qt (fil principal) ; caméra, MediaPipe et Core tournent dans un fil à part.
 """
 import argparse
@@ -89,7 +89,6 @@ def main(argv=None):
         ctl.release_all()
         qt.quit()
 
-    view_win.closed.connect(lambda: emergency("fenetre fermee"))
     glass.closed.connect(lambda: emergency("verre ferme"))
     stop_btn.closed.connect(lambda: emergency("bouton ferme"))
     stop_btn.triggered.connect(lambda: emergency("bouton STOP"))

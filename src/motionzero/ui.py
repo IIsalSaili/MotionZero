@@ -42,8 +42,9 @@ class PreviewWindow(QWidget):
             self._sized = True
 
     def closeEvent(self, event):
-        self.closed.emit()     # fenêtre fermée = STOP, comme avant
-        super().closeEvent(event)
+        # la croix n'arrête plus l'appli : seul le bouton STOP le fait. Elle réduit la fenêtre.
+        event.ignore()
+        self.showMinimized()
 
 
 # --- Étape 2 : verre plein écran, transparent aux clics -----------------------------------------
@@ -149,8 +150,9 @@ class GlassOverlay(QWidget):
 
 
 # --- Étape 3 : bouton STOP, petit overlay cliquable en bas à droite -----------------------------
-STOP_SIZE = 104     # px logiques (au-dessus des 96 px minimum du plan)
-STOP_MARGIN = 24    # écart avec le bord de l'écran et la barre des tâches
+STOP_SIZE = 36      # px logiques : volontairement minuscule (demande de l'utilisateur)
+STOP_MARGIN = 6     # écart avec le bord de l'écran et la barre des tâches
+STOP_HAND_PAD = 20  # zone élargie pour la main seulement (invisible), sinon trop dur à viser
 STOP_RED = QColor(0xD7, 0x19, 0x21)
 
 
@@ -177,8 +179,9 @@ class StopButton(QWidget):
 
     def physical_rect(self):
         """Zone du bouton en pixels physiques (ceux du curseur de la main et de SendInput) : x0, y0, x1, y1."""
-        g, d = self.geometry(), self.dpr
-        return (int(g.x() * d), int(g.y() * d), int((g.x() + g.width()) * d), int((g.y() + g.height()) * d))
+        g, d, m = self.geometry(), self.dpr, STOP_HAND_PAD
+        return (int((g.x() - m) * d), int((g.y() - m) * d),
+                int((g.x() + g.width() + m) * d), int((g.y() + g.height() + m) * d))
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -199,20 +202,20 @@ class StopButton(QWidget):
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        m = 8
+        m = 4
         rect = self.rect().adjusted(m, m, -m, -m)
-        p.setPen(QPen(QColor(0, 0, 0, 160), 3))       # contour sombre : visible sur fond rouge ou clair
+        p.setPen(QPen(QColor(0, 0, 0, 160), 2))       # contour sombre : visible sur fond rouge ou clair
         p.setBrush(STOP_RED)
         p.drawEllipse(rect)
         p.setPen(QColor(255, 255, 255))
         f = p.font()
         f.setFamilies(["Atkinson Hyperlegible", "Segoe UI"])
-        f.setPixelSize(22)
+        f.setPixelSize(8)
         f.setBold(True)
         p.setFont(f)
         p.drawText(rect, Qt.AlignmentFlag.AlignCenter, "STOP")
         if self.hover > 0:                                # anneau blanc qui se remplit sous la main
-            ring = self.rect().adjusted(3, 3, -3, -3)
+            ring = self.rect().adjusted(2, 2, -2, -2)
             p.setBrush(Qt.BrushStyle.NoBrush)
-            p.setPen(QPen(QColor(255, 255, 255), 5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
+            p.setPen(QPen(QColor(255, 255, 255), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.drawArc(ring, 90 * 16, -int(360 * 16 * min(self.hover, 1.0)))
