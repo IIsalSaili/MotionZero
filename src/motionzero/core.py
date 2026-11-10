@@ -81,6 +81,8 @@ class Core:
         self.need_move = False      # après une bulle ignorée : bouger avant d'en revoir une
         self.travel = 0.0           # déplacement du curseur depuis le dernier menu (px)
         self.last_click_t = -1e9
+        self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
+        self.wake_t = -1e9                    # début du dernier « iris » entendu
         # voix
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
@@ -260,7 +262,8 @@ class Core:
                 self.cursor = new
                 acts.append(("move", *new))
 
-        if (self.still_for >= c.dwell_menu_s and self.travel >= c.rearm_px
+        self.cursor_hist.append((t, self.cursor))
+        if (c.click_menu_on_still and self.still_for >= c.dwell_menu_s and self.travel >= c.rearm_px
                 and t - self.last_click_t >= c.click_recovery_s):
             self.menu.open(palm, t)
 
@@ -272,7 +275,7 @@ class Core:
         return self.mode != Mode.DISABLED and (t < self.listen_until or self.bubble is not None
                                                or self.menu.is_open)
 
-    def voice(self, word, t):
+    def voice(self, word, t, t_start=None):
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
         c = self.cfg
         acts = []
@@ -291,6 +294,7 @@ class Core:
             self.last_word = (word, t, True)
             return acts
         if word == WAKE_WORD:
+            self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
                 self.set_mode(Mode.READING, t, acts)
             self.listen_until = t + c.listen_s
@@ -304,6 +308,8 @@ class Core:
         self.last_word = (word, t, True)
         self.listen_until = t + c.listen_s
         label = VOICE_LABELS.get(word, word.upper())
+        if word in ("clic", "double", "menu", "glisse"):
+            acts += self._aim_back(t, t_start)
         if word in ("clic", "double", "menu"):
             if word == "menu":
                 acts.append(("click", "right"))
@@ -345,6 +351,27 @@ class Core:
             label = "PAUSE (dis IRIS pour reprendre)"
         self.last_gesture = (label, t)
         return acts
+
+    def _aim_back(self, t, t_start):
+        """Clic vocal : la main a pu bouger pendant « iris, clic ». On remet le curseur là où il était
+        juste avant le début de la phrase (« iris » s'il vient d'être dit, sinon le mot lui-même)."""
+        c = self.cfg
+        if self.mode != Mode.MOUSE or not self.cursor_hist:
+            return []
+        start = t_start if t_start is not None else t
+        if 0 <= start - self.wake_t <= c.voice_click_window_s:
+            start = self.wake_t
+        target = start - c.voice_click_rewind_s
+        pos = self.cursor_hist[0][1]
+        for ht, hp in self.cursor_hist:
+            if ht > target:
+                break
+            pos = hp
+        if pos == self.cursor:
+            return []
+        self.cursor = pos
+        self._cursor_f = [float(pos[0]), float(pos[1])]
+        return [("move", *pos)]
 
     # --- dictée Claude (VS Code) ---------------------------------------------
     def confirming(self, t):
@@ -418,7 +445,8 @@ class Core:
                 return ("defile " + ("haut" if self.scroll_side == "up" else "bas"), self.scroll_progress)
             if self.bubble is None and not self.need_move and self.still_for > 0.2:
                 return ("bulle SOURIS", min(self.still_for / c.mouse_enter_still_s, 1.0))
-        elif self.mode == Mode.MOUSE and not self.menu.is_open and self.travel >= c.rearm_px \
+        elif self.mode == Mode.MOUSE and c.click_menu_on_still and not self.menu.is_open \
+                and self.travel >= c.rearm_px \
                 and self.still_for > 0.1:
             return ("menu de clic", min(self.still_for / c.dwell_menu_s, 1.0))
         return None
