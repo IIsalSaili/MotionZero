@@ -206,6 +206,9 @@ def main(argv=None):
                         "confirming": core.confirming(t),
                         "listening": core.listening(t),
                         "toast": toast[0] if toast else None,
+                        # main verte 0,5 s : une commande vocale vient d'être comprise (pas « iris » seul)
+                        "ok_flash": bool(core.last_word and core.last_word[2] and core.last_word[0] != "iris"
+                                         and t - core.last_word[1] < 0.5),
                         "toast_age": t - toast[1] if toast else 1e9,
                     })
                 else:

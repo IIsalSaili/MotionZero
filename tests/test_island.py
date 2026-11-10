@@ -17,3 +17,12 @@ def test_priorites():
 def test_message_disparait_apres_2_5_s():
     assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 1.0})[1] == "CHROME"
     assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 3.0})[1] is None
+
+
+def test_logo_de_l_ilot():
+    from motionzero.ui import islet_logo
+    assert islet_logo({"mode": "NEUTRE"}, False) == "neutre"
+    assert islet_logo({"mode": "LECTURE"}, True) == "lecture_ferme"
+    assert islet_logo({"mode": "SOURIS"}, False) == "souris"
+    assert islet_logo({"mode": "SOURIS", "ok_flash": True}, True) == "ok"     # vert, sans clignement
+    assert islet_logo({"mode": "DESACTIVE"}, False) == "neutre"

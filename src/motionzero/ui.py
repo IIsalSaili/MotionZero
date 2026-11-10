@@ -5,6 +5,7 @@ Les signaux Qt émis depuis ce fil arrivent dans le fil de l'interface par la fi
 """
 import ctypes
 import os as _os
+import random as _random
 import time as _time
 
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, Signal
@@ -255,6 +256,23 @@ ISLAND_FADED = 0.25      # … à 25 % d'opacité
 TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
 MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
 
+# îlot du logo d'Iris, à gauche de l'île (un disque clair : la main noire du neutre reste lisible)
+_LOGO_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "iris")
+ISLET = 64               # diamètre de l'îlot (l'île du texte garde sa hauteur)
+ISLET_GAP = 8
+OK_FLASH_S = 0.5         # main verte : commande vocale comprise
+BLINK_S = 0.5            # œil fermé
+BLINK_EVERY = (4.0, 8.0) # intervalle irrégulier entre deux clignements
+LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
+
+
+def islet_logo(st, blinking):
+    """Nom du logo à afficher. Pur : testable. Vert pendant la validation (sans clignement)."""
+    if st.get("ok_flash"):
+        return "ok"
+    base = LOGO_BY_MODE.get(st.get("mode"), "neutre")
+    return base + "_ferme" if blinking else base
+
 
 def load_fonts():
     """Atkinson Hyperlegible (licence OFL, dans assets/fonts) : conçue pour la lisibilité."""
@@ -291,19 +309,35 @@ class _IslandPainter:
         self.content = None
         self.last_change = 0.0
         self.opacity = 1.0
+        self.logos = {}
+        for name in ("neutre", "neutre_ferme", "lecture", "lecture_ferme", "souris", "souris_ferme", "ok"):
+            pm = QPixmap(_os.path.join(_LOGO_DIR, f"{name}.png"))
+            if not pm.isNull():
+                self.logos[name] = pm
+        self.logo = None
+        self.blink_until = 0.0
+        self.next_blink = 0.0
 
     def rect(self):
-        return QRect((self.width - ISLAND_MAX_W) // 2, ISLAND_TOP - 4, ISLAND_MAX_W, ISLAND_H + 8)
+        w = ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP)
+        return QRect((self.width - w) // 2, ISLAND_TOP - 4, w, ISLET + 8)
 
     def update(self, st, now):
         mode, msg, active = island_text(st)
         content = (mode, msg)
         if content != self.content:
             self.content, self.last_change = content, now
+        if st.get("ok_flash"):
+            self.last_change = now
+        # clignement : 0,5 s, à intervalle irrégulier
+        if now >= self.next_blink:
+            self.blink_until = now + BLINK_S
+            self.next_blink = now + _random.uniform(*BLINK_EVERY)
+        logo = islet_logo(st, now < self.blink_until)
         idle = now - self.last_change
         target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
-        changed = abs(target - self.opacity) > 0.01 or idle < 0.1
-        self.opacity = target
+        changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo
+        self.opacity, self.logo = target, logo
         return changed
 
     def paint(self, p):
@@ -316,9 +350,11 @@ class _IslandPainter:
         if msg:
             msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, ISLAND_MAX_W - w - gap - pad)
             w += gap + fm_msg.horizontalAdvance(msg)
-        x, y = (self.width - w) / 2, ISLAND_TOP
+        gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
+        x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
         p.setOpacity(self.opacity)
+        self._paint_islet(p, gx, ISLAND_TOP)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
         p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
@@ -336,3 +372,15 @@ class _IslandPainter:
             mx = tx + fm_mode.horizontalAdvance(mode) + gap
             p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
         p.restore()
+
+    def _paint_islet(self, p, x, y):
+        """Disque clair à fin contour sombre, logo d'Iris centré dedans."""
+        p.setPen(QPen(QColor(0, 0, 0, 200), 2))
+        p.setBrush(QColor(245, 245, 240))
+        p.drawEllipse(QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2))
+        pm = self.logos.get(self.logo)
+        if pm is None:
+            return
+        h = ISLET - 14
+        pw = pm.width() * h / pm.height()
+        p.drawPixmap(QRectF(x + (ISLET - pw) / 2, y + 7, pw, h), pm, QRectF(pm.rect()))
