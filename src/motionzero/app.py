@@ -220,8 +220,6 @@ def main(argv=None):
     sink.show()
     from . import vscode
     vscode.SINK_HWND = int(sink.winId())
-    vscode.STATE_PATH = os.path.join(ROOT, "logs", "discord_state.json")
-    vscode.load_discord_state()
     qt.exec()
     stop.set()
     worker.join(timeout=3)
@@ -236,8 +234,7 @@ def main(argv=None):
 
 def vscode_actions(acts, core, ctl, sounds, t):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import (alt_tab, bring_to_front, discord_mute, discord_unmute, find_window, focus_and_send,
-                         go_back, open_app, remember_previous, toggle_claude_dictation)
+    from .vscode import alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app, toggle_claude_dictation
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
@@ -251,32 +248,16 @@ def vscode_actions(acts, core, ctl, sounds, t):
             else:
                 rest.append(("hotkey", ["escape"]))                         # ailleurs : touche Échap
                 continue
-        elif a[0] == "window_back":
-            discord_unmute()                   # on quitte VS Code : Discord rallumé (si on l'avait coupé)
-            err = go_back()
         elif a[0] == "alt_tab":
             alt_tab()
             err = None
         elif a[0] == "open_app":
             err = open_app(a[1])
-        elif a[0] == "discord_mute":
-            discord_mute(force=True)           # dit exprès : on envoie toujours le raccourci
-            err = None
-        elif a[0] == "discord_unmute":
-            discord_unmute(force=True)
+        elif a[0] in ("discord_mute", "discord_unmute"):
+            discord_mute_toggle()              # le raccourci, tout simplement : aucun état retenu
             err = None
         elif a[0] == "vscode_dictation":
-            # « iris claude » coupe Discord ; il reste coupé tant qu'on travaille sur VS Code et n'est
-            # rallumé que par « iris retour » (demande de l'utilisateur : qu'on ne l'entende pas parler à Claude).
-            # Le raccourci part dans une fenêtre invisible : il ne se tape ni dans la dictée ni ailleurs.
-            starting = core.dictating
-            code = find_window()
-            if starting:
-                remember_previous(code)        # pour « iris retour », avant de toucher au premier plan
-                discord_mute()
-            err = toggle_claude_dictation(send)
-            if starting and err:
-                discord_unmute()               # VS Code introuvable : on ne laisse pas Discord coupé
+            err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler

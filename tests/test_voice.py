@@ -66,22 +66,15 @@ def test_page_n_est_plus_un_mot_vocal():
     assert "page" not in WORDS
 
 
-def test_iris_retour_revient_a_la_fenetre_d_avant():
-    """« retour » ne tourne pas la page : il revient à la fenêtre d'avant « iris claude »."""
-    core = Core(Config())
-    core.voice("iris", 1.0)
-    assert core.voice("retour", 1.5) == [("window_back",)]
-
-
 def test_iris_tab_passe_a_la_fenetre_suivante():
     core = Core(Config())
     core.voice("iris", 1.0)
     assert core.voice("tab", 1.5) == [("alt_tab",)]
 
 
-def test_retour_et_tab_exigent_iris():
+def test_tab_exige_iris():
     core = Core(Config())
-    assert core.voice("retour", 1.0) == [] and core.voice("tab", 1.2) == []
+    assert core.voice("tab", 1.2) == []
 
 
 def test_main_immobile_ouvre_l_ecoute_sans_iris():
@@ -251,3 +244,10 @@ def test_iris_claude_dit_vite_passe_sans_deuxieme_avis():
     unsure = [{"word": "iris", "conf": 0.7}, {"word": "claude", "conf": 1.0}]
     assert not confirmed(unsure, "la france", n_heard=2)                   # « iris » pas net : 2e avis
     assert not confirmed([{"word": "discord", "conf": 1.0}], "d'accord mais du coup je", n_heard=1)
+
+
+def test_iris_studio_passe_sur_vs_code_sans_micro():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("studio", 1.5) == [("open_app", "studio")]
+    assert not core.dictating

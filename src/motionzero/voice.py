@@ -31,10 +31,10 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "pause": "pause",
-    "retour": "retour",   # « iris retour » : revient à la fenêtre d'avant « iris claude »
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
+    "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
