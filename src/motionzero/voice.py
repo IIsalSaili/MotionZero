@@ -31,7 +31,6 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "pause": "pause",
-    "retour": "retour",   # « iris retour » : revient à la fenêtre d'avant « iris claude »
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)

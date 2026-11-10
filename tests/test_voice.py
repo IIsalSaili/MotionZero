@@ -66,22 +66,15 @@ def test_page_n_est_plus_un_mot_vocal():
     assert "page" not in WORDS
 
 
-def test_iris_retour_revient_a_la_fenetre_d_avant():
-    """« retour » ne tourne pas la page : il revient à la fenêtre d'avant « iris claude »."""
-    core = Core(Config())
-    core.voice("iris", 1.0)
-    assert core.voice("retour", 1.5) == [("window_back",)]
-
-
 def test_iris_tab_passe_a_la_fenetre_suivante():
     core = Core(Config())
     core.voice("iris", 1.0)
     assert core.voice("tab", 1.5) == [("alt_tab",)]
 
 
-def test_retour_et_tab_exigent_iris():
+def test_tab_exige_iris():
     core = Core(Config())
-    assert core.voice("retour", 1.0) == [] and core.voice("tab", 1.2) == []
+    assert core.voice("tab", 1.2) == []
 
 
 def test_main_immobile_ouvre_l_ecoute_sans_iris():

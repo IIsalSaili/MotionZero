@@ -68,7 +68,6 @@ def focus_and_send(send_hotkey, key_groups):
         log.warning("VS Code introuvable")
         return "VS CODE INTROUVABLE"
     if u.GetForegroundWindow() != hwnd:
-        remember_previous(hwnd)
         if not bring_to_front(hwnd):
             log.warning("VS Code n'a pas pu passer au premier plan")
             return "VS CODE PAS AU PREMIER PLAN"
@@ -85,16 +84,26 @@ def toggle_claude_dictation(send_hotkey):
     return focus_and_send(send_hotkey, [DICTATION_KEYS])
 
 
-# --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
-_previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
+# --- état partagé ---------------------------------------------------------------------------------
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
 discord_muted = False   # état de Discord connu de motionzero (le raccourci inverse l'état à chaque appui)
 STATE_PATH = None       # fichier où cet état survit aux redémarrages (réglé par app.py)
 
 
+# --- « Iris, tab » : comme Alt+Tab -------------------------------------------------------------------
+def alt_tab():
+    u = ctypes.windll.user32
+    u.keybd_event(0x12, 0x38, 0, 0)        # Alt enfoncé
+    u.keybd_event(0x09, 0x0F, 0, 0)        # Tab
+    u.keybd_event(0x09, 0x0F, 2, 0)
+    time.sleep(0.05)
+    u.keybd_event(0x12, 0x38, 2, 0)        # Alt relâché : Windows passe à la fenêtre suivante
+    log.info("alt+tab")
+
+
+# --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
 def load_discord_state():
-    """Relit l'état sauvegardé. Mesuré le 10/11 : sans ça, un redémarrage pendant que Discord était coupé
-    faisait ignorer « démute », puis « mute » rallumait au lieu de couper."""
+    """Relit l'état sauvegardé (survit aux redémarrages)."""
     global discord_muted
     import json
     try:
@@ -115,63 +124,25 @@ def _save_discord_state():
             log.warning("discord : etat non sauvegarde")
 
 
-def _title(hwnd):
-    u = ctypes.windll.user32
-    n = u.GetWindowTextLengthW(hwnd)
-    buf = ctypes.create_unicode_buffer(n + 1)
-    u.GetWindowTextW(hwnd, buf, n + 1)
-    return buf.value[:80]
-
-
-def remember_previous(vscode_hwnd):
-    """Retient la fenêtre active (YouTube, autre appli…) avant de passer sur VS Code."""
-    global _previous
-    u = ctypes.windll.user32
-    fg = u.GetForegroundWindow()
-    pid = wintypes.DWORD()
-    u.GetWindowThreadProcessId(fg, ctypes.byref(pid))
-    if fg and fg != vscode_hwnd and pid.value != os.getpid():   # jamais nos propres fenêtres
-        _previous = fg
-        log.info("fenetre retenue pour « retour » : %s", _title(fg))
-
-
-def go_back():
-    """Remet au premier plan la fenêtre retenue. Renvoie None, ou un texte d'erreur."""
-    u = ctypes.windll.user32
-    if not _previous or not u.IsWindow(_previous):
-        return "RIEN A QUOI REVENIR"
-    if not bring_to_front(_previous):
-        return "RETOUR IMPOSSIBLE"
-    log.info("retour a : %s", _title(_previous))
-    return None
-
-
-# --- « Iris, tab » : comme Alt+Tab -------------------------------------------------------------------
-def alt_tab():
-    u = ctypes.windll.user32
-    u.keybd_event(0x12, 0x38, 0, 0)        # Alt enfoncé
-    u.keybd_event(0x09, 0x0F, 0, 0)        # Tab
-    u.keybd_event(0x09, 0x0F, 2, 0)
-    time.sleep(0.05)
-    u.keybd_event(0x12, 0x38, 2, 0)        # Alt relâché : Windows passe à la fenêtre suivante
-    log.info("alt+tab")
-
-
-# --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
-def discord_mute(force=False):
-    """Coupe Discord. Automatique (« iris claude ») : une seule fois, même si redit.
-    force=True (« iris mute » dit exprès) : envoie toujours le raccourci, l'utilisateur sait où il en est."""
+def discord_mute():
+    """« iris mute ». Le raccourci INVERSE l'état : on ne l'envoie que si Discord est allumé.
+    Mesuré le 10/11 : envoyé à chaque fois, deux « mute » de suite rallumaient le micro."""
     global discord_muted
-    if (force or not discord_muted) and discord_mute_toggle():
+    if discord_muted:
+        log.info("discord : deja coupe, rien a faire")
+        return
+    if discord_mute_toggle():
         discord_muted = True
         _save_discord_state()
 
 
-def discord_unmute(force=False):
-    """Rallume Discord. Automatique (« iris retour ») : seulement si motionzero l'avait coupé.
-    force=True (« iris démute » dit exprès) : envoie toujours le raccourci."""
+def discord_unmute():
+    """« iris démute » : le raccourci n'est envoyé que si Discord est coupé."""
     global discord_muted
-    if (force or discord_muted) and discord_mute_toggle():
+    if not discord_muted:
+        log.info("discord : deja allume, rien a faire")
+        return
+    if discord_mute_toggle():
         discord_muted = False
         _save_discord_state()
 
@@ -244,7 +215,6 @@ def open_app(name):
     import subprocess
     exe, cmd = APPS[name]
     hwnd = find_app_window(exe)
-    remember_previous(hwnd)                            # pour « iris retour »
     if hwnd:
         if not bring_to_front(hwnd):
             return f"{name.upper()} PAS AU PREMIER PLAN"

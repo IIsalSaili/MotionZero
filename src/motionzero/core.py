@@ -35,7 +35,7 @@ VOICE_HOTKEYS = {"entrée": ["enter"], "copie": ["ctrl", "c"], "colle": ["ctrl",
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
-                "claude": "MICRO CLAUDE : parle", "retour": "RETOUR A LA FENETRE D'AVANT",
+                "claude": "MICRO CLAUDE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS"}
 
@@ -285,11 +285,10 @@ class Core:
         if self.dictating:
             return acts  # le micro de Claude écoute : tes mots sont dictés, ils ne déclenchent rien ici
         if self.confirming(t):
-            if word != WAKE_WORD:
-                return self._confirm(word, t)
-            # « iris » : on passe à autre chose (retour, chrome…). Le message reste dans VS Code :
-            # « iris envoie » / « iris annule » marchent toujours, à tout moment.
-            self.confirm_until = -1e9
+            # « iris claude » en cours (message dicté, pas encore envoyé) : seuls envoie / annule / claude
+            # comptent, avec ou sans « iris ». Tout le reste de ce qu'on dit est ignoré (demande de
+            # l'utilisateur : pendant « iris claude », l'appli ne doit rien exécuter d'autre).
+            return self._confirm(word, t)
         if word == "stop":  # toujours écouté, prioritaire
             acts.append(("release_all",))
             self.menu.close()
@@ -353,8 +352,6 @@ class Core:
             self.menu.close()
             self.bubble = None
             acts.append(("vscode_dictation",))
-        elif word == "retour":
-            acts.append(("window_back",))
         elif word == "envoie":
             acts.append(("vscode_keys", [["enter"]]))      # envoie le message de Claude, à tout moment
             label = "MESSAGE ENVOYE A CLAUDE"
@@ -435,6 +432,9 @@ class Core:
             self.confirm_until = -1e9
             self.last_gesture = ("MESSAGE ENVOYE A CLAUDE", t)
             return [("vscode_keys", [["enter"]])]
+        if word == WAKE_WORD:              # « iris envoie » : on attend le mot suivant, sans rien faire
+            self.last_word = (word, t, True)
+            return []
         if word in ("annule", "stop"):
             self.confirm_until = -1e9
             self.last_gesture = ("MESSAGE EFFACE", t)

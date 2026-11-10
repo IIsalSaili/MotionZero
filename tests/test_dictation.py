@@ -66,14 +66,16 @@ def test_sans_reponse_la_confirmation_expire():
     assert core.voice("envoie", 40.0) == []  # écoute fermée : ignoré
 
 
-def test_iris_retour_marche_pendant_l_attente_d_envoi():
-    """Message dicté, ni envoyé ni annulé : « iris retour » doit marcher quand même."""
+def test_pendant_iris_claude_rien_d_autre_ne_s_execute():
+    """Demande de l'utilisateur : pendant « iris claude » (message dicté, pas encore envoyé), ce qu'on dit
+    ne doit rien déclencher d'autre ; seuls envoie / annule comptent, avec ou sans « iris »."""
     core = _start()
     core.dictation_tick(8.0, last_speech_t=4.0)            # micro coupé : attente envoie / annule
-    assert core.confirming(9.0)
-    core.voice("iris", 9.0)
-    assert not core.confirming(9.1)
-    assert core.voice("retour", 9.5) == [("window_back",)]
+    for word in ("iris", "chrome", "clic", "tab", "colle", "discord", "mute"):
+        assert core.voice(word, 9.0) == []
+    assert core.confirming(9.1)
+    core.voice("iris", 9.5)
+    assert core.voice("envoie", 9.6) == [("vscode_keys", [["enter"]])]
 
 
 def test_iris_envoie_et_iris_annule_a_tout_moment():
