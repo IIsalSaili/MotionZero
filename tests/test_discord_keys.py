@@ -39,3 +39,12 @@ def test_icones_discord():
     assert discord_icons((True, False)) == ["mic-off"]
     assert discord_icons((True, True)) == ["headphone-off", "mic-off"]
     assert discord_icons((False, True)) == ["headphone-off", "mic-off"]
+
+
+def test_mute_selon_l_etat_reel():
+    from motionzero.discord_keys import mute_needed
+    assert mute_needed(True, (False, False))          # allumé + « mute » : on coupe
+    assert not mute_needed(True, (True, False))       # déjà coupé : rien (sinon ça rallumerait)
+    assert mute_needed(False, (True, False))          # coupé + « démute » : on rallume
+    assert not mute_needed(False, (False, False))     # déjà allumé : rien
+    assert mute_needed(True, None) and mute_needed(False, None)   # état illisible : on envoie

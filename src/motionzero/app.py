@@ -304,8 +304,14 @@ def vscode_actions(acts, core, ctl, sounds, t):
         elif a[0] == "open_app":
             err = open_app(a[1])
         elif a[0] in ("discord_mute", "discord_unmute"):
-            discord_mute_toggle()              # le raccourci, tout simplement : aucun état retenu
+            # état RÉEL lu dans Discord à l'instant (rien n'est retenu par motionzero)
+            from .discord_keys import mute_needed, voice_state
+            want = a[0] == "discord_mute"
             err = None
+            if mute_needed(want, voice_state(fresh=True)):
+                discord_mute_toggle()
+            else:
+                core.last_gesture = ("DISCORD : DEJA " + ("COUPE" if want else "ALLUME"), t)
         elif a[0] == "discord_deafen":
             from .vscode import send_discord
             err = None if send_discord("TOGGLE_DEAFEN") else "SOURDINE : RACCOURCI DISCORD INTROUVABLE"
