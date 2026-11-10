@@ -34,8 +34,8 @@ def main():
     cv2.namedWindow(WIN, cv2.WINDOW_AUTOSIZE)
     cv2.imshow(WIN, view)
     cv2.waitKey(1)
-    front = bring_to_front(WIN)
-    t0 = time.perf_counter()
+    bring_to_front(WIN)
+    t0 = last_front = time.perf_counter()
     seq, last_ts = 0, -1
     try:
         while True:
@@ -43,8 +43,9 @@ def main():
             left = duration - (now - t0)
             if left <= 0:
                 break
-            if not front and now - t0 < 5:
-                front = bring_to_front(WIN)
+            if now - last_front >= 1.0:   # rester devant toute la minute (une fenêtre peut passer dessus)
+                bring_to_front(WIN)
+                last_front = now
             frame, new_seq = cam.read(seq)
             if frame is not None:
                 seq = new_seq

@@ -70,17 +70,23 @@ def finger_states(f, th):
     return [True if x <= e else False if x >= c else None for x, e, c in zip(f, ext, curl)]
 
 
+POINT_INDEX_MAX = 110.0  # index pointé : pliure de l'index au plus 110°
+POINT_GAP_MIN = 60.0     # ... et au moins 60° plus tendu que le plus tendu des 3 autres doigts.
+# Index vers la caméra : les autres doigts, cachés, sont « devinés » à demi ouverts par MediaPipe ;
+# l'écart avec l'index reste net, alors qu'une main ouverte n'a jamais cet écart (mesuré : -14°).
+
+
 def classify(f, centroids):
-    """(pose, états des doigts). Un seul doigt incertain, ou une combinaison inconnue : INCERTAIN."""
+    """(pose, états des doigts). Un doigt incertain, ou une combinaison inconnue : INCERTAIN."""
     st = finger_states(f, thresholds(centroids))
+    if f[0] <= POINT_INDEX_MAX and min(f[1:]) - f[0] >= POINT_GAP_MIN:
+        return "point", st
     if None in st:
         return UNSURE, st
     if all(st):
         return "open", st
     if not any(st):
         return "closed", st
-    if st == [True, False, False, False]:
-        return "point", st
     return UNSURE, st
 
 
