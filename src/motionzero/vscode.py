@@ -142,7 +142,8 @@ def discord_mute():
 
 
 def discord_unmute():
-    """Rallume Discord seulement si c'est motionzero qui l'avait coupé."""
+    """Rallume Discord seulement si c'est motionzero qui l'avait coupé (le raccourci inverse l'état :
+    sans ce suivi, « démute » sur un Discord déjà allumé le couperait)."""
     global discord_muted
     if discord_muted and discord_mute_toggle():
         discord_muted = False

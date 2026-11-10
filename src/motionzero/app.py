@@ -257,6 +257,12 @@ def vscode_actions(acts, core, ctl, sounds, t):
             err = None
         elif a[0] == "open_app":
             err = open_app(a[1])
+        elif a[0] == "discord_mute":
+            discord_mute()
+            err = None
+        elif a[0] == "discord_unmute":
+            discord_unmute()
+            err = None
         elif a[0] == "vscode_dictation":
             # « iris claude » coupe Discord ; il reste coupé tant qu'on travaille sur VS Code et n'est
             # rallumé que par « iris retour » (demande de l'utilisateur : qu'on ne l'entende pas parler à Claude).
