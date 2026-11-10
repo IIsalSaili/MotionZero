@@ -68,8 +68,8 @@ class Config:
     page_refractory_s: float = 1.0
 
     # défilement (lecture) : paume en haut / en bas de l'image
-    scroll_band_top: float = 0.25
-    scroll_band_bottom: float = 0.75
+    scroll_band_top: float = 0.12        # zones de défilement étroites (0,25 jugé beaucoup trop large)
+    scroll_band_bottom: float = 0.88
     scroll_hold_s: float = 0.3           # avant de commencer à défiler
     scroll_interval_s: float = 0.15      # un cran toutes les 0,15 s tant que la main y reste
     scroll_notch: int = 120              # un cran de molette Windows
@@ -85,8 +85,8 @@ class Config:
     bubble_timeout_s: float = 2.0
 
     # curseur relatif (type pavé tactile), gain selon la vitesse de la main
-    gain_min: float = 1.5
-    gain_max: float = 5.0
+    gain_min: float = 1.0                # mouvements lents (viser) ; 1,5 jugé trop réactif
+    gain_max: float = 3.5                # mouvements rapides ; 5,0 jugé trop réactif
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
@@ -100,6 +100,7 @@ class Config:
     recenter_absent_s: float = 0.5     # souris : main absente au moins 0,5 s puis revenue -> curseur au centre
     index_click_recovery_s: float = 0.8 # deux clics par l'index : au moins 0,8 s d'écart
     click_pose: str = "open"           # pose qui clique : ouvrir la main détendue (après main fermée)
+    hold_after_s: float = 2.0          # main gardée ouverte plus de 2 s après le clic : bouton maintenu
     index_click_frames: int = 3        # 3 images de suite dans cette pose (~0,15 s), sans bouger le curseur
     voice_click_rewind_s: float = 0.25 # clic vocal : curseur remis où il était juste avant « iris »
     voice_click_window_s: float = 3.0  # « iris » pris en compte s'il a été dit moins de 3 s avant le clic
@@ -122,7 +123,7 @@ class Config:
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
 
     # sécurité et confort
-    max_hold_s: float = 5.0
+    max_hold_s: float = 10.0           # sécurité : tout appui maintenu est relâché après 10 s (glisser compris)
     sounds: bool = True
 
 
