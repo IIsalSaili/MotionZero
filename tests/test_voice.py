@@ -251,3 +251,21 @@ def test_iris_studio_passe_sur_vs_code_sans_micro():
     core.voice("iris", 1.0)
     assert core.voice("studio", 1.5) == [("open_app", "studio")]
     assert not core.dictating
+
+
+def test_iris_question_enregistre_puis_envoie_apres_le_silence():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("question", 1.2) == [("ask_start",)] and core.asking
+    assert core.voice("iris", 2.0) == [] and core.voice("chrome", 2.1) == []   # la question n'est pas une commande
+    assert core.ask_tick(3.0, last_speech_t=2.5) == []                         # on parle encore
+    assert core.ask_tick(5.4, last_speech_t=2.5) == [("ask_stop",)] and not core.asking
+    core.voice("iris", 6.0)
+    assert core.voice("ferme", 6.2) == [("ask_close",)]
+
+
+def test_iris_question_sans_rien_dire_est_annulee():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("question", 1.2)
+    assert core.ask_tick(9.5, last_speech_t=0.0) == [("ask_cancel",)] and not core.asking

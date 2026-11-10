@@ -37,6 +37,8 @@ WORDS = {
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
+    "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
+    "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "stop": "stop",
@@ -154,6 +156,7 @@ class VoiceListener:
         self.last_rms = 0.0         # pour le journal pendant la dictée
         self._partial = ""          # dernier texte provisoire de la reconnaissance
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
+        self.capture = None         # morceaux de son gardés pendant « iris question »
 
     def start(self):
         import sounddevice as sd
@@ -200,6 +203,8 @@ class VoiceListener:
             return
         start_samples = self.samples
         self.samples += len(block) // 2
+        if self.capture is not None:
+            self.capture.append(block)
         rms = _rms(block)
         self.last_rms = rms
         if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
@@ -254,6 +259,14 @@ class VoiceListener:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             log.info("voix %s (%.2f)", ev.word, ev.conf)
             self.events.put(ev)
+
+    def start_capture(self):
+        self.capture = []
+
+    def stop_capture(self):
+        """Son enregistré depuis start_capture (int16, 16 kHz, mono)."""
+        blocks, self.capture = self.capture or [], None
+        return b"".join(blocks)
 
     def poll(self):
         out = []

@@ -64,6 +64,9 @@ def main(argv=None):
     if args.voice:
         from .voice import VoiceListener, default_model_dir
         listener = VoiceListener(default_model_dir(ROOT)).start()
+    from .ask import Asker
+    asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
+    asker.preload()
     # VS Code (micro de Claude, Entrée) : toujours envoyé pour de vrai, même en simulation,
     # sinon la dictée ne peut pas être essayée. Seules ces touches-là, et seulement vers VS Code.
     vscode_ctl = Controller(SendInputBackend(), cfg)
@@ -143,6 +146,7 @@ def main(argv=None):
 
                 if listener is not None:
                     acts = acts + core.dictation_tick(t, listener.last_speech_t)
+                    acts = acts + core.ask_tick(t, listener.last_speech_t)
                     for ev in listener.poll():
                         acts = acts + core.voice(ev.word, ev.t_end, t_start=ev.t_start)
                         accepted = core.last_word and core.last_word[2]
@@ -169,6 +173,8 @@ def main(argv=None):
                     last_level_log = t
                     log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
                              listener.last_rms, listener.ambient, t - listener.last_speech_t)
+                if listener is not None:
+                    acts = question_actions(acts, listener, asker)
                 acts = vscode_actions(acts, core, vscode_ctl, sounds, t)
                 ctl.execute(acts, t)
                 for a in acts:
@@ -210,6 +216,7 @@ def main(argv=None):
                         "ok_flash": bool(core.last_word and core.last_word[2] and core.last_word[0] != "iris"
                                          and t - core.last_word[1] < 0.5),
                         "toast_age": t - toast[1] if toast else 1e9,
+                        "qa": asker.snapshot() if listener is not None else None,
                     })
                 else:
                     time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
@@ -244,6 +251,25 @@ def main(argv=None):
     # ce qui laissait se lancer plusieurs motionzero à la fois
     logging.shutdown()
     os._exit(0)
+
+
+def question_actions(acts, listener, asker):
+    """« iris question » : enregistre, puis transcription + Claude dans un fil à part ; renvoie le reste."""
+    rest = []
+    for a in acts:
+        if a[0] == "ask_start":
+            listener.start_capture()
+            asker.listening()
+        elif a[0] == "ask_stop":
+            asker.submit(listener.stop_capture())
+        elif a[0] == "ask_cancel":
+            listener.stop_capture()
+            asker.cancel()
+        elif a[0] == "ask_close":
+            asker.close()
+        else:
+            rest.append(a)
+    return rest
 
 
 def vscode_actions(acts, core, ctl, sounds, t):

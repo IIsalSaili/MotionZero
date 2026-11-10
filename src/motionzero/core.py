@@ -87,6 +87,8 @@ class Core:
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
         self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
+        self.asking = False                   # « iris question » : la question est en cours d'enregistrement
+        self.ask_t0 = -1e9
         # voix
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
@@ -286,8 +288,8 @@ class Core:
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
         c = self.cfg
         acts = []
-        if self.dictating:
-            return acts  # le micro de Claude écoute : tes mots sont dictés, ils ne déclenchent rien ici
+        if self.dictating or self.asking:
+            return acts  # dictée Claude ou question en cours : tes mots sont pour Claude, pas des commandes
         if self.confirming(t) and word in ("envoie", "annule", "claude"):
             # juste après la dictée : envoie / annule / claude marchent aussi sans « iris ».
             # Aucun verrou : toutes les autres commandes « iris + … » restent utilisables.
@@ -367,6 +369,14 @@ class Core:
             if self.mode != Mode.MOUSE:
                 self.set_mode(Mode.MOUSE, t, acts)
             label = "SOURIS"
+        elif word == "question":
+            self.asking = True
+            self.ask_t0 = t
+            acts.append(("ask_start",))
+            label = "POSE TA QUESTION"
+        elif word == "ferme":
+            acts.append(("ask_close",))
+            label = "FERME"
         elif word == "lecture":
             if self.mode != Mode.READING:
                 self.set_mode(Mode.READING, t, acts)
@@ -430,6 +440,22 @@ class Core:
             self.dictating = False
             self.last_gesture = ("RIEN ENTENDU : micro coupe", t)
             return [("vscode_dictation",)]
+        return []
+
+    def ask_tick(self, t, last_speech_t):
+        """Fin de la question : comme la dictée, après un silence ; rien dit du tout : abandon."""
+        if not self.asking:
+            return []
+        c = self.cfg
+        spoke = last_speech_t > self.ask_t0 + c.dictation_echo_s
+        if spoke and t - last_speech_t >= c.dictation_silence_s:
+            self.asking = False
+            self.last_gesture = ("QUESTION ENVOYEE A CLAUDE", t)
+            return [("ask_stop",)]
+        if not spoke and t - self.ask_t0 >= c.dictation_no_speech_s:
+            self.asking = False
+            self.last_gesture = ("RIEN ENTENDU : question annulee", t)
+            return [("ask_cancel",)]
         return []
 
     def _confirm(self, word, t):
