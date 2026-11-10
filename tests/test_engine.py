@@ -358,10 +358,11 @@ def _poses(core, monkeypatch, seq):
     core.pose_cents = {"x": 1}
 
 
-def test_pointer_l_index_clique_une_seule_fois(monkeypatch):
+def test_ouvrir_la_main_clique_une_seule_fois(monkeypatch):
+    """Main fermée (on vise) puis ouverte détendue = un seul clic gauche."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["open"] * 10 + ["point"] * 30)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 30)
     acts = []
     for _ in range(40):
         clk.t += 0.05
@@ -369,12 +370,12 @@ def test_pointer_l_index_clique_une_seule_fois(monkeypatch):
     assert [a for a in acts if a[0] == "click"] == [("click", "left")]
 
 
-def test_main_revenue_deja_pointee_ne_clique_pas(monkeypatch):
+def test_main_revenue_deja_ouverte_ne_clique_pas(monkeypatch):
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["point"] * 30)
+    _poses(core, monkeypatch, ["open"] * 30 + ["point"] * 10 + ["open"] * 10)   # index puis ouverte : non plus
     acts = []
-    for _ in range(30):
+    for _ in range(50):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
     assert [a for a in acts if a[0] == "click"] == []
@@ -388,7 +389,7 @@ def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
     """Le clic part là où est le curseur : aucun déplacement au moment du clic."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["open"] * 10 + ["point"] * 5)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 5)
     acts = []
     for i in range(15):
         clk.t += 0.05

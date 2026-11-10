@@ -192,24 +192,24 @@ class Core:
         return acts
 
     def _index_click(self, world, t, acts):
-        """Pointer l'index = clic gauche (temporaire, demandé par l'utilisateur), là où est le curseur :
-        le clic ne déplace JAMAIS le curseur. Il part dès 3 images de suite avec l'index (~0,15 s),
-        à condition de venir d'une pose sûre (main ouverte ou fermée) : un seul clic par geste,
-        rien si la main revient déjà pointée."""
+        """Ouvrir la main de façon détendue = clic gauche (temporaire ; l'index fatiguait la main), là où est
+        le curseur : le clic ne déplace JAMAIS le curseur. Il part dès 3 images de suite main ouverte
+        (~0,15 s), à condition de venir d'une main fermée (sans serrer) : un seul clic par ouverture,
+        rien si la main revient déjà ouverte."""
         c = self.cfg
         if self.pose_cents is None or world is None:
             return
         raw = classify(flexion(world), self.pose_cents)[0]
-        self.point_frames = self.point_frames + 1 if raw == "point" else 0
+        self.point_frames = self.point_frames + 1 if raw == c.click_pose else 0
         stable = self.pose_voter.update(raw)
-        if stable in ("open", "closed"):
+        if stable in ("open", "closed", "point") and stable != c.click_pose:
             self.pose_firm = stable
-        if (self.point_frames >= c.index_click_frames and self.pose_firm in ("open", "closed")
+        if (self.point_frames >= c.index_click_frames and self.pose_firm == "closed"
                 and t - self.last_click_t >= c.index_click_recovery_s):
             acts.append(("click", "left"))
             self.last_click_t = t
-            self.pose_firm = "point"          # réarmé seulement en rouvrant (ou fermant) la main
-            self.last_gesture = ("CLIC GAUCHE (index)", t)
+            self.pose_firm = c.click_pose     # réarmé seulement en refermant la main
+            self.last_gesture = ("CLIC GAUCHE (main ouverte)", t)
 
     def _no_hand(self, t, acts):
         self.features = None
