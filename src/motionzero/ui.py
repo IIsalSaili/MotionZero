@@ -63,6 +63,9 @@ _u32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
 _u32.SetWindowLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
 _u32.SetWindowDisplayAffinity.argtypes = [ctypes.c_void_p, ctypes.c_uint]
 
+LOUPE_D = 200      # diamètre de la loupe (px), toujours affichée en mode souris
+LOUPE_ZOOM = 2.5
+LOUPE_GAP = 40     # écart entre le curseur et le bord de la loupe (elle ne cache pas la cible)
 RING_R = 26        # rayon de l'anneau (px)
 RING_W = 5         # épaisseur
 HALO_W = 9         # contour noir sous l'anneau blanc : lisible sur fond clair comme sombre
@@ -95,6 +98,7 @@ class GlassOverlay(QWidget):
         self.setGeometry(scr.geometry())
         self.dpr = scr.devicePixelRatio()
         self.cursor = None        # position logique (Qt), None = rien à dessiner
+        self.loupe = None         # (centre de la loupe, image agrandie) ou None
         self.progress = 0.0
         self.lost = False
         self.island = _IslandPainter(self.width())   # île Dot Iris (étape 4)
@@ -123,15 +127,67 @@ class GlassOverlay(QWidget):
         self.lost = st.get("lost", False)
         if self.island.update(st, _time.perf_counter()):
             self.update(self.island.rect())
+        old_loupe = self._loupe_box()
+        self._grab_loupe(st)
+        for box in (old_loupe, self._loupe_box()):
+            if box is not None:
+                self.update(box)
         # repeindre seulement autour de l'ancien et du nouveau curseur (Qt recopie la fenêtre à chaque image)
         if old is not None:
             self.update(self._box(old))
         if self.cursor is not None:
             self.update(self._box(self.cursor))
 
+    def _loupe_center(self):
+        """En haut à droite du curseur ; de l'autre côté près des bords de l'écran."""
+        c = self.cursor
+        off = LOUPE_GAP + LOUPE_D / 2
+        dx = off if c.x() + off + LOUPE_D / 2 < self.width() else -off
+        dy = -off if c.y() - off - LOUPE_D / 2 > 0 else off
+        return QPointF(c.x() + dx, c.y() + dy)
+
+    def _loupe_box(self):
+        if self.loupe is None:
+            return None
+        ctr = self.loupe[0]
+        r = LOUPE_D // 2 + 4
+        return QRect(int(ctr.x() - r), int(ctr.y() - r), 2 * r, 2 * r)
+
+    def _grab_loupe(self, st):
+        """Capture la petite zone sous le curseur (l'overlay de motionzero en est exclu)."""
+        if self.cursor is None or not st.get("show_cursor") or st.get("lost"):
+            self.loupe = None
+            return
+        src = LOUPE_D / LOUPE_ZOOM
+        scr = QGuiApplication.primaryScreen()
+        pm = scr.grabWindow(0, int(self.cursor.x() - src / 2), int(self.cursor.y() - src / 2), int(src), int(src))
+        self.loupe = (self._loupe_center(), pm)
+
+    def _paint_loupe(self, p):
+        ctr, pm = self.loupe
+        r = LOUPE_D / 2
+        circle = QRectF(ctr.x() - r, ctr.y() - r, LOUPE_D, LOUPE_D)
+        clip = QPainterPath()
+        clip.addEllipse(circle)
+        p.save()
+        p.setClipPath(clip)
+        p.drawPixmap(circle, pm, QRectF(pm.rect()))
+        p.restore()
+        p.setPen(QPen(QColor(0, 0, 0, 200), 4))                 # bord : noir + blanc, lisible partout
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(circle)
+        p.setPen(QPen(QColor(255, 255, 255), 2))
+        p.drawEllipse(circle)
+        for col, w in ((QColor(0, 0, 0, 200), 4), (QColor(255, 255, 255), 2)):   # croix au centre
+            p.setPen(QPen(col, w))
+            p.drawLine(QPointF(ctr.x() - 9, ctr.y()), QPointF(ctr.x() + 9, ctr.y()))
+            p.drawLine(QPointF(ctr.x(), ctr.y() - 9), QPointF(ctr.x(), ctr.y() + 9))
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self.loupe is not None and event.rect().intersects(self._loupe_box()):
+            self._paint_loupe(p)
         if event.rect().intersects(self.island.rect()):
             self.island.paint(p)
         if self.cursor is None:
