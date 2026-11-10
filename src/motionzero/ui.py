@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject, QPointF, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
-__all__ = ["Bridge", "GlassOverlay", "PreviewWindow", "QApplication", "StopButton"]
+__all__ = ["Bridge", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton"]
 
 
 class Bridge(QObject):
@@ -219,3 +219,18 @@ class StopButton(QWidget):
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.setPen(QPen(QColor(255, 255, 255), 3, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap))
             p.drawArc(ring, 90 * 16, -int(360 * 16 * min(self.hover, 1.0)))
+
+
+class KeySink(QWidget):
+    """Fenêtre invisible (1 px, hors de l'écran) qui reçoit le raccourci Discord : il ne se tape ainsi
+    ni dans la dictée de Claude, ni dans la fenêtre où l'on était (YouTube…)."""
+
+    def __init__(self):
+        super().__init__(None, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Tool)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setGeometry(-50, -50, 1, 1)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        hwnd = ctypes.c_void_p(int(self.winId()))
+        _u32.SetWindowDisplayAffinity(hwnd, _WDA_EXCLUDEFROMCAPTURE)

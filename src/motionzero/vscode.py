@@ -87,6 +87,7 @@ def toggle_claude_dictation(send_hotkey):
 
 # --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
 _previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
+SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
 
 
 def remember_previous(vscode_hwnd):
@@ -124,13 +125,19 @@ def alt_tab():
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
 def discord_mute_toggle():
-    """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches.
+    """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches, dans la
+    fenêtre invisible de motionzero (rien ne se tape ailleurs). Discord, lui, les capte partout.
     Pavé numérique activé : la touche Suppr/point envoie « point décimal » ; désactivé : Suppr."""
     u = ctypes.windll.user32
+    if SINK_HWND and not bring_to_front(SINK_HWND):
+        log.warning("fenetre invisible pas au premier plan : raccourci Discord non envoye")
+        return False
     del_vk = 0x6E if u.GetKeyState(0x90) & 1 else 0x2E   # VK_DECIMAL ou VK_DELETE, même touche (code 0x53)
     u.keybd_event(del_vk, 0x53, 0, 0)
     u.keybd_event(0x6B, 0x4E, 0, 0)        # VK_ADD, « + » du pavé numérique
     time.sleep(0.05)
     u.keybd_event(0x6B, 0x4E, 2, 0)
     u.keybd_event(del_vk, 0x53, 2, 0)
+    time.sleep(0.05)
     log.info("discord : micro bascule")
+    return True
