@@ -36,8 +36,8 @@ def test_coupe_apres_le_silence_puis_envoie():
     core = _start()
     assert core.dictation_tick(6.5, last_speech_t=4.0) == []      # 2,5 s de silence (pause pour réfléchir) : on attend
     assert core.dictation_tick(6.85, last_speech_t=4.0) == TOGGLE  # 2,85 s : micro coupé
-    assert not core.dictating and core.confirming(8.0) and core.listening(8.0)
-    assert core.voice("clic", 8.0) == []                          # pas d'autre commande pendant la confirmation
+    assert not core.dictating and core.confirming(8.0)
+    assert core.voice("clic", 8.0) == []                          # mot seul sans « iris » : ignoré
     assert core.voice("envoie", 9.0) == [("vscode_keys", [["enter"]])]
     assert not core.confirming(9.1)
 
@@ -66,16 +66,13 @@ def test_sans_reponse_la_confirmation_expire():
     assert core.voice("envoie", 40.0) == []  # écoute fermée : ignoré
 
 
-def test_pendant_iris_claude_rien_d_autre_ne_s_execute():
-    """Demande de l'utilisateur : pendant « iris claude » (message dicté, pas encore envoyé), ce qu'on dit
-    ne doit rien déclencher d'autre ; seuls envoie / annule comptent, avec ou sans « iris »."""
+def test_apres_la_dictee_aucune_commande_n_est_bloquee():
+    """Demande de l'utilisateur : le message dicté pas encore envoyé ne doit bloquer aucune commande."""
     core = _start()
-    core.dictation_tick(8.0, last_speech_t=4.0)            # micro coupé : attente envoie / annule
-    for word in ("iris", "chrome", "clic", "tab", "colle", "discord", "mute"):
-        assert core.voice(word, 9.0) == []
-    assert core.confirming(9.1)
-    core.voice("iris", 9.5)
-    assert core.voice("envoie", 9.6) == [("vscode_keys", [["enter"]])]
+    core.dictation_tick(8.0, last_speech_t=4.0)            # micro coupé : envoie / annule possibles
+    core.voice("iris", 9.0)
+    assert core.voice("chrome", 9.2) == [("open_app", "chrome")]
+    assert core.voice("envoie", 9.5) == [("vscode_keys", [["enter"]])]   # sans « iris » : marche encore
 
 
 def test_iris_envoie_et_iris_annule_a_tout_moment():

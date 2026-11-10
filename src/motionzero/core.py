@@ -273,8 +273,8 @@ class Core:
     # --- voix ----------------------------------------------------------------
     def listening(self, t):
         """L'écoute est ouverte après « iris », ou tant que la bulle / le menu (main immobile) sont affichés."""
-        if self.confirming(t):
-            return True
+        # (après une dictée, envoie / annule / claude sont traités à part : l'écoute n'est pas ouverte
+        # pour autant, sinon n'importe quel mot seul serait exécuté pendant 30 s)
         return self.mode != Mode.DISABLED and (t < self.listen_until or self.bubble is not None
                                                or self.menu.is_open)
 
@@ -284,10 +284,9 @@ class Core:
         acts = []
         if self.dictating:
             return acts  # le micro de Claude écoute : tes mots sont dictés, ils ne déclenchent rien ici
-        if self.confirming(t):
-            # « iris claude » en cours (message dicté, pas encore envoyé) : seuls envoie / annule / claude
-            # comptent, avec ou sans « iris ». Tout le reste de ce qu'on dit est ignoré (demande de
-            # l'utilisateur : pendant « iris claude », l'appli ne doit rien exécuter d'autre).
+        if self.confirming(t) and word in ("envoie", "annule", "claude"):
+            # juste après la dictée : envoie / annule / claude marchent aussi sans « iris ».
+            # Aucun verrou : toutes les autres commandes « iris + … » restent utilisables.
             return self._confirm(word, t)
         if word == "stop":  # toujours écouté, prioritaire
             acts.append(("release_all",))
@@ -432,10 +431,7 @@ class Core:
             self.confirm_until = -1e9
             self.last_gesture = ("MESSAGE ENVOYE A CLAUDE", t)
             return [("vscode_keys", [["enter"]])]
-        if word == WAKE_WORD:              # « iris envoie » : on attend le mot suivant, sans rien faire
-            self.last_word = (word, t, True)
-            return []
-        if word in ("annule", "stop"):
+        if word == "annule":
             self.confirm_until = -1e9
             self.last_gesture = ("MESSAGE EFFACE", t)
             return [("vscode_keys", [["ctrl", "a"], ["backspace"]])]

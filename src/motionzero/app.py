@@ -220,8 +220,6 @@ def main(argv=None):
     sink.show()
     from . import vscode
     vscode.SINK_HWND = int(sink.winId())
-    vscode.STATE_PATH = os.path.join(ROOT, "logs", "discord_state.json")
-    vscode.load_discord_state()
     qt.exec()
     stop.set()
     worker.join(timeout=3)
@@ -236,8 +234,7 @@ def main(argv=None):
 
 def vscode_actions(acts, core, ctl, sounds, t):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import (alt_tab, discord_mute, discord_unmute, find_window, focus_and_send, open_app,
-                         toggle_claude_dictation)
+    from .vscode import alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app, toggle_claude_dictation
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
@@ -256,14 +253,12 @@ def vscode_actions(acts, core, ctl, sounds, t):
             err = None
         elif a[0] == "open_app":
             err = open_app(a[1])
-        elif a[0] == "discord_mute":
-            discord_mute()
-            err = None
-        elif a[0] == "discord_unmute":
-            discord_unmute()
+        elif a[0] in ("discord_mute", "discord_unmute"):
+            discord_mute_toggle()              # le raccourci, tout simplement : aucun état retenu
             err = None
         elif a[0] == "vscode_dictation":
-            # Discord n'est plus touché ici : l'utilisateur coupe lui-même (« iris mute / démute »).
+            if core.dictating:                 # au début de la dictée : le raccourci Discord, sans rien retenir
+                discord_mute_toggle()
             err = toggle_claude_dictation(send)
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer

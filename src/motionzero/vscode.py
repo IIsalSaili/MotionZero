@@ -86,8 +86,6 @@ def toggle_claude_dictation(send_hotkey):
 
 # --- état partagé ---------------------------------------------------------------------------------
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
-discord_muted = False   # état de Discord connu de motionzero (le raccourci inverse l'état à chaque appui)
-STATE_PATH = None       # fichier où cet état survit aux redémarrages (réglé par app.py)
 
 
 # --- « Iris, tab » : comme Alt+Tab -------------------------------------------------------------------
@@ -102,51 +100,6 @@ def alt_tab():
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
-def load_discord_state():
-    """Relit l'état sauvegardé (survit aux redémarrages)."""
-    global discord_muted
-    import json
-    try:
-        with open(STATE_PATH, encoding="utf-8") as fh:
-            discord_muted = bool(json.load(fh).get("discord_muted", False))
-    except (OSError, ValueError, TypeError):
-        discord_muted = False
-    log.info("discord : etat relu, coupe=%s", discord_muted)
-
-
-def _save_discord_state():
-    import json
-    if STATE_PATH:
-        try:
-            with open(STATE_PATH, "w", encoding="utf-8") as fh:
-                json.dump({"discord_muted": discord_muted}, fh)
-        except OSError:
-            log.warning("discord : etat non sauvegarde")
-
-
-def discord_mute():
-    """« iris mute ». Le raccourci INVERSE l'état : on ne l'envoie que si Discord est allumé.
-    Mesuré le 10/11 : envoyé à chaque fois, deux « mute » de suite rallumaient le micro."""
-    global discord_muted
-    if discord_muted:
-        log.info("discord : deja coupe, rien a faire")
-        return
-    if discord_mute_toggle():
-        discord_muted = True
-        _save_discord_state()
-
-
-def discord_unmute():
-    """« iris démute » : le raccourci n'est envoyé que si Discord est coupé."""
-    global discord_muted
-    if not discord_muted:
-        log.info("discord : deja allume, rien a faire")
-        return
-    if discord_mute_toggle():
-        discord_muted = False
-        _save_discord_state()
-
-
 def discord_mute_toggle():
     """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches, dans la
     fenêtre invisible de motionzero (rien ne se tape ailleurs). Discord, lui, les capte partout.
