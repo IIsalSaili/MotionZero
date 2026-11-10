@@ -7,6 +7,7 @@ Pour arrêter : uniquement le petit bouton STOP en bas à droite (clic, ou main 
 L'interface est en Qt (fil principal) ; caméra, MediaPipe et Core tournent dans un fil à part.
 """
 import argparse
+import ctypes
 import logging
 import os
 import threading
@@ -241,7 +242,14 @@ def vscode_actions(acts, core, ctl, sounds, t):
 
     rest = []
     for a in acts:
-        if a[0] == "window_back":
+        if a[0] == "annule":
+            code = find_window()
+            if code and ctypes.windll.user32.GetForegroundWindow() == code:
+                err = focus_and_send(send, [["ctrl", "a"], ["backspace"]])   # vide le message de Claude
+            else:
+                rest.append(("hotkey", ["escape"]))                         # ailleurs : touche Échap
+                continue
+        elif a[0] == "window_back":
             discord_unmute()                   # on quitte VS Code : Discord rallumé (si on l'avait coupé)
             err = go_back()
         elif a[0] == "alt_tab":

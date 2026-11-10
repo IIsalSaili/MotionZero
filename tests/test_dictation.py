@@ -64,3 +64,24 @@ def test_sans_reponse_la_confirmation_expire():
     core.dictation_tick(8.0, last_speech_t=4.0)
     assert not core.confirming(40.0)
     assert core.voice("envoie", 40.0) == []  # écoute fermée : ignoré
+
+
+def test_iris_retour_marche_pendant_l_attente_d_envoi():
+    """Message dicté, ni envoyé ni annulé : « iris retour » doit marcher quand même."""
+    core = _start()
+    core.dictation_tick(8.0, last_speech_t=4.0)            # micro coupé : attente envoie / annule
+    assert core.confirming(9.0)
+    core.voice("iris", 9.0)
+    assert not core.confirming(9.1)
+    assert core.voice("retour", 9.5) == [("window_back",)]
+
+
+def test_iris_envoie_et_iris_annule_a_tout_moment():
+    """Sans « iris claude » avant (message tapé ou dicté plus tôt) : envoie / annule marchent."""
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("envoie", 1.5) == [("vscode_keys", [["enter"]])]
+    core.voice("iris", 2.0)
+    assert core.voice("annule", 2.5) == [("annule",)]

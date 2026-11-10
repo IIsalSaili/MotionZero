@@ -30,7 +30,7 @@ class Mode:
 
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "LECTURE"}
 WAKE_WORD = "iris"
-VOICE_HOTKEYS = {"entrée": ["enter"], "annule": ["escape"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"]}
+VOICE_HOTKEYS = {"entrée": ["enter"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"]}
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -282,7 +282,11 @@ class Core:
         if self.dictating:
             return acts  # le micro de Claude écoute : tes mots sont dictés, ils ne déclenchent rien ici
         if self.confirming(t):
-            return self._confirm(word, t)
+            if word != WAKE_WORD:
+                return self._confirm(word, t)
+            # « iris » : on passe à autre chose (retour, chrome…). Le message reste dans VS Code :
+            # « iris envoie » / « iris annule » marchent toujours, à tout moment.
+            self.confirm_until = -1e9
         if word == "stop":  # toujours écouté, prioritaire
             acts.append(("release_all",))
             self.menu.close()
@@ -340,6 +344,12 @@ class Core:
             acts.append(("vscode_dictation",))
         elif word == "retour":
             acts.append(("window_back",))
+        elif word == "envoie":
+            acts.append(("vscode_keys", [["enter"]]))      # envoie le message de Claude, à tout moment
+            label = "MESSAGE ENVOYE A CLAUDE"
+        elif word == "annule":
+            acts.append(("annule",))       # vide le message de Claude si VS Code est devant, sinon Échap
+            label = "ANNULE"
         elif word == "tab":
             acts.append(("alt_tab",))
         elif word in ("discord", "chrome"):
