@@ -249,6 +249,8 @@ class KeySink(QWidget):
 _FONT_DIR = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
                           "assets", "fonts")
 ISLAND_TOP = 12          # px depuis le haut de l'écran
+ANSWER_W = 560           # largeur de l'île agrandie pour une réponse de Claude
+ANSWER_MAX_H = 440      # 3 phrases longues tiennent ; au-delà, le texte est coupé proprement
 ISLAND_H = 46
 ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
@@ -286,6 +288,15 @@ def load_fonts():
 def island_text(st):
     """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
     mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    qa = st.get("qa") or {}
+    if qa.get("phase") == "listening":
+        return mode, "Pose ta question…", True
+    if qa.get("phase") == "thinking":
+        return mode, "Claude réfléchit…", True
+    if qa.get("phase") == "answer":
+        return mode, "Claude répond", True
+    if qa.get("phase") == "error":
+        return mode, "Question : échec", True
     if st.get("dictating"):
         return mode, "Claude t'écoute", True
     if st.get("confirming"):
@@ -308,6 +319,9 @@ class _IslandPainter:
         self.font_mode = QFont("Atkinson Hyperlegible", 15, QFont.Weight.Bold)
         self.font_mode.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.5)
         self.font_msg = QFont("Atkinson Hyperlegible", 15)
+        self.font_answer = QFont("Atkinson Hyperlegible", 17)
+        self.font_small = QFont("Atkinson Hyperlegible", 12)
+        self.qa = None
         self.width = width
         self.content = None
         self.last_change = 0.0
@@ -323,11 +337,13 @@ class _IslandPainter:
 
     def rect(self):
         w = ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP)
-        return QRect((self.width - w) // 2, ISLAND_TOP - 4, w, ISLET + 8)
+        return QRect((self.width - w) // 2, ISLAND_TOP - 4, w, ISLET + ANSWER_MAX_H + 8)
 
     def update(self, st, now):
         mode, msg, active = island_text(st)
-        content = (mode, msg)
+        qa = st.get("qa") or {}
+        self.qa = qa if qa.get("phase") in ("answer", "error") else None
+        content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -346,7 +362,10 @@ class _IslandPainter:
     def paint(self, p):
         if not self.content:
             return
-        mode, msg = self.content
+        mode, msg = self.content[0], self.content[1]
+        if getattr(self, "qa", None):
+            self._paint_answer(p, mode, msg)
+            return
         fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_msg)
         pad, dot, gap = 20, 10, 14
         w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
@@ -374,6 +393,53 @@ class _IslandPainter:
             p.setFont(self.font_msg)
             mx = tx + fm_mode.horizontalAdvance(mode) + gap
             p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
+        p.restore()
+
+    def _paint_answer(self, p, mode, header):
+        """L'île agrandie vers le bas : en-tête, la question en petit, la réponse, le temps restant."""
+        qa = self.qa
+        pad, top = 20, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        gx = (self.width - (ISLET + ISLET_GAP + ANSWER_W)) / 2
+        x = gx + ISLET + ISLET_GAP
+        inner = ANSWER_W - 2 * pad
+        fm_q = QFontMetrics(self.font_small)
+        fm_a = QFontMetrics(self.font_answer)
+        flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+        q_text = f"« {qa.get('question')} »" if qa.get("question") else ""
+        q_rect = fm_q.boundingRect(QRect(0, 0, inner, 1000), flags, q_text) if q_text else QRect()
+        a_rect = fm_a.boundingRect(QRect(0, 0, inner, 1000), flags, qa.get("answer") or "")
+        meta = f"Haiku · disparaît dans {int(qa.get('left', 0))} s · « Iris, ferme » pour la retirer"
+        h = min(ANSWER_MAX_H, 44 + (q_rect.height() + 8 if q_text else 0) + a_rect.height() + 40)
+        p.save()
+        self._paint_islet(p, gx, ISLAND_TOP)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 240))
+        p.drawRoundedRect(QRectF(x, top, ANSWER_W, h), 22, 22)
+        p.setBrush(QColor(255, 255, 255))
+        p.drawEllipse(QPointF(x + pad + 5, top + 23), 5, 5)
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_mode)
+        p.drawText(QRectF(x + pad + 20, top, inner, 46), Qt.AlignmentFlag.AlignVCenter, mode)
+        fm_mode = QFontMetrics(self.font_mode)
+        p.setPen(QColor(255, 255, 255, 200))
+        p.setFont(self.font_msg)
+        p.drawText(QRectF(x + pad + 34 + fm_mode.horizontalAdvance(mode), top, inner, 46),
+                   Qt.AlignmentFlag.AlignVCenter, header)
+        y = top + 44
+        if q_text:
+            p.setPen(QColor(255, 255, 255, 150))
+            p.setFont(self.font_small)
+            p.drawText(QRectF(x + pad, y, inner, q_rect.height()), flags, q_text)
+            y += q_rect.height() + 8
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_answer)
+        p.save()
+        p.setClipRect(QRectF(x + pad, y, inner, max(0, top + h - 36 - y)))   # jamais sur la ligne du bas
+        p.drawText(QRectF(x + pad, y, inner, a_rect.height()), flags, qa.get("answer") or "")
+        p.restore()
+        p.setPen(QColor(255, 255, 255, 110))
+        p.setFont(self.font_small)
+        p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
         p.restore()
 
     def _paint_islet(self, p, x, y):
