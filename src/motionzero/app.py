@@ -143,7 +143,7 @@ def main(argv=None):
                 if listener is not None:
                     acts = acts + core.dictation_tick(t, listener.last_speech_t)
                     for ev in listener.poll():
-                        acts = acts + core.voice(ev.word, ev.t_end)
+                        acts = acts + core.voice(ev.word, ev.t_end, t_start=ev.t_start)
                         accepted = core.last_word and core.last_word[2]
                         log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
                         if ev.word == "iris" and accepted:

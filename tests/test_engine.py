@@ -133,6 +133,9 @@ def test_pas_de_menu_en_entrant_sans_bouger():
     assert not core.menu.is_open and kinds(acts, "click") == []
 
 
+MENU = Config(click_menu_on_still=True)   # ancien menu de clic, gardé en option
+
+
 def _open_menu(core, clk):
     _enter_mouse(core, clk)
     clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.6)
@@ -141,31 +144,31 @@ def _open_menu(core, clk):
 
 
 def test_menu_gauche_clic_gauche():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     acts = clk.run(core, 0.2, cx=0.6, cy=0.52, to_cx=0.52)
     assert kinds(acts, "click") == [("click", "left")]
 
 
 def test_menu_droite_clic_droit_et_haut_double_clic():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     assert kinds(clk.run(core, 0.2, cx=0.6, cy=0.52, to_cx=0.68), "click") == [("click", "right")]
-    core2, clk2 = Core(Config()), Clock()
+    core2, clk2 = Core(MENU), Clock()
     _open_menu(core2, clk2)
     acts = clk2.run(core2, 0.2, cx=0.6, cy=0.52, to_cy=0.44)
     assert kinds(acts, "click") == [("click", "left"), ("click", "left")]
 
 
 def test_menu_bas_retour_lecture():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     clk.run(core, 0.2, cx=0.6, cy=0.52, to_cy=0.60)
     assert core.mode == Mode.READING
 
 
 def test_menu_ignore_aucun_clic():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     acts = clk.run(core, 2.0, cx=0.6, cy=0.52)
     assert kinds(acts, "click") == [] and not core.menu.is_open
@@ -173,7 +176,7 @@ def test_menu_ignore_aucun_clic():
 
 def test_un_seul_clic_tant_qu_on_ne_bouge_pas():
     """La cause des 19 clics involontaires : rester immobile ne doit pas recliquer."""
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     acts = clk.run(core, 0.2, cx=0.6, cy=0.52, to_cx=0.52)
     acts += clk.run(core, 6.0, cx=0.52, cy=0.52, jitter=0.003)
@@ -247,3 +250,27 @@ def test_one_euro_lisse_le_tremblement():
     f = OneEuro(1.0, 0.01)
     out = [f(100 + (3 if i % 2 else -3), i / 30) for i in range(60)]
     assert max(out[30:]) - min(out[30:]) < 2.0
+
+
+def test_main_immobile_n_ouvre_rien_ni_clic():
+    """Réfléchir main immobile en mode souris : aucun menu, aucun clic, même 30 s."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.6)
+    acts = clk.run(core, 30.0, cx=0.6, cy=0.52, jitter=0.003)
+    assert not core.menu.is_open and kinds(acts, "click") == [] and core.progress() is None
+
+
+def test_clic_vocal_la_ou_l_on_visait_avant_iris():
+    """La main bouge pendant « iris, clic » : le clic part de la position d'avant « iris »."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.6)
+    clk.run(core, 1.0, cx=0.6, cy=0.52)                    # on vise, immobile
+    aimed = core.cursor
+    t_iris = clk.t
+    clk.run(core, 0.6, cx=0.6, cy=0.52, to_cx=0.66)        # la main dérive en parlant
+    assert core.cursor != aimed
+    core.voice("iris", clk.t, t_start=t_iris)
+    acts = core.voice("clic", clk.t + 0.1, t_start=clk.t)
+    assert acts == [("move", *aimed), ("click", "left")] and core.cursor == aimed
