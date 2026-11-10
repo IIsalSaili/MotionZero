@@ -100,23 +100,36 @@ def alt_tab():
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
-def discord_mute_toggle():
-    """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches, dans la
-    fenêtre invisible de motionzero (rien ne se tape ailleurs). Discord, lui, les capte partout.
-    Pavé numérique activé : la touche Suppr/point envoie « point décimal » ; désactivé : Suppr."""
+EXTENDED_VK = {0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E, 0x5B, 0x5C, 0x6F, 0x90, 0xA3, 0xA5}
+
+
+def send_discord(action):
+    """Envoie le raccourci Discord d'une action (lu dans les réglages de Discord, voir discord_keys),
+    dans la fenêtre invisible de motionzero : rien ne se tape ailleurs, Discord le capte partout."""
+    from .discord_keys import combo
     u = ctypes.windll.user32
+    keys = combo(action)
+    if not keys:
+        return False
     if SINK_HWND and not bring_to_front(SINK_HWND):
         log.warning("fenetre invisible pas au premier plan : raccourci Discord non envoye")
         return False
-    del_vk = 0x6E if u.GetKeyState(0x90) & 1 else 0x2E   # VK_DECIMAL ou VK_DELETE, même touche (code 0x53)
-    u.keybd_event(del_vk, 0x53, 0, 0)
-    u.keybd_event(0x6B, 0x4E, 0, 0)        # VK_ADD, « + » du pavé numérique
+    def key(vk, up):
+        flags = (1 if vk in EXTENDED_VK else 0) | (2 if up else 0)
+        u.keybd_event(vk, u.MapVirtualKeyW(vk, 0), flags, 0)
+    for vk in keys:
+        key(vk, False)
     time.sleep(0.05)
-    u.keybd_event(0x6B, 0x4E, 2, 0)
-    u.keybd_event(del_vk, 0x53, 2, 0)
+    for vk in reversed(keys):
+        key(vk, True)
     time.sleep(0.05)
-    log.info("discord : micro bascule")
+    log.info("discord : %s (%s)", action, "+".join(hex(k) for k in keys))
     return True
+
+
+def discord_mute_toggle():
+    """« iris mute / démute » : le raccourci « couper le micro » de Discord, tel que réglé dans Discord."""
+    return send_discord("TOGGLE_MUTE")
 
 
 # --- « Iris, Discord » / « Iris, Chrome » : passer sur l'appli (ou la lancer) ------------------------

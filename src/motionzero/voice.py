@@ -41,23 +41,28 @@ WORDS = {
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
+    "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
     "stop": "stop",
 }
 WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
-GRAMMAR = json.dumps([w for w in WORDS if w != "démute"] + ["des mute", "[unk]"], ensure_ascii=False)
+SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
+         ("des", "fun"): "défun", ("dis", "fun"): "défun"}
+GRAMMAR = json.dumps([w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT] + ["[unk]"],
+                     ensure_ascii=False)
 
 
 def _join_demute(words):
-    """« des » + « mute » entendus à la suite = la commande « démute »."""
+    """Mots absents du modèle, entendus en deux morceaux : « des mute » = démute, « des fun » / « dis fun » = défun."""
     out, i = [], 0
     while i < len(words):
         w = words[i]
-        if w["word"] == "des" and i + 1 < len(words) and words[i + 1]["word"] == "mute":
+        pair = (w["word"], words[i + 1]["word"]) if i + 1 < len(words) else None
+        if pair in SPLIT:
             nxt = words[i + 1]
-            out.append({"word": "démute", "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
+            out.append({"word": SPLIT[pair], "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
             i += 2
             continue
         out.append(w)

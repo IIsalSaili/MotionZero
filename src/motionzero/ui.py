@@ -258,6 +258,22 @@ ISLAND_FADED = 0.25      # … à 25 % d'opacité
 TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
 MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
 
+# pastille Discord, à gauche de l'îlot : micro barré (micro coupé), casque barré + micro barré (sourdine)
+_ICON_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "icons")
+DISCORD_RED = "#ED4245"
+ICON = 24
+
+
+def discord_icons(state):
+    """Icônes à afficher d'après (micro coupé, sourdine). Pur : testable."""
+    if not state:
+        return []
+    mute, deaf = state
+    if deaf:
+        return ["headphone-off", "mic-off"]
+    return ["mic-off"] if mute else []
+
+
 # îlot du logo d'Iris, à gauche de l'île (un disque clair : la main noire du neutre reste lisible)
 _LOGO_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "iris")
 ISLET = 64               # diamètre de l'îlot (l'île du texte garde sa hauteur)
@@ -332,11 +348,21 @@ class _IslandPainter:
             if not pm.isNull():
                 self.logos[name] = pm
         self.logo = None
+        self.icons = {}
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtSvg import QSvgRenderer
+        for name in ("mic-off", "headphone-off"):
+            try:
+                svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
+                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", DISCORD_RED).encode()))
+            except OSError:
+                pass
+        self.discord = []
         self.blink_until = 0.0
         self.next_blink = 0.0
 
     def rect(self):
-        w = ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP)
+        w = ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120      # + la pastille Discord à gauche
         return QRect((self.width - w) // 2, ISLAND_TOP - 4, w, ISLET + ANSWER_MAX_H + 8)
 
     def update(self, st, now):
@@ -353,6 +379,9 @@ class _IslandPainter:
             self.blink_until = now + BLINK_S
             self.next_blink = now + _random.uniform(*BLINK_EVERY)
         logo = islet_logo(st, now < self.blink_until)
+        discord = discord_icons(st.get("discord"))
+        if discord != self.discord:
+            self.discord, self.last_change = discord, now
         idle = now - self.last_change
         target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
         changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo
@@ -442,9 +471,31 @@ class _IslandPainter:
         p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
         p.restore()
 
+    def _paint_discord(self, p, islet_x, y):
+        """Pastille noire à gauche de l'îlot, icônes rouges ; ne s'estompe jamais, comme le logo."""
+        if not self.discord:
+            return
+        pad, gap = 12, 6
+        w = 2 * pad + len(self.discord) * ICON + (len(self.discord) - 1) * gap
+        x = islet_x - ISLET_GAP - w
+        top = y + (ISLET - ISLAND_H) / 2
+        p.save()
+        p.setOpacity(1.0)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, top, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        ix = x + pad
+        for name in self.discord:
+            r = self.icons.get(name)
+            if r is not None:
+                r.render(p, QRectF(ix, top + (ISLAND_H - ICON) / 2, ICON, ICON))
+            ix += ICON + gap
+        p.restore()
+
     def _paint_islet(self, p, x, y):
         """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
         par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
+        self._paint_discord(p, x, y)
         circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
         # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
         p.setPen(Qt.PenStyle.NoPen)
