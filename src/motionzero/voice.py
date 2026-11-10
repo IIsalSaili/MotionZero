@@ -169,51 +169,62 @@ class VoiceListener:
             pass  # on préfère perdre un bloc que bloquer l'audio
 
     def _run(self):
+        # une erreur sur un morceau de son ne doit jamais arrêter l'écoute (mesuré : une phrase vide
+        # faisait planter le fil, et plus aucune commande vocale n'était entendue)
         while self.running:
             try:
-                block = self.audio.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            start_samples = self.samples
-            self.samples += len(block) // 2
-            rms = _rms(block)
-            self.last_rms = rms
-            if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
-                self.ambient = 0.98 * self.ambient + 0.02 * rms
-            if rms >= min(max(self.ambient * 3.0, 400.0), 1500.0):
-                self._loud += len(block) / 2 / self.sr
-                if self._loud >= 0.15:  # un bruit bref ne compte pas comme de la parole
-                    self.last_speech_t = time.perf_counter()
-            else:
-                self._loud = 0.0
-            if self.muted:
-                self.rec.Reset()
-                self.free.Reset()
-                continue
-            now = time.perf_counter()
-            if self.free.AcceptWaveform(block):
-                self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
-            if self.rec.AcceptWaveform(block):
-                self._partial = ""
-                t_free, text = self._free_final
-                if now - t_free > 1.5:   # la reconnaissance libre n'a pas encore fini sa phrase
-                    text = json.loads(self.free.PartialResult()).get("partial", "")
-                self._emit(json.loads(self.rec.Result()), text)
-            else:
-                # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
-                # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
-                # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
-                partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
-                if partial and partial != self._partial:
-                    self.last_speech_t = time.perf_counter()
-                self._partial = partial
+                self._step()
+            except Exception:
+                log.exception("erreur dans l'ecoute vocale (on continue)")
+
+    def _step(self):
+        """Traite un morceau de son (30 ms)."""
+        try:
+            block = self.audio.get(timeout=0.2)
+        except queue.Empty:
+            return
+        start_samples = self.samples
+        self.samples += len(block) // 2
+        rms = _rms(block)
+        self.last_rms = rms
+        if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
+            self.ambient = 0.98 * self.ambient + 0.02 * rms
+        if rms >= min(max(self.ambient * 3.0, 400.0), 1500.0):
+            self._loud += len(block) / 2 / self.sr
+            if self._loud >= 0.15:  # un bruit bref ne compte pas comme de la parole
+                self.last_speech_t = time.perf_counter()
+        else:
+            self._loud = 0.0
+        if self.muted:
+            self.rec.Reset()
+            self.free.Reset()
+            return
+        now = time.perf_counter()
+        if self.free.AcceptWaveform(block):
+            self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
+        if self.rec.AcceptWaveform(block):
+            self._partial = ""
+            t_free, text = self._free_final
+            if now - t_free > 1.5:   # la reconnaissance libre n'a pas encore fini sa phrase
+                text = json.loads(self.free.PartialResult()).get("partial", "")
+            self._emit(json.loads(self.rec.Result()), text)
+        else:
+            # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
+            # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
+            # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
+            partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
+            if partial and partial != self._partial:
+                self.last_speech_t = time.perf_counter()
+            self._partial = partial
 
     def _emit(self, res, free_text=None):
         why = rejection(res, self.min_conf)
         if why:
             log.info("iris rejete : %s", why)
         words = accepted_words(res, self.min_conf)
-        if words and free_text is not None and not confirmed(words, free_text):
+        if not words:
+            return
+        if free_text is not None and not confirmed(words, free_text):
             log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
             return
         # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
@@ -221,7 +232,7 @@ class VoiceListener:
         # ramenait alors le curseur à une position vieille de plusieurs secondes.
         # La phrase vient de finir (Vosk rend le résultat après un court silence) : on recale sur « maintenant ».
         now = time.perf_counter() - END_SILENCE_S
-        last_end = max(w["end"] for w in res.get("result", words))
+        last_end = max(w["end"] for w in words)
         for w in words:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             log.info("voix %s (%.2f)", ev.word, ev.conf)

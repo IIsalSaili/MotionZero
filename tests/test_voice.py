@@ -212,3 +212,14 @@ def test_deuxieme_verification():
     assert not confirmed(w("iris", "colle"), "il colle")            # pas de « iris » prononcé
     assert confirmed(w("stop"), "arrête stop tout de suite là")    # sécurité : jamais bloqué
     assert confirmed(w("lâche"), "")
+
+
+def test_phrase_vide_ne_fait_pas_planter_l_ecoute():
+    """Mesuré : un résultat vide faisait planter le fil d'écoute, plus aucune commande n'était entendue."""
+    from motionzero.voice import VoiceListener
+    v = VoiceListener.__new__(VoiceListener)
+    import queue
+    v.events, v.min_conf = queue.Queue(), 0.6
+    v._emit({"result": [], "text": ""}, "")
+    v._emit({"text": ""}, "")
+    assert v.events.empty()
