@@ -329,3 +329,71 @@ def test_clic_vocal_date_absurde_ne_deplace_pas_le_curseur():
     core.voice("iris", clk.t, t_start=clk.t - 50.0)          # date fausse, bien plus vieille que l'historique
     acts = core.voice("clic", clk.t + 0.1, t_start=clk.t - 49.0)
     assert acts == [("click", "left")] and core.cursor == here
+
+
+# --- souris : centre, retour au centre, index = clic -----------------------------------------------
+def test_mode_souris_commence_au_centre():
+    core, clk = Core(Config()), Clock()
+    core.cursor = core._cursor_f = (100, 1000)               # curseur laissé n'importe où
+    acts = _enter_mouse(core, clk)
+    assert ("move", 960, 540) in acts
+
+
+def test_main_revenue_le_curseur_repart_du_centre():
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.7)
+    assert core.cursor[0] > 1100
+    clk.run(core, 1.0, absent=True)
+    acts = clk.run(core, 0.1, cx=0.3, cy=0.52)
+    assert ("move", 960, 540) in acts
+
+
+def _poses(core, monkeypatch, seq):
+    """Fait « voir » une suite de poses au moteur (sans vraie main en 3D)."""
+    import motionzero.core as mc
+    it = iter(seq)
+    monkeypatch.setattr(mc, "flexion", lambda w: None)
+    monkeypatch.setattr(mc, "classify", lambda f, c: (next(it), None))
+    core.pose_cents = {"x": 1}
+
+
+def test_ouvrir_la_main_clique_une_seule_fois(monkeypatch):
+    """Main fermée (on vise) puis ouverte détendue = un seul clic gauche."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 30)
+    acts = []
+    for _ in range(40):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert [a for a in acts if a[0] == "click"] == [("click", "left")]
+
+
+def test_main_revenue_deja_ouverte_ne_clique_pas(monkeypatch):
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["open"] * 30 + ["point"] * 10 + ["open"] * 10)   # index puis ouverte : non plus
+    acts = []
+    for _ in range(50):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert [a for a in acts if a[0] == "click"] == []
+
+
+def hand_pts():
+    return hand("open", 0.5, 0.52)
+
+
+def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
+    """Le clic part là où est le curseur : aucun déplacement au moment du clic."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 5)
+    acts = []
+    for i in range(15):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    i_click = acts.index(("click", "left"))
+    assert acts[i_click - 1][0] != "move" or acts[i_click - 1] == ("move", *core.cursor)
+    assert [a for a in acts[i_click:] if a[0] == "move"] == []

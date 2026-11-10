@@ -19,6 +19,7 @@ from collections import deque
 from .filters import OneEuro
 from .gestures import RadialMenu, ScrollDetector, StillnessDetector, ZoneDetector
 from .hand import compute_features
+from .poses import UNSURE, PoseVoter, classify, flexion
 
 
 class Mode:
@@ -87,6 +88,10 @@ class Core:
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
         self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
+        self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
+        self.pose_voter = PoseVoter()
+        self.pose_firm = None                 # dernière pose sûre (ouverte / fermée / index)
+        self.point_frames = 0                 # images de suite avec l'index pointé
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -131,7 +136,19 @@ class Core:
         self.mode_since = t
         self._reset()
         acts.append(("mode", mode))
+        if mode == Mode.MOUSE:
+            self._center(acts)                # le mode souris commence toujours au centre
         self.feed.append((f"MODE {mode}", t))
+
+    def _center(self, acts):
+        sx, sy, sw, sh = self.screen
+        self.cursor = (sx + sw // 2, sy + sh // 2)
+        self._cursor_f = [float(self.cursor[0]), float(self.cursor[1])]
+        self.cursor_hist.clear()
+        self.prev_palm = None
+        self.fx.reset()
+        self.fy.reset()
+        acts.append(("move", *self.cursor))
 
     def disable(self, t):
         acts = [("release_all",)]
@@ -144,12 +161,16 @@ class Core:
         return acts
 
     # --- boucle ------------------------------------------------------------
-    def step(self, pts, t):
+    def step(self, pts, t, world=None):
+        """world : les 21 points 3D « monde » de la même main (pour reconnaître l'index pointé)."""
         acts = []
         if self.mode == Mode.DISABLED:
             return acts
         if pts is None:
             return self._no_hand(t, acts)
+        if (self.mode == Mode.MOUSE and self.last_seen is not None
+                and t - self.last_seen >= self.cfg.recenter_absent_s):
+            self._center(acts)                # la main revient : le curseur repart du centre
         self.last_seen = t
         self.released = False
         self.features = compute_features(pts, self.cfg)
@@ -166,12 +187,36 @@ class Core:
             self._reading(palm, t, acts)
         elif self.mode == Mode.MOUSE:
             self._mouse(palm, t, acts)
+            self._index_click(world, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
+
+    def _index_click(self, world, t, acts):
+        """Ouvrir la main de façon détendue = clic gauche (temporaire ; l'index fatiguait la main), là où est
+        le curseur : le clic ne déplace JAMAIS le curseur. Il part dès 3 images de suite main ouverte
+        (~0,15 s), à condition de venir d'une main fermée (sans serrer) : un seul clic par ouverture,
+        rien si la main revient déjà ouverte."""
+        c = self.cfg
+        if self.pose_cents is None or world is None:
+            return
+        raw = classify(flexion(world), self.pose_cents)[0]
+        self.point_frames = self.point_frames + 1 if raw == c.click_pose else 0
+        stable = self.pose_voter.update(raw)
+        if stable in ("open", "closed", "point") and stable != c.click_pose:
+            self.pose_firm = stable
+        if (self.point_frames >= c.index_click_frames and self.pose_firm == "closed"
+                and t - self.last_click_t >= c.index_click_recovery_s):
+            acts.append(("click", "left"))
+            self.last_click_t = t
+            self.pose_firm = c.click_pose     # réarmé seulement en refermant la main
+            self.last_gesture = ("CLIC GAUCHE (main ouverte)", t)
 
     def _no_hand(self, t, acts):
         self.features = None
         self.palm = None
+        self.pose_voter.reset()
+        self.pose_firm = None                 # main revenue déjà pointée : pas de clic
+        self.point_frames = 0
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen

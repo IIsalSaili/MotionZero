@@ -51,6 +51,11 @@ def main(argv=None):
     set_dpi_aware()
     cfg = load_config(args.config)
     core = Core(cfg, primary_screen())
+    try:                                       # repères des poses de l'utilisateur (index pointé = clic)
+        from .poses import load_centroids
+        core.pose_cents = load_centroids(os.path.join(ROOT, "calibration", "poses.json"))
+    except (OSError, ValueError, KeyError):
+        log.warning("calibration des poses absente : pas de clic par l'index")
     tracker = HandTracker()
     backend = FakeBackend() if args.simulation else SendInputBackend()
     ctl = Controller(backend, cfg)
@@ -135,7 +140,11 @@ def main(argv=None):
                     res = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
                     all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
                     pts = tracker.update(all_hands, t)  # les deux mains suivies ; celle qui bouge agit
-                    acts = core.step(pts, t)
+                    world = None                        # la même main en 3D (index pointé = clic)
+                    for j, h in enumerate(all_hands):
+                        if h is pts and j < len(res.hand_world_landmarks):
+                            world = [(p.x, p.y, p.z) for p in res.hand_world_landmarks[j]]
+                    acts = core.step(pts, t, world)
                     frames += 1
                     if t - fps_t >= 1.0:
                         fps, frames, fps_t = frames / (t - fps_t), 0, t
