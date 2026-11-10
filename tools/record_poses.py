@@ -34,6 +34,14 @@ PHASES = [
     ("pinch", "PINCEMENT LEGER pouce-index, 2 ou 3 fois", 6), REST,
     ("none", "Retirez la main", 3),
 ]
+# Session courte : l'index tourné vers la caméra (python tools/record_poses.py sortie.jsonl index_face)
+SESSIONS = {"index_face": [
+    ("prepare", "C'est parti. Gardez le coude pose", 3),
+    ("point_face", "INDEX POINTE VERS LA CAMERA (si c'est confortable)", 6), REST,
+    ("point", "INDEX POINTE vers le haut, comme avant", 5), REST,
+    ("point_face", "Encore : INDEX VERS LA CAMERA", 6), REST,
+    ("none", "Retirez la main", 3),
+]}
 WIN = "motionzero - enregistrement des poses"
 HINT = "Si ca fait mal : retirez la main, la pose est passee."
 READY_S = 2.0   # main vue 2 s de suite = prêt : l'enregistrement démarre seulement là
@@ -96,7 +104,10 @@ def draw(view, phase, remaining, hands):
 
 
 def main():
+    global PHASES
     out_path = sys.argv[1]
+    if len(sys.argv) > 2:
+        PHASES = SESSIONS[sys.argv[2]]
     rec = vision.GestureRecognizer.create_from_options(vision.GestureRecognizerOptions(
         base_options=BaseOptions(model_asset_path=MODEL),
         running_mode=vision.RunningMode.VIDEO, num_hands=2))

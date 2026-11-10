@@ -57,11 +57,11 @@ def main():
                 if res.hand_world_landmarks:
                     world = [(p.x, p.y, p.z) for p in res.hand_world_landmarks[0]]
                     f = flexion(world)
-                    raw, d, ratio = classify(f, cents)
+                    raw, st = classify(f, cents)
                     stable = voter.update(raw)
                     for p in res.hand_landmarks[0]:
                         cv2.circle(view, (int(p.x * w), int(p.y * h)), 3, (0, 200, 255), -1)
-                    detail = f"image: {LABELS[raw]}  ecart {d:.1f}  doigts " + " ".join(f"{x:.0f}" for x in f)
+                    detail = f"image: {LABELS[raw]}  doigts " + " ".join(f"{x:.0f}{'+' if e else '-' if e is False else '?'}" for x, e in zip(f, st))
                 else:
                     voter.reset()
                     stable, detail = UNSURE, "aucune main"

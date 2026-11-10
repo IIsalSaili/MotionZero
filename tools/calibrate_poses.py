@@ -26,7 +26,7 @@ def main():
         if not r.get("hands"):
             voter.reset()
             continue
-        pose, _, _ = classify(flexion(r["hands"][0]["world"]), cents)
+        pose, _ = classify(flexion(r["hands"][0]["world"]), cents)
         raw[r["phase"]][pose] += 1
         voted[r["phase"]][voter.update(pose)] += 1
     print("\nPose reconnue par phase (image par image | après vote 6 sur 8) :")

@@ -7,8 +7,9 @@ articulations, calculés sur les points 3D « monde » de MediaPipe, ne dépende
 Principe :
 - chaque doigt (index, majeur, annulaire, auriculaire) donne sa pliure totale en degrés
   (0 = tendu, ~230 = replié) ;
-- on compare ces 4 valeurs aux poses enregistrées par l'utilisateur (calibration/poses.json) ;
-- trop loin de toutes, ou entre deux poses : INCERTAIN, et rien ne se déclenche ;
+- chaque doigt est tendu, plié ou incertain, selon des seuils tirés des poses enregistrées par
+  l'utilisateur (calibration/poses.json) ; main ouverte = 4 doigts tendus, quelle que soit l'ouverture ;
+- un doigt incertain, ou une combinaison inconnue : INCERTAIN, et rien ne se déclenche ;
 - une pose ne compte qu'après avoir été vue sur 6 des 8 dernières images (~0,4 s à 20 images/s).
 """
 import json
@@ -20,9 +21,8 @@ FINGERS = {"index": (0, 5, 6, 7, 8), "middle": (0, 9, 10, 11, 12),
 UNSURE = "INCERTAIN"
 LABELS = {"open": "MAIN OUVERTE", "closed": "MAIN FERMEE", "point": "INDEX", UNSURE: UNSURE}
 
-SCALE_DEG = 25.0      # écart « normal » autour d'une pose (degrés)
-MAX_DIST = 2.6        # au-delà (≈ 65° d'écart moyen) : pose inconnue
-MAX_RATIO = 0.6       # distance à la plus proche / à la 2e : au-delà, c'est entre deux poses
+EXT_MARGIN_DEG = 35.0   # tendu jusqu'au repère « main ouverte » + 35° (main détendue comprise)
+CURL_MARGIN_DEG = 20.0  # plié à partir du repère « plié » - 20° ; entre les deux : doigt incertain
 VOTE_N, VOTE_K = 8, 6
 
 
@@ -50,18 +50,38 @@ def flexion(world):
     return out
 
 
-def _dist(f, c):
-    return math.sqrt(sum((a - b) ** 2 for a, b in zip(f, c)) / len(f)) / SCALE_DEG
+def thresholds(centroids):
+    """Seuils par doigt, tirés des poses enregistrées :
+    - tendu si la pliure est sous le repère « main ouverte » + marge. Une main plus ouverte
+      que la main détendue enregistrée compte donc aussi (main grande ouverte) ;
+    - plié si la pliure dépasse le plus petit repère « plié » (main fermée, ou doigts repliés
+      de l'index pointé) - marge."""
+    ext, curl = [], []
+    for i in range(4):
+        ext.append(centroids["open"][i] + EXT_MARGIN_DEG)
+        bent = [centroids["closed"][i]] + ([centroids["point"][i]] if i > 0 and "point" in centroids else [])
+        curl.append(min(bent) - CURL_MARGIN_DEG)
+    return ext, curl
+
+
+def finger_states(f, th):
+    """True = tendu, False = plié, None = entre les deux."""
+    ext, curl = th
+    return [True if x <= e else False if x >= c else None for x, e, c in zip(f, ext, curl)]
 
 
 def classify(f, centroids):
-    """(pose, distance, rapport) ; pose = UNSURE si trop loin ou entre deux poses."""
-    ranked = sorted((_dist(f, c), name) for name, c in centroids.items())
-    best_d, best = ranked[0]
-    ratio = best_d / ranked[1][0] if len(ranked) > 1 and ranked[1][0] > 0 else 0.0
-    if best_d > MAX_DIST or ratio > MAX_RATIO:
-        return UNSURE, best_d, ratio
-    return best, best_d, ratio
+    """(pose, états des doigts). Un seul doigt incertain, ou une combinaison inconnue : INCERTAIN."""
+    st = finger_states(f, thresholds(centroids))
+    if None in st:
+        return UNSURE, st
+    if all(st):
+        return "open", st
+    if not any(st):
+        return "closed", st
+    if st == [True, False, False, False]:
+        return "point", st
+    return UNSURE, st
 
 
 class PoseVoter:
