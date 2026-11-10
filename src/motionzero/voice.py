@@ -152,6 +152,7 @@ class VoiceListener:
         self.last_speech_t = time.perf_counter()
         self.last_rms = 0.0         # pour le journal pendant la dictée
         self._partial = ""          # dernier texte provisoire de la reconnaissance
+        self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
 
     def start(self):
         import sounddevice as sd
@@ -238,7 +239,9 @@ class VoiceListener:
         if not words:
             return
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", []))):
-            log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
+            said = " ".join(w["word"] for w in words)
+            log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
+            self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())
             return
         # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
         # repart de zéro quand l'écoute est mise en sourdine (dictée Claude). Mesuré : le clic vocal

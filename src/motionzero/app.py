@@ -191,11 +191,22 @@ def main(argv=None):
                                    status, tracker.active_id, voice_on=listener is not None)
                     show(shown)
                     prog = core.progress()
+                    # île : la dernière chose comprise (ou refusée), la plus récente des deux
+                    toast = core.last_gesture
+                    rej = listener.last_rejected if listener is not None else None
+                    if rej and (not toast or rej[1] > toast[1]):
+                        toast = rej
                     bridge.state.emit({
                         "show_cursor": core.mode == Mode.MOUSE,
                         "cursor": core.cursor,
                         "progress": prog[1] if prog else 0.0,
                         "lost": pts is None,
+                        "mode": core.mode,
+                        "dictating": core.dictating,
+                        "confirming": core.confirming(t),
+                        "listening": core.listening(t),
+                        "toast": toast[0] if toast else None,
+                        "toast_age": t - toast[1] if toast else 1e9,
                     })
                 else:
                     time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
