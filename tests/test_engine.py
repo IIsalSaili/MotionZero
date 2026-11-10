@@ -382,3 +382,17 @@ def test_main_revenue_deja_pointee_ne_clique_pas(monkeypatch):
 
 def hand_pts():
     return hand("open", 0.5, 0.52)
+
+
+def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
+    """Le clic part là où est le curseur : aucun déplacement au moment du clic."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["open"] * 10 + ["point"] * 5)
+    acts = []
+    for i in range(15):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    i_click = acts.index(("click", "left"))
+    assert acts[i_click - 1][0] != "move" or acts[i_click - 1] == ("move", *core.cursor)
+    assert [a for a in acts[i_click:] if a[0] == "move"] == []

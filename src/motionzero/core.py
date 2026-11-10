@@ -91,7 +91,7 @@ class Core:
         self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
         self.pose_voter = PoseVoter()
         self.pose_firm = None                 # dernière pose sûre (ouverte / fermée / index)
-        self.point_since = None               # début du geste « index » (pour cliquer là où l'on visait)
+        self.point_frames = 0                 # images de suite avec l'index pointé
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -192,43 +192,31 @@ class Core:
         return acts
 
     def _index_click(self, world, t, acts):
-        """Pointer l'index = clic gauche (temporaire, demandé par l'utilisateur). Un seul clic par geste :
-        il faut passer d'une pose sûre (main ouverte ou fermée) à l'index, confirmé sur 6 images sur 8.
-        Le clic part de la position d'avant le début du geste (former l'index déplace la paume)."""
+        """Pointer l'index = clic gauche (temporaire, demandé par l'utilisateur), là où est le curseur :
+        le clic ne déplace JAMAIS le curseur. Il part dès 3 images de suite avec l'index (~0,15 s),
+        à condition de venir d'une pose sûre (main ouverte ou fermée) : un seul clic par geste,
+        rien si la main revient déjà pointée."""
         c = self.cfg
         if self.pose_cents is None or world is None:
             return
         raw = classify(flexion(world), self.pose_cents)[0]
-        if raw == "point":
-            self.point_since = self.point_since if self.point_since is not None else t
-        else:
-            self.point_since = None
+        self.point_frames = self.point_frames + 1 if raw == "point" else 0
         stable = self.pose_voter.update(raw)
-        if stable == UNSURE:
-            return
-        if (stable == "point" and self.pose_firm in ("open", "closed")
+        if stable in ("open", "closed"):
+            self.pose_firm = stable
+        if (self.point_frames >= c.index_click_frames and self.pose_firm in ("open", "closed")
                 and t - self.last_click_t >= c.index_click_recovery_s):
-            target = (self.point_since if self.point_since is not None else t) - c.index_click_rewind_s
-            pos = self.cursor
-            for ht, hp in self.cursor_hist:
-                if ht > target:
-                    break
-                pos = hp
-            if pos != self.cursor:
-                self.cursor = pos
-                self._cursor_f = [float(pos[0]), float(pos[1])]
-                acts.append(("move", *pos))
             acts.append(("click", "left"))
             self.last_click_t = t
+            self.pose_firm = "point"          # réarmé seulement en rouvrant (ou fermant) la main
             self.last_gesture = ("CLIC GAUCHE (index)", t)
-        self.pose_firm = stable
 
     def _no_hand(self, t, acts):
         self.features = None
         self.palm = None
         self.pose_voter.reset()
         self.pose_firm = None                 # main revenue déjà pointée : pas de clic
-        self.point_since = None
+        self.point_frames = 0
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen
