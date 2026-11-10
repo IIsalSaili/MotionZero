@@ -41,6 +41,7 @@ WORDS = {
     "stop": "stop",
 }
 WAKE_WORD = "iris"
+END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 GRAMMAR = json.dumps([w for w in WORDS if w != "démute"] + ["des mute", "[unk]"], ensure_ascii=False)
@@ -215,8 +216,14 @@ class VoiceListener:
         if words and free_text is not None and not confirmed(words, free_text):
             log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
             return
+        # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
+        # repart de zéro quand l'écoute est mise en sourdine (dictée Claude). Mesuré : le clic vocal
+        # ramenait alors le curseur à une position vieille de plusieurs secondes.
+        # La phrase vient de finir (Vosk rend le résultat après un court silence) : on recale sur « maintenant ».
+        now = time.perf_counter() - END_SILENCE_S
+        last_end = max(w["end"] for w in res.get("result", words))
         for w in words:
-            ev =VoiceEvent(w["word"], w["conf"], self.t_stream0 + w["start"], self.t_stream0 + w["end"])
+            ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             log.info("voix %s (%.2f)", ev.word, ev.conf)
             self.events.put(ev)
 

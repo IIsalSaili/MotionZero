@@ -293,3 +293,15 @@ def test_main_immobile_en_lecture_ne_propose_plus_la_souris():
     core, clk = Core(Config()), Clock()
     clk.run(core, 10.0, cx=0.5, cy=0.6, jitter=0.004)
     assert core.bubble is None and core.mode == Mode.READING and not core.listening(clk.t)
+
+
+def test_clic_vocal_date_absurde_ne_deplace_pas_le_curseur():
+    """Horloge audio décalée (repartie de zéro) : le curseur ne doit pas sauter vers une vieille position."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.6)
+    clk.run(core, 6.0, cx=0.6, cy=0.52)                     # main immobile
+    here = core.cursor
+    core.voice("iris", clk.t, t_start=clk.t - 50.0)          # date fausse, bien plus vieille que l'historique
+    acts = core.voice("clic", clk.t + 0.1, t_start=clk.t - 49.0)
+    assert acts == [("click", "left")] and core.cursor == here

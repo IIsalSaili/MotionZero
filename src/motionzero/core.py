@@ -391,6 +391,10 @@ class Core:
         if 0 <= start - self.wake_t <= c.voice_click_window_s:
             start = self.wake_t
         target = start - c.voice_click_rewind_s
+        # garde-fou : un instant plus vieux que l'historique, ou trop loin en arrière, est une erreur de
+        # date. Le curseur reste alors où il est : il ne doit jamais sauter si la main n'a pas bougé.
+        if target < self.cursor_hist[0][0] or t - target > c.voice_click_window_s:
+            return []
         pos = self.cursor_hist[0][1]
         for ht, hp in self.cursor_hist:
             if ht > target:
