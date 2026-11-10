@@ -100,6 +100,7 @@ class Config:
     recenter_absent_s: float = 0.5     # souris : main absente au moins 0,5 s puis revenue -> curseur au centre
     index_click_recovery_s: float = 0.8 # deux clics par l'index : au moins 0,8 s d'écart
     click_pose: str = "open"           # pose qui clique : ouvrir la main détendue (après main fermée)
+    hold_after_s: float = 2.0          # main gardée ouverte plus de 2 s après le clic : bouton maintenu
     index_click_frames: int = 3        # 3 images de suite dans cette pose (~0,15 s), sans bouger le curseur
     voice_click_rewind_s: float = 0.25 # clic vocal : curseur remis où il était juste avant « iris »
     voice_click_window_s: float = 3.0  # « iris » pris en compte s'il a été dit moins de 3 s avant le clic

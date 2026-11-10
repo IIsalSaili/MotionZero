@@ -359,17 +359,28 @@ def _poses(core, monkeypatch, seq):
     core.pose_cents = {"x": 1}
 
 
-def test_main_ouverte_maintient_le_clic_fermee_le_relache(monkeypatch):
-    """Comme un vrai bouton : ouverte = enfoncé (une seule fois), refermée = relâché."""
+def test_ouvrir_la_main_clique(monkeypatch):
+    """Ouverte brièvement puis refermée : un clic simple, rien de maintenu."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 30 + ["closed"] * 10)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 20 + ["closed"] * 10)   # ouverte ~1 s
     acts = []
-    for _ in range(50):
+    for _ in range(40):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
-    btn = [a for a in acts if a[0] in ("press", "release", "click")]
-    assert btn == [("press", "mouse", "left"), ("release", "mouse", "left")]
+    assert [a for a in acts if a[0] in ("press", "release", "click")] == [("click", "left")]
+
+
+def test_gardee_ouverte_plus_de_2_s_maintient_puis_relache(monkeypatch):
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 60 + ["closed"] * 10)   # ouverte ~3 s
+    acts = []
+    for _ in range(80):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert [a for a in acts if a[0] in ("press", "release", "click")] == [
+        ("click", "left"), ("press", "mouse", "left"), ("release", "mouse", "left")]
 
 
 def test_main_revenue_deja_ouverte_ne_clique_pas(monkeypatch):
@@ -396,7 +407,7 @@ def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
     for i in range(15):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
-    i_click = acts.index(("press", "mouse", "left"))
+    i_click = acts.index(("click", "left"))
     assert acts[i_click - 1][0] != "move" or acts[i_click - 1] == ("move", *core.cursor)
     assert [a for a in acts[i_click:] if a[0] == "move"] == []
 
@@ -404,8 +415,8 @@ def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
 def test_main_perdue_pendant_l_appui_relache(monkeypatch):
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 10)
-    for _ in range(20):
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 60)
+    for _ in range(70):
         clk.t += 0.05
         core.step(hand_pts(), clk.t, world="x")
     assert core.pressing
