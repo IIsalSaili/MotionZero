@@ -88,6 +88,7 @@ def toggle_claude_dictation(send_hotkey):
 # --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
 _previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
+discord_muted = False   # True si c'est motionzero qui a coupé Discord (le raccourci inverse l'état)
 
 
 def _title(hwnd):
@@ -133,6 +134,20 @@ def alt_tab():
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
+def discord_mute():
+    """Coupe Discord (une seule fois, même si « iris claude » est redit)."""
+    global discord_muted
+    if not discord_muted and discord_mute_toggle():
+        discord_muted = True
+
+
+def discord_unmute():
+    """Rallume Discord seulement si c'est motionzero qui l'avait coupé."""
+    global discord_muted
+    if discord_muted and discord_mute_toggle():
+        discord_muted = False
+
+
 def discord_mute_toggle():
     """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches, dans la
     fenêtre invisible de motionzero (rien ne se tape ailleurs). Discord, lui, les capte partout.
@@ -150,3 +165,67 @@ def discord_mute_toggle():
     time.sleep(0.05)
     log.info("discord : micro bascule")
     return True
+
+
+# --- « Iris, Discord » / « Iris, Chrome » : passer sur l'appli (ou la lancer) ------------------------
+APPS = {
+    "discord": ("discord.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Discord\Update.exe"),
+                                "--processStart", "Discord.exe"]),
+    "chrome": ("chrome.exe", [r"C:\Program Files\Google\Chrome\Application\chrome.exe"]),
+}
+
+
+def _exe_of(hwnd):
+    """Nom du programme d'une fenêtre (ex. « chrome.exe »), en minuscules."""
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    pid = wintypes.DWORD()
+    u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = k.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(520)
+        size = wintypes.DWORD(520)
+        if not k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return ""
+        return os.path.basename(buf.value).lower()
+    finally:
+        k.CloseHandle(h)
+
+
+def find_app_window(exe):
+    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None."""
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        if (u.IsWindowVisible(hwnd) and u.GetWindowTextLengthW(hwnd) > 0
+                and not u.GetWindow(hwnd, 4)           # GW_OWNER : pas une fenêtre secondaire
+                and _exe_of(hwnd) == exe):
+            found.append(hwnd)
+            return False
+        return True
+
+    u.EnumWindows(cb, 0)
+    return found[0] if found else None
+
+
+def open_app(name):
+    """Met l'appli au premier plan, ou la lance si elle n'est pas ouverte. Renvoie None ou une erreur."""
+    import subprocess
+    exe, cmd = APPS[name]
+    hwnd = find_app_window(exe)
+    remember_previous(hwnd)                            # pour « iris retour »
+    if hwnd:
+        if not bring_to_front(hwnd):
+            return f"{name.upper()} PAS AU PREMIER PLAN"
+        log.info("%s au premier plan", name)
+        return None
+    try:
+        subprocess.Popen(cmd, close_fds=True)
+    except OSError:
+        log.warning("%s introuvable : %s", name, cmd[0])
+        return f"{name.upper()} INTROUVABLE"
+    log.info("%s lance", name)
+    return None
