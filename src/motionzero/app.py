@@ -237,11 +237,18 @@ def vscode_actions(acts, core, ctl, sounds, t):
             alt_tab()
             err = None
         elif a[0] == "vscode_dictation":
-            # micro de Claude allumé = Discord coupé ; micro de Claude coupé = Discord rallumé
-            discord_mute_toggle()
+            # micro de Claude allumé = Discord coupé ; micro de Claude coupé = Discord rallumé.
+            # Les touches Discord partent dans la fenêtre active : jamais pendant que la dictée de
+            # Claude écoute (elles s'y tapaient et l'empêchaient de se couper).
+            starting = core.dictating
+            if starting:
+                discord_mute_toggle()          # avant de passer sur VS Code
             err = toggle_claude_dictation(send)
-            if err and core.dictating:
-                discord_mute_toggle()   # VS Code introuvable : on ne laisse pas Discord coupé
+            if not starting:
+                time.sleep(0.3)                # laisser la dictée de Claude s'éteindre
+                discord_mute_toggle()
+            elif err:
+                discord_mute_toggle()          # VS Code introuvable : on ne laisse pas Discord coupé
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler
