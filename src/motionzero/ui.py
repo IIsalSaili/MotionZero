@@ -9,8 +9,8 @@ import random as _random
 import time as _time
 
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, Signal
-from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter, QPen,
-                           QPixmap)
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
+                           QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 __all__ = ["Bridge", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton"]
@@ -261,8 +261,11 @@ _LOGO_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "iris")
 ISLET = 64               # diamètre de l'îlot (l'île du texte garde sa hauteur)
 ISLET_GAP = 8
 OK_FLASH_S = 0.5         # main verte : commande vocale comprise
-BLINK_S = 0.5            # œil fermé
-BLINK_EVERY = (4.0, 8.0) # intervalle irrégulier entre deux clignements
+BLINK_S = 0.25           # œil fermé (un clignement humain dure environ 0,1 à 0,4 s)
+BLINK_EVERY = (1.2, 1.8) # environ toutes les 1,5 s, un peu irrégulier pour ne pas faire métronome
+EYE_AT = (0.560, 0.690)  # centre de l'œil dans l'image du logo (mesuré sur assets/iris/neutre.png)
+EYE_W = 0.31             # largeur de l'œil / largeur de l'image
+EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, le haut des doigts sort du cadre
 LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
 
 
@@ -353,8 +356,8 @@ class _IslandPainter:
         gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
+        self._paint_islet(p, gx, ISLAND_TOP)       # le logo ne s'estompe jamais
         p.setOpacity(self.opacity)
-        self._paint_islet(p, gx, ISLAND_TOP)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
         p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
@@ -374,13 +377,24 @@ class _IslandPainter:
         p.restore()
 
     def _paint_islet(self, p, x, y):
-        """Disque clair à fin contour sombre, logo d'Iris centré dedans."""
-        p.setPen(QPen(QColor(0, 0, 0, 200), 2))
+        """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
+        par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
+        circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
+        # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
+        p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(245, 245, 240))
-        p.drawEllipse(QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2))
+        p.drawEllipse(circle)
         pm = self.logos.get(self.logo)
-        if pm is None:
-            return
-        h = ISLET - 14
-        pw = pm.width() * h / pm.height()
-        p.drawPixmap(QRectF(x + (ISLET - pw) / 2, y + 7, pw, h), pm, QRectF(pm.rect()))
+        if pm is not None:
+            pw = ISLET * EYE_IN_ISLET / EYE_W                   # largeur affichée de l'image
+            ph = pw * pm.height() / pm.width()
+            cx = x + ISLET / 2
+            clip = QPainterPath()
+            clip.addEllipse(circle)
+            p.save()
+            p.setClipPath(clip)
+            p.drawPixmap(QRectF(cx - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
+            p.restore()
+        p.setPen(QPen(QColor(0, 0, 0, 200), 2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(circle)
