@@ -6,6 +6,7 @@ d'envoyer la touche : elle ne peut donc plus partir dans une autre fenêtre (Chr
 """
 import ctypes
 import logging
+import os
 import time
 from ctypes import wintypes
 
@@ -67,6 +68,7 @@ def focus_and_send(send_hotkey, key_groups):
         log.warning("VS Code introuvable")
         return "VS CODE INTROUVABLE"
     if u.GetForegroundWindow() != hwnd:
+        remember_previous(hwnd)
         if not bring_to_front(hwnd):
             log.warning("VS Code n'a pas pu passer au premier plan")
             return "VS CODE PAS AU PREMIER PLAN"
@@ -81,3 +83,54 @@ def focus_and_send(send_hotkey, key_groups):
 def toggle_claude_dictation(send_hotkey):
     """Allume / éteint le micro du panneau Claude."""
     return focus_and_send(send_hotkey, [DICTATION_KEYS])
+
+
+# --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
+_previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
+
+
+def remember_previous(vscode_hwnd):
+    """Retient la fenêtre active (YouTube, autre appli…) avant de passer sur VS Code."""
+    global _previous
+    u = ctypes.windll.user32
+    fg = u.GetForegroundWindow()
+    pid = wintypes.DWORD()
+    u.GetWindowThreadProcessId(fg, ctypes.byref(pid))
+    if fg and fg != vscode_hwnd and pid.value != os.getpid():   # jamais nos propres fenêtres
+        _previous = fg
+
+
+def go_back():
+    """Remet au premier plan la fenêtre retenue. Renvoie None, ou un texte d'erreur."""
+    u = ctypes.windll.user32
+    if not _previous or not u.IsWindow(_previous):
+        return "RIEN A QUOI REVENIR"
+    if not bring_to_front(_previous):
+        return "RETOUR IMPOSSIBLE"
+    log.info("retour a la fenetre precedente")
+    return None
+
+
+# --- « Iris, tab » : comme Alt+Tab -------------------------------------------------------------------
+def alt_tab():
+    u = ctypes.windll.user32
+    u.keybd_event(0x12, 0x38, 0, 0)        # Alt enfoncé
+    u.keybd_event(0x09, 0x0F, 0, 0)        # Tab
+    u.keybd_event(0x09, 0x0F, 2, 0)
+    time.sleep(0.05)
+    u.keybd_event(0x12, 0x38, 2, 0)        # Alt relâché : Windows passe à la fenêtre suivante
+    log.info("alt+tab")
+
+
+# --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
+def discord_mute_toggle():
+    """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches.
+    Pavé numérique activé : la touche Suppr/point envoie « point décimal » ; désactivé : Suppr."""
+    u = ctypes.windll.user32
+    del_vk = 0x6E if u.GetKeyState(0x90) & 1 else 0x2E   # VK_DECIMAL ou VK_DELETE, même touche (code 0x53)
+    u.keybd_event(del_vk, 0x53, 0, 0)
+    u.keybd_event(0x6B, 0x4E, 0, 0)        # VK_ADD, « + » du pavé numérique
+    time.sleep(0.05)
+    u.keybd_event(0x6B, 0x4E, 2, 0)
+    u.keybd_event(del_vk, 0x53, 2, 0)
+    log.info("discord : micro bascule")

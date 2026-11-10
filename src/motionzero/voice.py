@@ -23,7 +23,7 @@ WORDS = {
     "glisse": "glisse",
     "lâche": "lâche",
     "défile": "défile",
-    # « page » / « retour » retirés : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
+    # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
@@ -31,6 +31,8 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "pause": "pause",
+    "retour": "retour",   # « iris retour » : revient à la fenêtre d'avant « iris claude »
+    "tab": "tab",         # « iris tab » : comme Alt+Tab
     "stop": "stop",
 }
 WAKE_WORD = "iris"

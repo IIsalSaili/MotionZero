@@ -224,15 +224,24 @@ def main(argv=None):
 
 def vscode_actions(acts, core, ctl, sounds, t):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import focus_and_send, toggle_claude_dictation
+    from .vscode import alt_tab, discord_mute_toggle, focus_and_send, go_back, toggle_claude_dictation
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
 
     rest = []
     for a in acts:
-        if a[0] == "vscode_dictation":
+        if a[0] == "window_back":
+            err = go_back()
+        elif a[0] == "alt_tab":
+            alt_tab()
+            err = None
+        elif a[0] == "vscode_dictation":
+            # micro de Claude allumé = Discord coupé ; micro de Claude coupé = Discord rallumé
+            discord_mute_toggle()
             err = toggle_claude_dictation(send)
+            if err and core.dictating:
+                discord_mute_toggle()   # VS Code introuvable : on ne laisse pas Discord coupé
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler
