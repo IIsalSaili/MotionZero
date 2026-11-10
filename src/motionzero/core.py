@@ -37,7 +37,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle", "retour": "RETOUR A LA FENETRE D'AVANT",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME"}
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS"}
 
 
 class Core:
@@ -84,6 +84,7 @@ class Core:
         self.last_click_t = -1e9
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
+        self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
         # voix
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
@@ -210,7 +211,8 @@ class Core:
             return
         in_center = in_center and c.scroll_band_top < palm[1] < c.scroll_band_bottom
         if self.bubble is None:
-            if in_center and not self.need_move and self.still_for >= c.mouse_enter_still_s:
+            if (c.mouse_bubble and in_center and not self.need_move
+                    and self.still_for >= c.mouse_enter_still_s):
                 self.bubble = (t, palm[0], palm[1])
             return
         t0, x0, y0 = self.bubble
@@ -298,6 +300,11 @@ class Core:
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
+        if word == "lâche" and self.dragging:  # bouton tenu : on doit toujours pouvoir le relâcher
+            self.dragging = False
+            self.last_word = (word, t, True)
+            self.last_gesture = (VOICE_LABELS["lâche"], t)
+            return [("release", "mouse", "left")]
         if word == WAKE_WORD:
             self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
@@ -311,7 +318,9 @@ class Core:
             self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
             return acts
         self.last_word = (word, t, True)
-        self.listen_until = t + c.listen_s
+        # une seule commande par « iris » : la fenêtre se ferme (avant, 8 s prolongées à chaque commande :
+        # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
+        self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
         if word in ("clic", "double", "menu", "glisse"):
             acts += self._aim_back(t, t_start)
@@ -325,6 +334,7 @@ class Core:
             self.travel = 0.0
         elif word == "glisse":
             acts.append(("press", "mouse", "left"))
+            self.dragging = True
         elif word == "lâche":
             acts.append(("release", "mouse", "left"))
         elif word == "défile":
@@ -353,6 +363,10 @@ class Core:
             label = "ANNULE"
         elif word == "tab":
             acts.append(("alt_tab",))
+        elif word == "souris":
+            if self.mode != Mode.MOUSE:
+                self.set_mode(Mode.MOUSE, t, acts)
+            label = "SOURIS"
         elif word in ("discord", "chrome"):
             acts.append(("open_app", word))
         elif word == "mute":
@@ -377,6 +391,10 @@ class Core:
         if 0 <= start - self.wake_t <= c.voice_click_window_s:
             start = self.wake_t
         target = start - c.voice_click_rewind_s
+        # garde-fou : un instant plus vieux que l'historique, ou trop loin en arrière, est une erreur de
+        # date. Le curseur reste alors où il est : il ne doit jamais sauter si la main n'a pas bougé.
+        if target < self.cursor_hist[0][0] or t - target > c.voice_click_window_s:
+            return []
         pos = self.cursor_hist[0][1]
         for ht, hp in self.cursor_hist:
             if ht > target:
@@ -458,7 +476,7 @@ class Core:
                 return ("page suivante" if self.zone_side == "next" else "page precedente", self.zone_progress)
             if self.scroll_side is not None:
                 return ("defile " + ("haut" if self.scroll_side == "up" else "bas"), self.scroll_progress)
-            if self.bubble is None and not self.need_move and self.still_for > 0.2:
+            if c.mouse_bubble and self.bubble is None and not self.need_move and self.still_for > 0.2:
                 return ("bulle SOURIS", min(self.still_for / c.mouse_enter_still_s, 1.0))
         elif self.mode == Mode.MOUSE and c.click_menu_on_still and not self.menu.is_open \
                 and self.travel >= c.rearm_px \

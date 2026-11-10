@@ -35,11 +35,14 @@ WORDS = {
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
+    "souris": "souris",   # « iris souris » : mode souris
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "stop": "stop",
 }
 WAKE_WORD = "iris"
+END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
+LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 GRAMMAR = json.dumps([w for w in WORDS if w != "démute"] + ["des mute", "[unk]"], ensure_ascii=False)
 
@@ -60,22 +63,57 @@ def _join_demute(words):
 
 
 def accepted_words(res, min_conf=0.6, max_words=1):
-    """Mots acceptés d'un résultat Vosk. Règle anti-faux-positifs : une commande doit être dite SEULE.
-    Si la phrase contient un mot inconnu ([unk]) — conversation, série — ou plusieurs mots, TOUT est ignoré.
-    Mesuré (voix de synthèse) : sans cette règle « il fait beau aujourd'hui » donnait « iris » (0,87) ;
-    avec, 0 faux positif sur 12 phrases ordinaires."""
+    """Mots acceptés d'un résultat Vosk.
+    - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
+      fond (vidéo, Discord), la reconnaissance colle « iris claude » au bruit d'avant (« stop pause stop iris
+      claude ») et l'ancienne règle « dit seul » rejetait tout. La 2e vérification (confirmed) exige alors
+      que « iris » ait vraiment été prononcé.
+    - un mot sans « iris » : il doit être dit SEUL dans sa phrase, et net (sinon : conversation)."""
     words = _join_demute(res.get("result", []))
-    # « euh », souffle, bruit juste avant « iris + commande » : toléré (mesuré : « [unk] iris claude » rejeté)
-    if len(words) == 3 and words[0]["word"] == "[unk]" and words[1]["word"] == WAKE_WORD:
-        words = words[1:]
-    if not words or any(w["word"] == "[unk]" for w in words):
+    if not words:
         return []
-    # exception : « iris » + une commande dans la même phrase (« Iris, Claude » dit d'une traite)
-    if len(words) == 2 and words[0]["word"] == WAKE_WORD and words[1]["word"] != WAKE_WORD:
-        return words if all(w["conf"] >= min_conf for w in words) else []
-    if len(words) > max_words:
+    for i in range(len(words) - 1, -1, -1):          # le dernier « iris » de la phrase
+        if words[i]["word"] != WAKE_WORD or words[i]["conf"] < min_conf:
+            continue
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        if nxt is None:
+            return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
+        if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
+            return [words[i], nxt]
+    if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
         return []
-    return [w for w in words if w["conf"] >= min_conf]
+    # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
+    # « démute » à 0,81 étaient des faux déclenchements
+    need = min_conf if words[0]["word"] == WAKE_WORD else max(min_conf, LONE_MIN_CONF)
+    return [w for w in words if w["conf"] >= need]
+
+
+FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
+ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
+
+
+IRIS_SURE_CONF = 0.9        # « iris » entendu net par la grammaire, dans une phrase courte : pas de 2e avis
+SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
+
+
+def confirmed(words, free_text, n_heard=None):
+    """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
+    série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
+    son doit donc confirmer :
+    - commande avec « iris » dite d'un trait (phrase courte, « iris » net) : acceptée telle quelle. Mesuré le
+      10/11 : dit vite, la reconnaissance libre entend « la france » au lieu de « iris claude » ;
+    - commande avec « iris » collée à d'autres paroles : « iris » vraiment prononcé ;
+    - mot seul : phrase courte (mesuré : 8 mots de conversation bloqués en 30 min, ex. « d'accord » -> discord).
+    n_heard : nombre de mots de la phrase entendue par la grammaire."""
+    names = [w["word"] for w in words]
+    if not names or set(names) & ALWAYS_HEARD:
+        return True
+    tokens = free_text.lower().split()
+    if names[0] == WAKE_WORD:
+        if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= IRIS_SURE_CONF:
+            return True
+        return any(tok.startswith("iri") for tok in tokens)
+    return 0 < len(tokens) <= FREE_MAX_WORDS
 
 
 def rejection(res, min_conf=0.6):
@@ -123,6 +161,8 @@ class VoiceListener:
         self.model = Model(self.model_dir)
         self.rec = KaldiRecognizer(self.model, self.sr, GRAMMAR)
         self.rec.SetWords(True)
+        self.free = KaldiRecognizer(self.model, self.sr)   # sans grammaire : sert à vérifier (voir confirmed)
+        self._free_final = (0.0, "")
         self.running = True
         self.t_stream0 = time.perf_counter()
         self.samples = 0
@@ -142,44 +182,72 @@ class VoiceListener:
             pass  # on préfère perdre un bloc que bloquer l'audio
 
     def _run(self):
+        # une erreur sur un morceau de son ne doit jamais arrêter l'écoute (mesuré : une phrase vide
+        # faisait planter le fil, et plus aucune commande vocale n'était entendue)
         while self.running:
             try:
-                block = self.audio.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            start_samples = self.samples
-            self.samples += len(block) // 2
-            rms = _rms(block)
-            self.last_rms = rms
-            if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
-                self.ambient = 0.98 * self.ambient + 0.02 * rms
-            if rms >= min(max(self.ambient * 3.0, 400.0), 1500.0):
-                self._loud += len(block) / 2 / self.sr
-                if self._loud >= 0.15:  # un bruit bref ne compte pas comme de la parole
-                    self.last_speech_t = time.perf_counter()
-            else:
-                self._loud = 0.0
-            if self.muted:
-                self.rec.Reset()
-                continue
-            if self.rec.AcceptWaveform(block):
-                self._partial = ""
-                self._emit(json.loads(self.rec.Result()))
-            else:
-                # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
-                # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
-                # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
-                partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
-                if partial and partial != self._partial:
-                    self.last_speech_t = time.perf_counter()
-                self._partial = partial
+                self._step()
+            except Exception:
+                log.exception("erreur dans l'ecoute vocale (on continue)")
 
-    def _emit(self, res):
+    def _step(self):
+        """Traite un morceau de son (30 ms)."""
+        try:
+            block = self.audio.get(timeout=0.2)
+        except queue.Empty:
+            return
+        start_samples = self.samples
+        self.samples += len(block) // 2
+        rms = _rms(block)
+        self.last_rms = rms
+        if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
+            self.ambient = 0.98 * self.ambient + 0.02 * rms
+        if rms >= min(max(self.ambient * 3.0, 400.0), 1500.0):
+            self._loud += len(block) / 2 / self.sr
+            if self._loud >= 0.15:  # un bruit bref ne compte pas comme de la parole
+                self.last_speech_t = time.perf_counter()
+        else:
+            self._loud = 0.0
+        if self.muted:
+            self.rec.Reset()
+            self.free.Reset()
+            return
+        now = time.perf_counter()
+        if self.free.AcceptWaveform(block):
+            self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
+        if self.rec.AcceptWaveform(block):
+            self._partial = ""
+            t_free, text = self._free_final
+            if now - t_free > 1.5:   # la reconnaissance libre n'a pas encore fini sa phrase
+                text = json.loads(self.free.PartialResult()).get("partial", "")
+            self._emit(json.loads(self.rec.Result()), text)
+        else:
+            # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
+            # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
+            # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
+            partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
+            if partial and partial != self._partial:
+                self.last_speech_t = time.perf_counter()
+            self._partial = partial
+
+    def _emit(self, res, free_text=None):
         why = rejection(res, self.min_conf)
         if why:
             log.info("iris rejete : %s", why)
-        for w in accepted_words(res, self.min_conf):
-            ev =VoiceEvent(w["word"], w["conf"], self.t_stream0 + w["start"], self.t_stream0 + w["end"])
+        words = accepted_words(res, self.min_conf)
+        if not words:
+            return
+        if free_text is not None and not confirmed(words, free_text, len(res.get("result", []))):
+            log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
+            return
+        # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
+        # repart de zéro quand l'écoute est mise en sourdine (dictée Claude). Mesuré : le clic vocal
+        # ramenait alors le curseur à une position vieille de plusieurs secondes.
+        # La phrase vient de finir (Vosk rend le résultat après un court silence) : on recale sur « maintenant ».
+        now = time.perf_counter() - END_SILENCE_S
+        last_end = max(w["end"] for w in words)
+        for w in words:
+            ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             log.info("voix %s (%.2f)", ev.word, ev.conf)
             self.events.put(ev)
 

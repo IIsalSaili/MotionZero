@@ -94,6 +94,7 @@ class Config:
 
     # clic : main immobile -> menu à 4 directions (gauche, droit, double, retour lecture)
     dwell_menu_s: float = 0.8
+    mouse_bubble: bool = False         # bulle « SOURIS ? » sur main immobile ; remplacée par « iris souris »
     click_menu_on_still: bool = False  # main immobile -> menu de clic. Désactivé : réfléchir ne doit rien ouvrir
     voice_click_rewind_s: float = 0.25 # clic vocal : curseur remis où il était juste avant « iris »
     voice_click_window_s: float = 3.0  # « iris » pris en compte s'il a été dit moins de 3 s avant le clic
@@ -104,7 +105,7 @@ class Config:
     click_recovery_s: float = 0.5
 
     # voix : « iris » (ou bulle / menu affichés) ouvre l'écoute
-    listen_s: float = 8.0                # durée de l'écoute après « iris » (prolongée à chaque commande)
+    listen_s: float = 3.5                # écoute après « iris » dit seul ; une seule commande, puis fermée
     voice_scroll_s: float = 8.0          # « défile » : la hauteur de la main règle le défilement
     voice_scroll_dead: float = 0.04      # zone neutre autour de la hauteur de départ
     voice_scroll_max_rate: float = 15.0  # crans par seconde au maximum
