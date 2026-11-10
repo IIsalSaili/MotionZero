@@ -90,6 +90,14 @@ _previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » 
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
 
 
+def _title(hwnd):
+    u = ctypes.windll.user32
+    n = u.GetWindowTextLengthW(hwnd)
+    buf = ctypes.create_unicode_buffer(n + 1)
+    u.GetWindowTextW(hwnd, buf, n + 1)
+    return buf.value[:80]
+
+
 def remember_previous(vscode_hwnd):
     """Retient la fenêtre active (YouTube, autre appli…) avant de passer sur VS Code."""
     global _previous
@@ -99,6 +107,7 @@ def remember_previous(vscode_hwnd):
     u.GetWindowThreadProcessId(fg, ctypes.byref(pid))
     if fg and fg != vscode_hwnd and pid.value != os.getpid():   # jamais nos propres fenêtres
         _previous = fg
+        log.info("fenetre retenue pour « retour » : %s", _title(fg))
 
 
 def go_back():
@@ -108,7 +117,7 @@ def go_back():
         return "RIEN A QUOI REVENIR"
     if not bring_to_front(_previous):
         return "RETOUR IMPOSSIBLE"
-    log.info("retour a la fenetre precedente")
+    log.info("retour a : %s", _title(_previous))
     return None
 
 
