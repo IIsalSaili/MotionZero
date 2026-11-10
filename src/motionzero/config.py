@@ -94,6 +94,7 @@ class Config:
 
     # clic : main immobile -> menu à 4 directions (gauche, droit, double, retour lecture)
     dwell_menu_s: float = 0.8
+    start_mode: str = "NEUTRE"         # au démarrage : neutre (la main ne fait rien). « iris lecture » / « iris souris »
     mouse_bubble: bool = False         # bulle « SOURIS ? » sur main immobile ; remplacée par « iris souris »
     click_menu_on_still: bool = False  # main immobile -> menu de clic. Désactivé : réfléchir ne doit rien ouvrir
     voice_click_rewind_s: float = 0.25 # clic vocal : curseur remis où il était juste avant « iris »

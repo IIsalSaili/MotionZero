@@ -23,6 +23,7 @@ from .hand import compute_features
 
 class Mode:
     DISABLED = "DESACTIVE"
+    NEUTRAL = "NEUTRE"    # par défaut : la main ne déclenche rien, seule la voix agit
     READING = "LECTURE"
     MOUSE = "SOURIS"
     IDLE = READING  # compatibilité : l'ancien « repos » est désormais la lecture
@@ -37,7 +38,8 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS"}
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS",
+                "lecture": "LECTURE"}
 
 
 class Core:
@@ -58,7 +60,7 @@ class Core:
         self._last_gesture = None
         self.cfg = cfg
         self.screen = screen
-        self.mode = Mode.READING
+        self.mode = cfg.start_mode
         self.mode_since = -1e9
         self.last_seen = None
         self.released = True
@@ -136,7 +138,7 @@ class Core:
 
     def enable(self, t):
         acts = []
-        self.set_mode(Mode.READING, t, acts)
+        self.set_mode(Mode.NEUTRAL, t, acts)
         return acts
 
     # --- boucle ------------------------------------------------------------
@@ -175,7 +177,7 @@ class Core:
             acts.append(("release_all",))
             self.released = True
         if self.mode == Mode.MOUSE and gone >= self.cfg.absent_mouse_s:
-            self.set_mode(Mode.READING, t, acts)
+            self.set_mode(Mode.NEUTRAL, t, acts)
         # main retirée = « embrayage » : on la repose ailleurs, le curseur ne saute pas
         self.still.reset()
         self.zone.reset()
@@ -241,7 +243,7 @@ class Core:
                 acts += [("click", "left"), ("click", "left")]
             elif choice == "down":
                 self.last_gesture = (MENU_LABELS["down"], t)
-                self.set_mode(Mode.READING, t, acts)
+                self.set_mode(Mode.NEUTRAL, t, acts)
                 return
             if choice and choice != "cancel":
                 self.last_gesture = (MENU_LABELS[choice], t)
@@ -293,8 +295,8 @@ class Core:
             self.menu.close()
             self.bubble = None
             self.voice_scroll_until = self.listen_until = -1e9
-            if self.mode == Mode.MOUSE:
-                self.set_mode(Mode.READING, t, acts)
+            if self.mode in (Mode.MOUSE, Mode.READING):
+                self.set_mode(Mode.NEUTRAL, t, acts)
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
@@ -306,7 +308,7 @@ class Core:
         if word == WAKE_WORD:
             self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
-                self.set_mode(Mode.READING, t, acts)
+                self.set_mode(Mode.NEUTRAL, t, acts)
             self.listen_until = t + c.listen_s
             self.last_word = (word, t, True)
             self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
@@ -363,6 +365,10 @@ class Core:
             if self.mode != Mode.MOUSE:
                 self.set_mode(Mode.MOUSE, t, acts)
             label = "SOURIS"
+        elif word == "lecture":
+            if self.mode != Mode.READING:
+                self.set_mode(Mode.READING, t, acts)
+            label = "LECTURE"
         elif word in ("discord", "chrome", "studio"):
             acts.append(("open_app", word))
         elif word == "mute":

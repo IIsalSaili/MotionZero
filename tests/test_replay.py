@@ -2,6 +2,7 @@ import json
 
 from synth import hand
 
+from motionzero.config import Config
 from motionzero.replay import replay
 
 
@@ -23,5 +24,5 @@ def test_relecture_d_un_enregistrement(tmp_path):
     add(0.6, "open", 0.9)           # reste au bord -> page suivante
     path.write_text("\n".join(json.dumps(r) for r in lines), encoding="utf-8")
 
-    actions = [a for _, a in replay(str(path))]
+    actions = [a for _, a in replay(str(path), Config(start_mode="LECTURE"))]
     assert ("key", "right") in actions

@@ -253,7 +253,7 @@ ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
 ISLAND_FADED = 0.25      # … à 25 % d'opacité
 TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
-MODE_NAMES = {"LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
+MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
 
 
 def load_fonts():

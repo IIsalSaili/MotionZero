@@ -79,7 +79,7 @@ def test_tab_exige_iris():
 
 def test_main_immobile_ouvre_l_ecoute_sans_iris():
     """Le menu (main immobile) ouvre l'écoute : on peut dire « menu » au lieu de bouger."""
-    core, clk = Core(Config(mouse_bubble=True)), Clock()     # ancienne bulle, en option
+    core, clk = Core(Config(mouse_bubble=True, start_mode="LECTURE")), Clock()     # ancienne bulle, en option
     clk.run(core, 1.7, cx=0.5, cy=0.6)
     assert core.bubble is not None and core.listening(clk.t)
     assert core.voice("menu", clk.t) == [("click", "right")]
@@ -89,7 +89,7 @@ def test_stop_toujours_ecoute_et_prioritaire():
     core = Core(Config())
     core.mode = Mode.MOUSE
     acts = core.voice("stop", 1.0)
-    assert ("release_all",) in acts and core.mode == Mode.READING
+    assert ("release_all",) in acts and core.mode == Mode.NEUTRAL
 
 
 def test_pause_puis_iris_reprend():
@@ -99,7 +99,7 @@ def test_pause_puis_iris_reprend():
     assert core.mode == Mode.DISABLED
     assert core.voice("clic", 2.0) == []
     core.voice("iris", 3.0)
-    assert core.mode == Mode.READING
+    assert core.mode == Mode.NEUTRAL
 
 
 def test_raccourcis_clavier_vocaux():

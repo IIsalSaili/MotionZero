@@ -36,6 +36,7 @@ WORDS = {
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
+    "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "stop": "stop",
