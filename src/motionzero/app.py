@@ -67,6 +67,14 @@ def main(argv=None):
     from .ask import Asker
     asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
     asker.preload()
+    discord_voice = {"state": None}            # (micro coupé, sourdine), relu dans Discord chaque seconde
+
+    def watch_discord():
+        from .discord_keys import voice_state
+        while not stop.is_set():
+            discord_voice["state"] = voice_state()
+            stop.wait(1.0)
+
     # VS Code (micro de Claude, Entrée) : toujours envoyé pour de vrai, même en simulation,
     # sinon la dictée ne peut pas être essayée. Seules ces touches-là, et seulement vers VS Code.
     vscode_ctl = Controller(SendInputBackend(), cfg)
@@ -217,6 +225,7 @@ def main(argv=None):
                                          and t - core.last_word[1] < 0.5),
                         "toast_age": t - toast[1] if toast else 1e9,
                         "qa": asker.snapshot() if listener is not None else None,
+                        "discord": discord_voice["state"] if listener is not None else None,
                     })
                 else:
                     time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
@@ -232,6 +241,7 @@ def main(argv=None):
             landmarker.close()
             log.info("arret (images rejetees=%d, reconnexions=%d)", cam.rejected, cam.reconnections)
 
+    threading.Thread(target=watch_discord, name="discord", daemon=True).start()   # après « stop »
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
     view_win.show()

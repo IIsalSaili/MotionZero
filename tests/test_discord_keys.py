@@ -24,3 +24,18 @@ def test_ignore_desactives_vides_et_souris():
 
 def test_base_absente():
     assert parse_keybinds(None) == {}
+
+
+def test_etat_micro_et_sourdine():
+    from motionzero.discord_keys import parse_voice_state
+    raw = b"\x01" + json.dumps({"default": {"mute": True, "deaf": False}, "stream": {"mute": False}}).encode()
+    assert parse_voice_state(raw) == (True, False)
+    assert parse_voice_state(None) is None
+
+
+def test_icones_discord():
+    from motionzero.ui import discord_icons
+    assert discord_icons(None) == [] and discord_icons((False, False)) == []
+    assert discord_icons((True, False)) == ["mic-off"]
+    assert discord_icons((True, True)) == ["headphone-off", "mic-off"]
+    assert discord_icons((False, True)) == ["headphone-off", "mic-off"]

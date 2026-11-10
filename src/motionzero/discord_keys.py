@@ -62,3 +62,30 @@ def combo(action):
         return keys
     log.warning("raccourci discord %s introuvable : reglage de secours", action)
     return FALLBACK.get(action)
+
+
+# --- état réel du micro et de la sourdine (lu dans Discord, jamais retenu par motionzero) ---------------
+_voice_cache = {"mtime": None, "state": None}
+
+
+def parse_voice_state(raw):
+    """(micro coupé, sourdine) d'après l'entrée « MediaEngineStore » de Discord. Pur : testable."""
+    if raw is None:
+        return None
+    text = raw[1:].decode("latin-1") if raw[:1] == b"\x01" else raw[1:].decode("utf-16-le")
+    default = json.loads(text).get("default", {})
+    return bool(default.get("mute")), bool(default.get("deaf"))
+
+
+def voice_state():
+    """(micro coupé, sourdine) tels que Discord les a enregistrés, ou None si illisible."""
+    mtime = _db_mtime()
+    if mtime is not None and mtime != _voice_cache["mtime"]:
+        try:
+            state = parse_voice_state(latest_value(DB_DIR, lambda k: k.endswith(b"MediaEngineStore")))
+            if state != _voice_cache["state"]:
+                log.info("discord : micro coupe=%s, sourdine=%s", *(state or (None, None)))
+            _voice_cache.update(mtime=mtime, state=state)
+        except Exception:
+            log.exception("etat discord illisible")
+    return _voice_cache["state"]
