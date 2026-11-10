@@ -63,20 +63,24 @@ def _join_demute(words):
 
 
 def accepted_words(res, min_conf=0.6, max_words=1):
-    """Mots acceptés d'un résultat Vosk. Règle anti-faux-positifs : une commande doit être dite SEULE.
-    Si la phrase contient un mot inconnu ([unk]) — conversation, série — ou plusieurs mots, TOUT est ignoré.
-    Mesuré (voix de synthèse) : sans cette règle « il fait beau aujourd'hui » donnait « iris » (0,87) ;
-    avec, 0 faux positif sur 12 phrases ordinaires."""
+    """Mots acceptés d'un résultat Vosk.
+    - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
+      fond (vidéo, Discord), la reconnaissance colle « iris claude » au bruit d'avant (« stop pause stop iris
+      claude ») et l'ancienne règle « dit seul » rejetait tout. La 2e vérification (confirmed) exige alors
+      que « iris » ait vraiment été prononcé.
+    - un mot sans « iris » : il doit être dit SEUL dans sa phrase, et net (sinon : conversation)."""
     words = _join_demute(res.get("result", []))
-    # « euh », souffle, bruit juste avant « iris + commande » : toléré (mesuré : « [unk] iris claude » rejeté)
-    if len(words) == 3 and words[0]["word"] == "[unk]" and words[1]["word"] == WAKE_WORD:
-        words = words[1:]
-    if not words or any(w["word"] == "[unk]" for w in words):
+    if not words:
         return []
-    # exception : « iris » + une commande dans la même phrase (« Iris, Claude » dit d'une traite)
-    if len(words) == 2 and words[0]["word"] == WAKE_WORD and words[1]["word"] != WAKE_WORD:
-        return words if all(w["conf"] >= min_conf for w in words) else []
-    if len(words) > max_words:
+    for i in range(len(words) - 1, -1, -1):          # le dernier « iris » de la phrase
+        if words[i]["word"] != WAKE_WORD or words[i]["conf"] < min_conf:
+            continue
+        nxt = words[i + 1] if i + 1 < len(words) else None
+        if nxt is None:
+            return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
+        if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
+            return [words[i], nxt]
+    if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
         return []
     # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
     # « démute » à 0,81 étaient des faux déclenchements
@@ -84,23 +88,23 @@ def accepted_words(res, min_conf=0.6, max_words=1):
     return [w for w in words if w["conf"] >= need]
 
 
-FREE_MAX_WORDS = 4          # une commande est courte ; une phrase de conversation, non
+FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
 ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
 
 
 def confirmed(words, free_text):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
-    son doit donc confirmer : phrase courte, et « iris » vraiment prononcé s'il fait partie de la commande."""
+    son doit donc confirmer :
+    - commande avec « iris » : « iris » vraiment prononcé (la phrase peut contenir du bruit autour) ;
+    - mot seul : phrase courte."""
     names = [w["word"] for w in words]
     if not names or set(names) & ALWAYS_HEARD:
         return True
     tokens = free_text.lower().split()
-    if not tokens or len(tokens) > FREE_MAX_WORDS:
-        return False
     if names[0] == WAKE_WORD:
         return any(tok.startswith("iri") for tok in tokens)
-    return True
+    return 0 < len(tokens) <= FREE_MAX_WORDS
 
 
 def rejection(res, min_conf=0.6):

@@ -154,8 +154,10 @@ def test_iris_et_commande_d_une_traite():
     from motionzero.voice import accepted_words, rejection
     w = lambda *ws: {"result": [{"word": x, "conf": c, "start": 0, "end": 1} for x, c in ws]}
     assert [x["word"] for x in accepted_words(w(("iris", 1.0), ("claude", 1.0)))] == ["iris", "claude"]
-    assert accepted_words(w(("claude", 1.0), ("iris", 1.0))) == []          # ordre inverse : non
-    assert accepted_words(w(("iris", 1.0), ("claude", 1.0), ("clic", 1.0))) == []
+    # ordre inverse : seul « iris » compte (il ouvre l'écoute), « claude » d'avant est ignoré
+    assert [x["word"] for x in accepted_words(w(("claude", 1.0), ("iris", 1.0)))] == ["iris"]
+    # ce qui suit la commande (la dictée qui commence, du bruit) ne l'annule plus
+    assert [x["word"] for x in accepted_words(w(("iris", 1.0), ("claude", 1.0), ("clic", 1.0)))] == ["iris", "claude"]
     assert accepted_words(w(("iris", 0.4), ("claude", 1.0))) == []
     assert rejection(w(("iris", 0.4), ("claude", 1.0))) == "iris(0.40) claude(1.00)"
 
@@ -168,12 +170,14 @@ def test_iris_claude_d_une_traite_lance_la_dictee():
     assert core.voice("claude", 1.0) == [("vscode_dictation",)]
 
 
-def test_bruit_avant_iris_commande_tolere_mais_pas_avant_iris_seul():
+def test_bruit_autour_de_iris_tolere():
     from motionzero.voice import accepted_words
     w = lambda *ws: {"result": [{"word": x, "conf": 1.0, "start": 0, "end": 1} for x in ws]}
     assert [x["word"] for x in accepted_words(w("[unk]", "iris", "claude"))] == ["iris", "claude"]
-    assert accepted_words(w("[unk]", "iris")) == []
-    assert accepted_words(w("[unk]", "[unk]", "iris", "claude")) == []
+    # bruit de fond avant : toléré (la 2e vérification exige « iris » vraiment prononcé)
+    assert [x["word"] for x in accepted_words(w("[unk]", "iris"))] == ["iris"]
+    assert [x["word"] for x in accepted_words(w("[unk]", "[unk]", "iris", "claude"))] == ["iris", "claude"]
+    assert accepted_words(w("[unk]", "clic")) == []          # sans « iris » : toujours dit seul
 
 
 def test_iris_discord_et_chrome_ouvrent_l_appli():
@@ -223,3 +227,15 @@ def test_phrase_vide_ne_fait_pas_planter_l_ecoute():
     v._emit({"result": [], "text": ""}, "")
     v._emit({"text": ""}, "")
     assert v.events.empty()
+
+
+def test_iris_claude_colle_au_bruit_de_fond():
+    """Mesuré le 10/11 avec une vidéo en fond : « stop pause stop iris claude » était rejeté."""
+    r = lambda *ws: {"result": [{"word": w, "conf": c, "start": 0.0, "end": 0.1} for w, c in ws]}
+    got = accepted_words(r(("stop", 0.64), ("pause", 0.65), ("stop", 0.99), ("iris", 1.0), ("claude", 1.0)))
+    assert [w["word"] for w in got] == ["iris", "claude"]
+    got = accepted_words(r(("stop", 0.63), ("[unk]", 1.0), ("iris", 1.0), ("claude", 1.0), ("[unk]", 1.0)))
+    assert [w["word"] for w in got] == ["iris", "claude"]
+    from motionzero.voice import confirmed
+    assert confirmed(got, "le grès n'attend pas iris claude et je voudrais")    # « iris » bien entendu
+    assert not confirmed(got, "le grès n'attend pas le temps alors et des puzzles")
