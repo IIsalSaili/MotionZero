@@ -233,8 +233,8 @@ def main(argv=None):
 
 def vscode_actions(acts, core, ctl, sounds, t):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import (alt_tab, discord_mute_toggle, find_window, focus_and_send, go_back,
-                         remember_previous, toggle_claude_dictation, bring_to_front)
+    from .vscode import (alt_tab, bring_to_front, discord_mute_toggle, find_window, focus_and_send, go_back,
+                         open_app, remember_previous, toggle_claude_dictation)
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
@@ -246,6 +246,8 @@ def vscode_actions(acts, core, ctl, sounds, t):
         elif a[0] == "alt_tab":
             alt_tab()
             err = None
+        elif a[0] == "open_app":
+            err = open_app(a[1])
         elif a[0] == "vscode_dictation":
             # micro de Claude allumé = Discord coupé ; micro de Claude coupé = Discord rallumé.
             # Les touches Discord partent dans la fenêtre active : jamais pendant que la dictée de

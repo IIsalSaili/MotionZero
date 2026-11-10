@@ -150,3 +150,67 @@ def discord_mute_toggle():
     time.sleep(0.05)
     log.info("discord : micro bascule")
     return True
+
+
+# --- « Iris, Discord » / « Iris, Chrome » : passer sur l'appli (ou la lancer) ------------------------
+APPS = {
+    "discord": ("discord.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Discord\Update.exe"),
+                                "--processStart", "Discord.exe"]),
+    "chrome": ("chrome.exe", [r"C:\Program Files\Google\Chrome\Application\chrome.exe"]),
+}
+
+
+def _exe_of(hwnd):
+    """Nom du programme d'une fenêtre (ex. « chrome.exe »), en minuscules."""
+    u, k = ctypes.windll.user32, ctypes.windll.kernel32
+    pid = wintypes.DWORD()
+    u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    h = k.OpenProcess(0x1000, False, pid.value)   # PROCESS_QUERY_LIMITED_INFORMATION
+    if not h:
+        return ""
+    try:
+        buf = ctypes.create_unicode_buffer(520)
+        size = wintypes.DWORD(520)
+        if not k.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+            return ""
+        return os.path.basename(buf.value).lower()
+    finally:
+        k.CloseHandle(h)
+
+
+def find_app_window(exe):
+    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None."""
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        if (u.IsWindowVisible(hwnd) and u.GetWindowTextLengthW(hwnd) > 0
+                and not u.GetWindow(hwnd, 4)           # GW_OWNER : pas une fenêtre secondaire
+                and _exe_of(hwnd) == exe):
+            found.append(hwnd)
+            return False
+        return True
+
+    u.EnumWindows(cb, 0)
+    return found[0] if found else None
+
+
+def open_app(name):
+    """Met l'appli au premier plan, ou la lance si elle n'est pas ouverte. Renvoie None ou une erreur."""
+    import subprocess
+    exe, cmd = APPS[name]
+    hwnd = find_app_window(exe)
+    remember_previous(hwnd)                            # pour « iris retour »
+    if hwnd:
+        if not bring_to_front(hwnd):
+            return f"{name.upper()} PAS AU PREMIER PLAN"
+        log.info("%s au premier plan", name)
+        return None
+    try:
+        subprocess.Popen(cmd, close_fds=True)
+    except OSError:
+        log.warning("%s introuvable : %s", name, cmd[0])
+        return f"{name.upper()} INTROUVABLE"
+    log.info("%s lance", name)
+    return None
