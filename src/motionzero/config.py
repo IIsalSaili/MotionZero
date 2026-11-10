@@ -23,7 +23,7 @@ class Config:
     hold_fist_s: float = 1.0           # poing -> repos
     transition_cooldown_s: float = 0.8
     absent_reading_s: float = 60.0     # main absente -> repos (lecture) : pas besoin de réarmer à chaque page
-    absent_mouse_s: float = 2.0        # main absente -> repos (souris)
+    absent_mouse_s: float = 0.0        # 0 = la main absente ne fait plus sortir du mode souris (« iris stop »)
     release_absent_s: float = 0.5      # main absente -> on relâche tout
 
     # balayage (mode lecture), en fraction de largeur d'image

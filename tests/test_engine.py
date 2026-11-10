@@ -196,11 +196,23 @@ def test_un_seul_clic_tant_qu_on_ne_bouge_pas():
     assert len(kinds(acts, "click")) == 1
 
 
-def test_main_absente_retour_lecture_et_relache():
+def test_main_absente_relache_mais_reste_en_souris():
+    """La main absente relâche tout, mais le mode souris reste (on en sort par « iris stop »)."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    acts = clk.run(core, 2.2, absent=True)
-    assert core.mode == Mode.NEUTRAL and ("release_all",) in acts
+    acts = clk.run(core, 5.0, absent=True)
+    assert core.mode == Mode.MOUSE and ("release_all",) in acts
+
+
+def test_iris_souris_main_baissee_reste_en_souris():
+    """Mesuré le 10/11 : « iris souris » main baissée -> ressorti du mode souris 30 ms plus tard."""
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.5, cx=0.5, cy=0.6)
+    clk.run(core, 4.0, absent=True)                         # main baissée depuis 4 s
+    core.voice("iris", clk.t)
+    core.voice("souris", clk.t + 0.2)
+    clk.run(core, 1.0, absent=True)
+    assert core.mode == Mode.MOUSE
 
 
 # --- deux mains ---------------------------------------------------------------------

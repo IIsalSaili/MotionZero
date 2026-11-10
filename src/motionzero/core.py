@@ -176,7 +176,9 @@ class Core:
         if not self.released and gone >= self.cfg.release_absent_s:
             acts.append(("release_all",))
             self.released = True
-        if self.mode == Mode.MOUSE and gone >= self.cfg.absent_mouse_s:
+        # Mesuré le 10/11 : entré à la voix main baissée, on ressortait du mode souris 30 ms après.
+        # La main absente relâche tout (ci-dessus) mais ne change plus de mode, sauf réglage explicite.
+        if self.mode == Mode.MOUSE and self.cfg.absent_mouse_s > 0 and gone >= self.cfg.absent_mouse_s:
             self.set_mode(Mode.NEUTRAL, t, acts)
         # main retirée = « embrayage » : on la repose ailleurs, le curseur ne saute pas
         self.still.reset()
