@@ -84,6 +84,7 @@ class Core:
         self.last_click_t = -1e9
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
+        self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
         # voix
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
@@ -298,6 +299,11 @@ class Core:
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
+        if word == "lâche" and self.dragging:  # bouton tenu : on doit toujours pouvoir le relâcher
+            self.dragging = False
+            self.last_word = (word, t, True)
+            self.last_gesture = (VOICE_LABELS["lâche"], t)
+            return [("release", "mouse", "left")]
         if word == WAKE_WORD:
             self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
@@ -311,7 +317,9 @@ class Core:
             self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
             return acts
         self.last_word = (word, t, True)
-        self.listen_until = t + c.listen_s
+        # une seule commande par « iris » : la fenêtre se ferme (avant, 8 s prolongées à chaque commande :
+        # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
+        self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
         if word in ("clic", "double", "menu", "glisse"):
             acts += self._aim_back(t, t_start)
@@ -325,6 +333,7 @@ class Core:
             self.travel = 0.0
         elif word == "glisse":
             acts.append(("press", "mouse", "left"))
+            self.dragging = True
         elif word == "lâche":
             acts.append(("release", "mouse", "left"))
         elif word == "défile":

@@ -104,7 +104,7 @@ class Config:
     click_recovery_s: float = 0.5
 
     # voix : « iris » (ou bulle / menu affichés) ouvre l'écoute
-    listen_s: float = 8.0                # durée de l'écoute après « iris » (prolongée à chaque commande)
+    listen_s: float = 3.5                # écoute après « iris » dit seul ; une seule commande, puis fermée
     voice_scroll_s: float = 8.0          # « défile » : la hauteur de la main règle le défilement
     voice_scroll_dead: float = 0.04      # zone neutre autour de la hauteur de départ
     voice_scroll_max_rate: float = 15.0  # crans par seconde au maximum

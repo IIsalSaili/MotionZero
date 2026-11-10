@@ -40,6 +40,7 @@ WORDS = {
     "stop": "stop",
 }
 WAKE_WORD = "iris"
+LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 GRAMMAR = json.dumps([w for w in WORDS if w != "démute"] + ["des mute", "[unk]"], ensure_ascii=False)
 
@@ -75,7 +76,10 @@ def accepted_words(res, min_conf=0.6, max_words=1):
         return words if all(w["conf"] >= min_conf for w in words) else []
     if len(words) > max_words:
         return []
-    return [w for w in words if w["conf"] >= min_conf]
+    # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
+    # « démute » à 0,81 étaient des faux déclenchements
+    need = min_conf if words[0]["word"] == WAKE_WORD else max(min_conf, LONE_MIN_CONF)
+    return [w for w in words if w["conf"] >= need]
 
 
 def rejection(res, min_conf=0.6):

@@ -43,11 +43,21 @@ def test_iris_puis_clic():
     assert core.voice("clic", 2.0) == [("click", "left")]
 
 
-def test_ecoute_dure_8_s_puis_se_referme():
+def test_ecoute_courte_et_une_seule_commande():
+    """Mesuré : 8 s prolongées laissaient passer « colle », « chrome » dits dans la conversation."""
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("clic", 7.0) == [("click", "left")]   # encore ouverte, et prolongée
-    assert core.voice("clic", 16.0) == []                    # 9 s après le dernier mot : fermée
+    assert core.voice("clic", 3.0) == [("click", "left")]   # « iris » seul puis le mot : marche
+    assert core.voice("clic", 3.5) == []                     # 2e mot sans « iris » : ignoré
+    core.voice("iris", 10.0)
+    assert core.voice("clic", 14.0) == []                    # plus de 3,5 s après « iris » : fermée
+
+
+def test_mot_seul_peu_sur_refuse():
+    from motionzero.voice import accepted_words
+    one = lambda w, c: {"result": [{"word": w, "conf": c, "start": 0.0, "end": 0.3}]}
+    assert accepted_words(one("tab", 0.60)) == [] and accepted_words(one("colle", 0.79)) == []
+    assert accepted_words(one("clic", 0.95))[0]["word"] == "clic"
 
 
 def test_page_n_est_plus_un_mot_vocal():
@@ -115,7 +125,7 @@ def test_glisse_lache_et_securite():
     ctl = Controller(fake, Config())
     ctl.execute(core.voice("glisse", 1.2), 1.2)
     assert ("button", "left", True) in fake.events
-    ctl.execute(core.voice("lâche", 2.0), 2.0)
+    ctl.execute(core.voice("lâche", 9.0), 9.0)               # longtemps après, sans « iris » : relâché quand même
     assert fake.events[-1] == ("button", "left", False)
 
 
