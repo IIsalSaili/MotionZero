@@ -23,7 +23,7 @@ WORDS = {
     "glisse": "glisse",
     "lâche": "lâche",
     "défile": "défile",
-    # « page » / « retour » retirés : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
+    # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
@@ -31,6 +31,8 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "pause": "pause",
+    "retour": "retour",   # « iris retour » : revient à la fenêtre d'avant « iris claude »
+    "tab": "tab",         # « iris tab » : comme Alt+Tab
     "stop": "stop",
 }
 WAKE_WORD = "iris"
@@ -90,6 +92,8 @@ class VoiceListener:
         self.stream = None
         self.t_stream0 = None
         self.last_speech_t = time.perf_counter()
+        self.last_rms = 0.0         # pour le journal pendant la dictée
+        self._partial = ""          # dernier texte provisoire de la reconnaissance
 
     def start(self):
         import sounddevice as sd
@@ -126,6 +130,7 @@ class VoiceListener:
             start_samples = self.samples
             self.samples += len(block) // 2
             rms = _rms(block)
+            self.last_rms = rms
             if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
                 self.ambient = 0.98 * self.ambient + 0.02 * rms
             if rms >= min(max(self.ambient * 3.0, 400.0), 1500.0):
@@ -138,7 +143,16 @@ class VoiceListener:
                 self.rec.Reset()
                 continue
             if self.rec.AcceptWaveform(block):
+                self._partial = ""
                 self._emit(json.loads(self.rec.Result()))
+            else:
+                # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
+                # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
+                # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
+                partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
+                if partial and partial != self._partial:
+                    self.last_speech_t = time.perf_counter()
+                self._partial = partial
 
     def _emit(self, res):
         why = rejection(res, self.min_conf)

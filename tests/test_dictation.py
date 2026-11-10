@@ -34,8 +34,8 @@ def test_le_micro_reste_allume_tant_qu_on_parle():
 
 def test_coupe_apres_le_silence_puis_envoie():
     core = _start()
-    assert core.dictation_tick(7.0, last_speech_t=4.0) == []      # 3 s de silence (pause pour réfléchir) : on attend
-    assert core.dictation_tick(7.6, last_speech_t=4.0) == TOGGLE  # 3,6 s : micro coupé
+    assert core.dictation_tick(6.5, last_speech_t=4.0) == []      # 2,5 s de silence (pause pour réfléchir) : on attend
+    assert core.dictation_tick(6.85, last_speech_t=4.0) == TOGGLE  # 2,85 s : micro coupé
     assert not core.dictating and core.confirming(8.0) and core.listening(8.0)
     assert core.voice("clic", 8.0) == []                          # pas d'autre commande pendant la confirmation
     assert core.voice("envoie", 9.0) == [("vscode_keys", [["enter"]])]

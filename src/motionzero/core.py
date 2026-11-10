@@ -35,7 +35,8 @@ VOICE_HOTKEYS = {"entrée": ["enter"], "annule": ["escape"], "copie": ["ctrl", "
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
-                "claude": "MICRO CLAUDE : parle"}
+                "claude": "MICRO CLAUDE : parle", "retour": "RETOUR A LA FENETRE D'AVANT",
+                "tab": "FENETRE SUIVANTE (Alt+Tab)"}
 
 
 class Core:
@@ -331,6 +332,10 @@ class Core:
             self.menu.close()
             self.bubble = None
             acts.append(("vscode_dictation",))
+        elif word == "retour":
+            acts.append(("window_back",))
+        elif word == "tab":
+            acts.append(("alt_tab",))
         elif word == "pause":
             acts += [("release_all",)]
             self.set_mode(Mode.DISABLED, t, acts)

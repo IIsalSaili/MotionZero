@@ -24,7 +24,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, GlassOverlay, PreviewWindow, QApplication, StopButton
+from .ui import Bridge, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
@@ -112,6 +112,7 @@ def main(argv=None):
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
         stop_since = None           # début du survol du bouton STOP par la main
+        last_level_log = 0.0
         try:
             while not stop.is_set():
                 t = time.perf_counter()
@@ -163,6 +164,10 @@ def main(argv=None):
                 elif stop_since is not None:
                     stop_since = None
                     bridge.stop_hover.emit(0.0)
+                if listener is not None and core.dictating and t - last_level_log >= 1.0:
+                    last_level_log = t
+                    log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
+                             listener.last_rms, listener.ambient, t - listener.last_speech_t)
                 acts = vscode_actions(acts, core, vscode_ctl, sounds, t)
                 ctl.execute(acts, t)
                 for a in acts:
@@ -210,6 +215,10 @@ def main(argv=None):
     view_win.show()
     glass.show()
     stop_btn.show()
+    sink = KeySink()
+    sink.show()
+    from . import vscode
+    vscode.SINK_HWND = int(sink.winId())
     qt.exec()
     stop.set()
     worker.join(timeout=3)
@@ -224,15 +233,36 @@ def main(argv=None):
 
 def vscode_actions(acts, core, ctl, sounds, t):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import focus_and_send, toggle_claude_dictation
+    from .vscode import (alt_tab, discord_mute_toggle, find_window, focus_and_send, go_back,
+                         remember_previous, toggle_claude_dictation, bring_to_front)
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
 
     rest = []
     for a in acts:
-        if a[0] == "vscode_dictation":
+        if a[0] == "window_back":
+            err = go_back()
+        elif a[0] == "alt_tab":
+            alt_tab()
+            err = None
+        elif a[0] == "vscode_dictation":
+            # micro de Claude allumé = Discord coupé ; micro de Claude coupé = Discord rallumé.
+            # Les touches Discord partent dans la fenêtre active : jamais pendant que la dictée de
+            # Claude écoute (elles s'y tapaient et l'empêchaient de se couper).
+            starting = core.dictating
+            code = find_window()
+            if starting:
+                remember_previous(code)        # pour « iris retour », avant de toucher au premier plan
+                discord_mute_toggle()          # dans la fenêtre invisible : Discord coupé
             err = toggle_claude_dictation(send)
+            if not starting:
+                time.sleep(0.3)                # laisser la dictée de Claude s'éteindre
+                discord_mute_toggle()          # dans la fenêtre invisible : Discord rallumé
+                if code:
+                    bring_to_front(code)       # retour sur VS Code pour « envoie » / « annule »
+            elif err:
+                discord_mute_toggle()          # VS Code introuvable : on ne laisse pas Discord coupé
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler
