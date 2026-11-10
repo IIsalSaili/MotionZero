@@ -4,9 +4,13 @@ Le moteur (caméra, MediaPipe, Core) tourne dans un autre fil et envoie ses imag
 Les signaux Qt émis depuis ce fil arrivent dans le fil de l'interface par la file d'attente Qt.
 """
 import ctypes
+import os as _os
+import random as _random
+import time as _time
 
-from PySide6.QtCore import QObject, QPointF, QRect, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QImage, QPainter, QPen, QPixmap
+from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
+                           QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
 
 __all__ = ["Bridge", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton"]
@@ -93,6 +97,7 @@ class GlassOverlay(QWidget):
         self.cursor = None        # position logique (Qt), None = rien à dessiner
         self.progress = 0.0
         self.lost = False
+        self.island = _IslandPainter(self.width())   # île Dot Iris (étape 4)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -116,6 +121,8 @@ class GlassOverlay(QWidget):
             self.cursor = None
         self.progress = st.get("progress", 0.0)
         self.lost = st.get("lost", False)
+        if self.island.update(st, _time.perf_counter()):
+            self.update(self.island.rect())
         # repeindre seulement autour de l'ancien et du nouveau curseur (Qt recopie la fenêtre à chaque image)
         if old is not None:
             self.update(self._box(old))
@@ -123,10 +130,12 @@ class GlassOverlay(QWidget):
             self.update(self._box(self.cursor))
 
     def paintEvent(self, event):
-        if self.cursor is None:
-            return
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if event.rect().intersects(self.island.rect()):
+            self.island.paint(p)
+        if self.cursor is None:
+            return
         c, r = self.cursor, RING_R
         rect = QRect(int(c.x() - r), int(c.y() - r), 2 * r, 2 * r)
         if self.lost:
@@ -234,3 +243,158 @@ class KeySink(QWidget):
         super().showEvent(event)
         hwnd = ctypes.c_void_p(int(self.winId()))
         _u32.SetWindowDisplayAffinity(hwnd, _WDA_EXCLUDEFROMCAPTURE)
+
+
+# --- Étape 4 : l'île Dot Iris (en haut au centre, dans le verre) ------------------------------------
+_FONT_DIR = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))),
+                          "assets", "fonts")
+ISLAND_TOP = 12          # px depuis le haut de l'écran
+ISLAND_H = 46
+ISLAND_MAX_W = 960
+ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
+ISLAND_FADED = 0.25      # … à 25 % d'opacité
+TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
+MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
+
+# îlot du logo d'Iris, à gauche de l'île (un disque clair : la main noire du neutre reste lisible)
+_LOGO_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "iris")
+ISLET = 64               # diamètre de l'îlot (l'île du texte garde sa hauteur)
+ISLET_GAP = 8
+OK_FLASH_S = 0.5         # main verte : commande vocale comprise
+BLINK_S = 0.25           # œil fermé (un clignement humain dure environ 0,1 à 0,4 s)
+BLINK_EVERY = (1.2, 1.8) # environ toutes les 1,5 s, un peu irrégulier pour ne pas faire métronome
+EYE_AT = (0.560, 0.690)  # centre de l'œil dans l'image du logo (mesuré sur assets/iris/neutre.png)
+EYE_W = 0.31             # largeur de l'œil / largeur de l'image
+EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, le haut des doigts sort du cadre
+LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
+
+
+def islet_logo(st, blinking):
+    """Nom du logo à afficher. Pur : testable. Vert pendant la validation (sans clignement)."""
+    if st.get("ok_flash"):
+        return "ok"
+    base = LOGO_BY_MODE.get(st.get("mode"), "neutre")
+    return base + "_ferme" if blinking else base
+
+
+def load_fonts():
+    """Atkinson Hyperlegible (licence OFL, dans assets/fonts) : conçue pour la lisibilité."""
+    for name in ("AtkinsonHyperlegible-Bold.ttf", "AtkinsonHyperlegible-Regular.ttf"):
+        QFontDatabase.addApplicationFont(_os.path.join(_FONT_DIR, name))
+
+
+def island_text(st):
+    """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
+    mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    if st.get("dictating"):
+        return mode, "Claude t'écoute", True
+    if st.get("confirming"):
+        return mode, "Dis ENVOIE ou ANNULE", True
+    if st.get("listening"):
+        return mode, "Iris écoute…", True
+    if st.get("lost") and st.get("mode") == "SOURIS":
+        return mode, "Main non détectée", True
+    toast, age = st.get("toast"), st.get("toast_age", 1e9)
+    if toast and age <= TOAST_S:
+        return mode, toast, True
+    return mode, None, False
+
+
+class _IslandPainter:
+    """Dessine l'île dans le verre. Ne garde que ce qu'il faut pour l'estomper au repos."""
+
+    def __init__(self, width):
+        load_fonts()
+        self.font_mode = QFont("Atkinson Hyperlegible", 15, QFont.Weight.Bold)
+        self.font_mode.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.5)
+        self.font_msg = QFont("Atkinson Hyperlegible", 15)
+        self.width = width
+        self.content = None
+        self.last_change = 0.0
+        self.opacity = 1.0
+        self.logos = {}
+        for name in ("neutre", "neutre_ferme", "lecture", "lecture_ferme", "souris", "souris_ferme", "ok"):
+            pm = QPixmap(_os.path.join(_LOGO_DIR, f"{name}.png"))
+            if not pm.isNull():
+                self.logos[name] = pm
+        self.logo = None
+        self.blink_until = 0.0
+        self.next_blink = 0.0
+
+    def rect(self):
+        w = ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP)
+        return QRect((self.width - w) // 2, ISLAND_TOP - 4, w, ISLET + 8)
+
+    def update(self, st, now):
+        mode, msg, active = island_text(st)
+        content = (mode, msg)
+        if content != self.content:
+            self.content, self.last_change = content, now
+        if st.get("ok_flash"):
+            self.last_change = now
+        # clignement : 0,5 s, à intervalle irrégulier
+        if now >= self.next_blink:
+            self.blink_until = now + BLINK_S
+            self.next_blink = now + _random.uniform(*BLINK_EVERY)
+        logo = islet_logo(st, now < self.blink_until)
+        idle = now - self.last_change
+        target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
+        changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo
+        self.opacity, self.logo = target, logo
+        return changed
+
+    def paint(self, p):
+        if not self.content:
+            return
+        mode, msg = self.content
+        fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_msg)
+        pad, dot, gap = 20, 10, 14
+        w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
+        if msg:
+            msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, ISLAND_MAX_W - w - gap - pad)
+            w += gap + fm_msg.horizontalAdvance(msg)
+        gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
+        x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        p.save()
+        self._paint_islet(p, gx, ISLAND_TOP)       # le logo ne s'estompe jamais
+        p.setOpacity(self.opacity)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
+        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        cx = x + pad + dot / 2
+        p.setBrush(QColor(255, 255, 255))
+        p.drawEllipse(QPointF(cx, y + ISLAND_H / 2), dot / 2, dot / 2)
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_mode)
+        tx = x + pad + dot + 10
+        p.drawText(QRectF(tx, y, fm_mode.horizontalAdvance(mode) + 2, ISLAND_H),
+                   Qt.AlignmentFlag.AlignVCenter, mode)
+        if msg:
+            p.setPen(QColor(255, 255, 255, 200))
+            p.setFont(self.font_msg)
+            mx = tx + fm_mode.horizontalAdvance(mode) + gap
+            p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
+        p.restore()
+
+    def _paint_islet(self, p, x, y):
+        """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
+        par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
+        circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
+        # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(245, 245, 240))
+        p.drawEllipse(circle)
+        pm = self.logos.get(self.logo)
+        if pm is not None:
+            pw = ISLET * EYE_IN_ISLET / EYE_W                   # largeur affichée de l'image
+            ph = pw * pm.height() / pm.width()
+            cx = x + ISLET / 2
+            clip = QPainterPath()
+            clip.addEllipse(circle)
+            p.save()
+            p.setClipPath(clip)
+            p.drawPixmap(QRectF(cx - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
+            p.restore()
+        p.setPen(QPen(QColor(0, 0, 0, 200), 2))
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(circle)

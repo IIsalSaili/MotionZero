@@ -9,10 +9,16 @@ from .core import MENU_LABELS, Mode
 
 PANEL_W = 340
 WHITE, DIM, GREEN, YELLOW = (255, 255, 255), (110, 110, 110), (0, 220, 0), (0, 220, 255)
-MODE_COLORS = {Mode.READING: (216, 78, 29), Mode.MOUSE: (12, 65, 194), Mode.DISABLED: (60, 60, 60)}  # BGR
+MODE_COLORS = {Mode.NEUTRAL: (90, 90, 90), Mode.READING: (216, 78, 29), Mode.MOUSE: (12, 65, 194), Mode.DISABLED: (60, 60, 60)}  # BGR
 FLASH_S = 1.5
 
 HELP = {
+    Mode.NEUTRAL: [
+        "NEUTRE : la main ne fait rien",
+        "IRIS LECTURE > pages a la main",
+        "IRIS SOURIS  > curseur a la main",
+        "IRIS STOP    > revenir ici",
+    ],
     Mode.READING: [
         "LECTURE",
         "Paume au bord DROIT  > page suivante",

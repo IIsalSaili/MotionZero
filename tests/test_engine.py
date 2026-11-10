@@ -18,7 +18,7 @@ def mirror(pts):
 
 # --- lecture : bords de l'image ---------------------------------------------
 def test_bord_droit_page_suivante_une_seule_fois():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(READ), Clock()
     assert core.mode == Mode.READING
     clk.run(core, 0.5, cx=0.5)
     acts = clk.run(core, 0.2, cx=0.5, to_cx=0.9) + clk.run(core, 2.0, cx=0.9)
@@ -26,7 +26,7 @@ def test_bord_droit_page_suivante_une_seule_fois():
 
 
 def test_bord_gauche_page_precedente_apres_retour_au_centre():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(READ), Clock()
     clk.run(core, 0.5, cx=0.5)
     clk.run(core, 0.2, cx=0.5, to_cx=0.9)
     clk.run(core, 0.6, cx=0.9)
@@ -46,7 +46,7 @@ def test_passage_rapide_au_bord_ne_tourne_pas_la_page():
 def test_aucune_forme_de_main_exigee():
     """Poing, main ouverte, n'importe quoi : seule la position compte."""
     for pose in ("open", "fist", "point", "thumb_up"):
-        core, clk = Core(Config()), Clock()
+        core, clk = Core(READ), Clock()
         clk.run(core, 0.5, pose, cx=0.5)
         acts = clk.run(core, 0.2, pose, cx=0.5, to_cx=0.9) + clk.run(core, 0.6, pose, cx=0.9)
         assert kinds(acts, "key") == [("key", "right")], pose
@@ -54,7 +54,7 @@ def test_aucune_forme_de_main_exigee():
 
 # --- défilement -----------------------------------------------------------------
 def test_paume_en_bas_defile_vers_le_bas_tant_qu_elle_y_reste():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(READ), Clock()
     clk.run(core, 0.5, cx=0.5, cy=0.5)
     # (cy = poignet ; la paume est ~0,11 plus haut)
     acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.95) + clk.run(core, 1.0, cx=0.5, cy=0.95)
@@ -65,7 +65,7 @@ def test_paume_en_bas_defile_vers_le_bas_tant_qu_elle_y_reste():
 
 
 def test_paume_en_haut_defile_vers_le_haut_sans_bulle():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(READ), Clock()
     clk.run(core, 0.5, cx=0.5, cy=0.5)
     acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.15) + clk.run(core, 3.0, cx=0.5, cy=0.15)
     assert kinds(acts, "scroll") and all(s[1] > 0 for s in kinds(acts, "scroll"))
@@ -86,7 +86,8 @@ def test_molette_envoyee_a_windows():
 
 
 # --- entrer en souris ---------------------------------------------------------
-BUBBLE = Config(mouse_bubble=True)   # ancienne bulle « SOURIS ? », gardée en option
+READ = Config(start_mode="LECTURE")   # tests du mode lecture : il n'est plus le mode de départ
+BUBBLE = Config(mouse_bubble=True, start_mode="LECTURE")   # ancienne bulle « SOURIS ? », gardée en option
 
 
 def _enter_mouse_bubble(core, clk):
@@ -145,7 +146,7 @@ def test_pas_de_menu_en_entrant_sans_bouger():
     assert not core.menu.is_open and kinds(acts, "click") == []
 
 
-MENU = Config(click_menu_on_still=True)   # ancien menu de clic, gardé en option
+MENU = Config(click_menu_on_still=True, start_mode="LECTURE")   # ancien menu de clic, gardé en option
 
 
 def _open_menu(core, clk):
@@ -176,7 +177,7 @@ def test_menu_bas_retour_lecture():
     core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
     clk.run(core, 0.2, cx=0.6, cy=0.52, to_cy=0.60)
-    assert core.mode == Mode.READING
+    assert core.mode == Mode.NEUTRAL
 
 
 def test_menu_ignore_aucun_clic():
@@ -195,11 +196,23 @@ def test_un_seul_clic_tant_qu_on_ne_bouge_pas():
     assert len(kinds(acts, "click")) == 1
 
 
-def test_main_absente_retour_lecture_et_relache():
+def test_main_absente_relache_mais_reste_en_souris():
+    """La main absente relâche tout, mais le mode souris reste (on en sort par « iris stop »)."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    acts = clk.run(core, 2.2, absent=True)
-    assert core.mode == Mode.READING and ("release_all",) in acts
+    acts = clk.run(core, 5.0, absent=True)
+    assert core.mode == Mode.MOUSE and ("release_all",) in acts
+
+
+def test_iris_souris_main_baissee_reste_en_souris():
+    """Mesuré le 10/11 : « iris souris » main baissée -> ressorti du mode souris 30 ms plus tard."""
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.5, cx=0.5, cy=0.6)
+    clk.run(core, 4.0, absent=True)                         # main baissée depuis 4 s
+    core.voice("iris", clk.t)
+    core.voice("souris", clk.t + 0.2)
+    clk.run(core, 1.0, absent=True)
+    assert core.mode == Mode.MOUSE
 
 
 # --- deux mains ---------------------------------------------------------------------
@@ -290,9 +303,20 @@ def test_clic_vocal_la_ou_l_on_visait_avant_iris():
 
 def test_main_immobile_en_lecture_ne_propose_plus_la_souris():
     """La bulle « SOURIS ? » est remplacée par « iris souris » : rien ne s'ouvre main immobile."""
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(READ), Clock()
     clk.run(core, 10.0, cx=0.5, cy=0.6, jitter=0.004)
     assert core.bubble is None and core.mode == Mode.READING and not core.listening(clk.t)
+
+
+def test_demarrage_en_neutre_la_main_ne_fait_rien():
+    """Main posée sur la cuisse, qui bouge un peu : en neutre, ni page, ni défilement, ni rien."""
+    core, clk = Core(Config()), Clock()
+    assert core.mode == Mode.NEUTRAL
+    acts = clk.run(core, 5.0, cx=0.9, cy=0.9, jitter=0.01) + clk.run(core, 2.0, cx=0.5, cy=0.1, to_cx=0.1)
+    assert [a for a in acts if a[0] != "move"] == []
+    core.voice("iris", clk.t)
+    core.voice("lecture", clk.t + 0.2)
+    assert core.mode == Mode.READING
 
 
 def test_clic_vocal_date_absurde_ne_deplace_pas_le_curseur():
