@@ -35,10 +35,28 @@ WORDS = {
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
+    "mute": "mute",       # « iris mute » : coupe Discord
+    "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "stop": "stop",
 }
 WAKE_WORD = "iris"
-GRAMMAR = json.dumps(list(WORDS) + ["[unk]"], ensure_ascii=False)
+# « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
+GRAMMAR = json.dumps([w for w in WORDS if w != "démute"] + ["des mute", "[unk]"], ensure_ascii=False)
+
+
+def _join_demute(words):
+    """« des » + « mute » entendus à la suite = la commande « démute »."""
+    out, i = [], 0
+    while i < len(words):
+        w = words[i]
+        if w["word"] == "des" and i + 1 < len(words) and words[i + 1]["word"] == "mute":
+            nxt = words[i + 1]
+            out.append({"word": "démute", "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
+            i += 2
+            continue
+        out.append(w)
+        i += 1
+    return out
 
 
 def accepted_words(res, min_conf=0.6, max_words=1):
@@ -46,7 +64,7 @@ def accepted_words(res, min_conf=0.6, max_words=1):
     Si la phrase contient un mot inconnu ([unk]) — conversation, série — ou plusieurs mots, TOUT est ignoré.
     Mesuré (voix de synthèse) : sans cette règle « il fait beau aujourd'hui » donnait « iris » (0,87) ;
     avec, 0 faux positif sur 12 phrases ordinaires."""
-    words = res.get("result", [])
+    words = _join_demute(res.get("result", []))
     # « euh », souffle, bruit juste avant « iris + commande » : toléré (mesuré : « [unk] iris claude » rejeté)
     if len(words) == 3 and words[0]["word"] == "[unk]" and words[1]["word"] == WAKE_WORD:
         words = words[1:]

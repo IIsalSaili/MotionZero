@@ -172,3 +172,19 @@ def test_iris_discord_et_chrome_ouvrent_l_appli():
     assert core.voice("discord", 1.5) == [("open_app", "discord")]
     core.voice("iris", 2.0)
     assert core.voice("chrome", 2.5) == [("open_app", "chrome")]
+
+
+def test_iris_mute_et_demute():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("mute", 1.5) == [("discord_mute",)]
+    core.voice("iris", 2.0)
+    assert core.voice("démute", 2.5) == [("discord_unmute",)]
+
+
+def test_des_mute_est_compris_comme_demute():
+    """« démute » n'existe pas dans le modèle vocal : on entend « des » + « mute »."""
+    r = {"result": [{"word": "iris", "conf": 1.0, "start": 0.0, "end": 0.3},
+                    {"word": "des", "conf": 0.9, "start": 0.4, "end": 0.5},
+                    {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
+    assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
