@@ -48,7 +48,8 @@ WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
-SPLIT = {("des", "mute"): "démute", ("des", "fun"): "défun", ("dis", "fun"): "défun"}
+SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
+         ("des", "fun"): "défun", ("dis", "fun"): "défun"}
 GRAMMAR = json.dumps([w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT] + ["[unk]"],
                      ensure_ascii=False)
 

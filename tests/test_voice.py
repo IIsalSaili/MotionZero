@@ -283,3 +283,10 @@ def test_des_fun_et_dis_fun_sont_compris_comme_defun():
                         {"word": first, "conf": 0.9, "start": 0.4, "end": 0.5},
                         {"word": "fun", "conf": 0.95, "start": 0.5, "end": 0.8}]}
         assert [w["word"] for w in accepted_words(r)] == ["iris", "défun"]
+
+
+def test_unmute_vaut_demute():
+    r = {"result": [{"word": "iris", "conf": 1.0, "start": 0.0, "end": 0.3},
+                    {"word": "un", "conf": 0.9, "start": 0.4, "end": 0.5},
+                    {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
+    assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
