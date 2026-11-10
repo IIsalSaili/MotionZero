@@ -91,7 +91,9 @@ class Core:
         self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
         self.pose_voter = PoseVoter()
         self.pose_firm = None                 # dernière pose sûre (ouverte / fermée / index)
-        self.point_frames = 0                 # images de suite avec l'index pointé
+        self.point_frames = 0                 # images de suite main ouverte
+        self.closed_frames = 0                # images de suite main fermée
+        self.pressing = False                 # bouton gauche enfoncé par la main ouverte
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -132,6 +134,7 @@ class Core:
             return
         if self.mode == Mode.MOUSE:
             acts.append(("release_all",))
+            self.pressing = False
         self.mode = mode
         self.mode_since = t
         self._reset()
@@ -192,31 +195,42 @@ class Core:
         return acts
 
     def _index_click(self, world, t, acts):
-        """Ouvrir la main de façon détendue = clic gauche (temporaire ; l'index fatiguait la main), là où est
-        le curseur : le clic ne déplace JAMAIS le curseur. Il part dès 3 images de suite main ouverte
-        (~0,15 s), à condition de venir d'une main fermée (sans serrer) : un seul clic par ouverture,
-        rien si la main revient déjà ouverte."""
+        """Clic gauche MAINTENU par la main (comme un vrai bouton) : main fermée sans serrer = on vise ;
+        on rouvre la main, détendue -> bouton enfoncé ; tant qu'elle reste ouverte il reste enfoncé
+        (glisser-déposer possible) ; on la referme -> bouton relâché. Le curseur n'est jamais déplacé par
+        le clic. Chaque changement exige 3 images de suite (~0,15 s) ; l'appui ne s'arme qu'après une main
+        fermée (pas d'appui si la main revient déjà ouverte)."""
         c = self.cfg
         if self.pose_cents is None or world is None:
             return
         raw = classify(flexion(world), self.pose_cents)[0]
         self.point_frames = self.point_frames + 1 if raw == c.click_pose else 0
+        self.closed_frames = self.closed_frames + 1 if raw == "closed" else 0
         stable = self.pose_voter.update(raw)
-        if stable in ("open", "closed", "point") and stable != c.click_pose:
+        if not self.pressing and stable in ("closed", "point"):
             self.pose_firm = stable
-        if (self.point_frames >= c.index_click_frames and self.pose_firm == "closed"
+        if self.pressing:
+            if self.closed_frames >= c.index_click_frames:
+                acts.append(("release", "mouse", "left"))
+                self.pressing = False
+                self.pose_firm = "closed"
+                self.last_gesture = ("CLIC RELACHE", t)
+        elif (self.point_frames >= c.index_click_frames and self.pose_firm == "closed"
                 and t - self.last_click_t >= c.index_click_recovery_s):
-            acts.append(("click", "left"))
+            acts.append(("press", "mouse", "left"))
+            self.pressing = True
             self.last_click_t = t
-            self.pose_firm = c.click_pose     # réarmé seulement en refermant la main
-            self.last_gesture = ("CLIC GAUCHE (main ouverte)", t)
+            self.pose_firm = c.click_pose
+            self.last_gesture = ("CLIC GAUCHE MAINTENU", t)
 
     def _no_hand(self, t, acts):
         self.features = None
         self.palm = None
         self.pose_voter.reset()
-        self.pose_firm = None                 # main revenue déjà pointée : pas de clic
+        self.pose_firm = None                 # main revenue déjà ouverte : pas d'appui
         self.point_frames = 0
+        self.closed_frames = 0
+        self.pressing = False                 # le bouton est relâché par release_all (main absente)
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen

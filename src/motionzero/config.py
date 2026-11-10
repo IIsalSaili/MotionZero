@@ -68,8 +68,8 @@ class Config:
     page_refractory_s: float = 1.0
 
     # défilement (lecture) : paume en haut / en bas de l'image
-    scroll_band_top: float = 0.25
-    scroll_band_bottom: float = 0.75
+    scroll_band_top: float = 0.12        # zones de défilement étroites (0,25 jugé beaucoup trop large)
+    scroll_band_bottom: float = 0.88
     scroll_hold_s: float = 0.3           # avant de commencer à défiler
     scroll_interval_s: float = 0.15      # un cran toutes les 0,15 s tant que la main y reste
     scroll_notch: int = 120              # un cran de molette Windows
@@ -122,7 +122,7 @@ class Config:
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
 
     # sécurité et confort
-    max_hold_s: float = 5.0
+    max_hold_s: float = 10.0           # sécurité : tout appui maintenu est relâché après 10 s (glisser compris)
     sounds: bool = True
 
 

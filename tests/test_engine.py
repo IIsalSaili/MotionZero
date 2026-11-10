@@ -57,10 +57,11 @@ def test_paume_en_bas_defile_vers_le_bas_tant_qu_elle_y_reste():
     core, clk = Core(READ), Clock()
     clk.run(core, 0.5, cx=0.5, cy=0.5)
     # (cy = poignet ; la paume est ~0,11 plus haut)
-    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.95) + clk.run(core, 1.0, cx=0.5, cy=0.95)
+    # zone du bas étroite (paume au-delà de 0,88) : poignet à 1,02 -> paume ~0,91
+    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=1.02) + clk.run(core, 1.0, cx=0.5, cy=1.02)
     scrolls = kinds(acts, "scroll")
     assert len(scrolls) >= 4 and all(s[1] < 0 for s in scrolls)
-    acts = clk.run(core, 0.2, cx=0.5, cy=0.95, to_cy=0.5) + clk.run(core, 0.5, cx=0.5, cy=0.5)
+    acts = clk.run(core, 0.2, cx=0.5, cy=1.02, to_cy=0.5) + clk.run(core, 0.5, cx=0.5, cy=0.5)
     assert len(kinds(acts, "scroll")) <= 1  # s'arrête en revenant au centre
 
 
@@ -358,16 +359,17 @@ def _poses(core, monkeypatch, seq):
     core.pose_cents = {"x": 1}
 
 
-def test_ouvrir_la_main_clique_une_seule_fois(monkeypatch):
-    """Main fermée (on vise) puis ouverte détendue = un seul clic gauche."""
+def test_main_ouverte_maintient_le_clic_fermee_le_relache(monkeypatch):
+    """Comme un vrai bouton : ouverte = enfoncé (une seule fois), refermée = relâché."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
-    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 30)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 30 + ["closed"] * 10)
     acts = []
-    for _ in range(40):
+    for _ in range(50):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
-    assert [a for a in acts if a[0] == "click"] == [("click", "left")]
+    btn = [a for a in acts if a[0] in ("press", "release", "click")]
+    assert btn == [("press", "mouse", "left"), ("release", "mouse", "left")]
 
 
 def test_main_revenue_deja_ouverte_ne_clique_pas(monkeypatch):
@@ -378,7 +380,7 @@ def test_main_revenue_deja_ouverte_ne_clique_pas(monkeypatch):
     for _ in range(50):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
-    assert [a for a in acts if a[0] == "click"] == []
+    assert [a for a in acts if a[0] in ("click", "press")] == []
 
 
 def hand_pts():
@@ -394,6 +396,26 @@ def test_clic_index_ne_bouge_pas_le_curseur(monkeypatch):
     for i in range(15):
         clk.t += 0.05
         acts += core.step(hand_pts(), clk.t, world="x")
-    i_click = acts.index(("click", "left"))
+    i_click = acts.index(("press", "mouse", "left"))
     assert acts[i_click - 1][0] != "move" or acts[i_click - 1] == ("move", *core.cursor)
     assert [a for a in acts[i_click:] if a[0] == "move"] == []
+
+
+def test_main_perdue_pendant_l_appui_relache(monkeypatch):
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 10)
+    for _ in range(20):
+        clk.t += 0.05
+        core.step(hand_pts(), clk.t, world="x")
+    assert core.pressing
+    acts = clk.run(core, 1.0, absent=True)
+    assert ("release_all",) in acts and not core.pressing
+
+
+def test_main_un_peu_basse_ne_defile_plus():
+    """Mesuré : la zone de défilement (25 % en bas) était beaucoup trop large. Paume à ~0,84 : rien."""
+    core, clk = Core(READ), Clock()
+    clk.run(core, 0.5, cx=0.5, cy=0.5)
+    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.95) + clk.run(core, 2.0, cx=0.5, cy=0.95)
+    assert kinds(acts, "scroll") == []
