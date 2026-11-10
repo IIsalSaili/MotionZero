@@ -296,6 +296,9 @@ def vscode_actions(acts, core, ctl, sounds, t):
         elif a[0] in ("discord_mute", "discord_unmute"):
             discord_mute_toggle()              # le raccourci, tout simplement : aucun état retenu
             err = None
+        elif a[0] == "discord_deafen":
+            from .vscode import send_discord
+            err = None if send_discord("TOGGLE_DEAFEN") else "SOURDINE : RACCOURCI DISCORD INTROUVABLE"
         elif a[0] == "vscode_dictation":
             err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
             if not err and core.dictating:

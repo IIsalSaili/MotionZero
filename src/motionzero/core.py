@@ -38,7 +38,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS",
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE"}
 
 
@@ -387,6 +387,8 @@ class Core:
             acts.append(("discord_mute",))
         elif word == "démute":
             acts.append(("discord_unmute",))
+        elif word == "défun":
+            acts.append(("discord_deafen",))
         elif word == "pause":
             acts += [("release_all",)]
             self.set_mode(Mode.DISABLED, t, acts)
