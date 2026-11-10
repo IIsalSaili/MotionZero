@@ -93,6 +93,7 @@ class VoiceListener:
         self.t_stream0 = None
         self.last_speech_t = time.perf_counter()
         self.last_rms = 0.0         # pour le journal pendant la dictée
+        self._partial = ""          # dernier texte provisoire de la reconnaissance
 
     def start(self):
         import sounddevice as sd
@@ -142,14 +143,16 @@ class VoiceListener:
                 self.rec.Reset()
                 continue
             if self.rec.AcceptWaveform(block):
-                res = json.loads(self.rec.Result())
-                if res.get("result"):
+                self._partial = ""
+                self._emit(json.loads(self.rec.Result()))
+            else:
+                # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
+                # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
+                # Seul un texte qui CHANGE compte : le dernier mot reste affiché un moment après la parole.
+                partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
+                if partial and partial != self._partial:
                     self.last_speech_t = time.perf_counter()
-                self._emit(res)
-            elif json.loads(self.rec.PartialResult()).get("partial", "").strip():
-                # la reconnaissance entend des mots (même inconnus) : c'est de la parole, quel que soit
-                # le volume du micro (que VS Code ou Discord peuvent baisser en l'ouvrant)
-                self.last_speech_t = time.perf_counter()
+                self._partial = partial
 
     def _emit(self, res):
         why = rejection(res, self.min_conf)

@@ -107,7 +107,7 @@ class Config:
     voice_scroll_max_rate: float = 15.0  # crans par seconde au maximum
 
     # « iris, claude » : micro du panneau Claude dans VS Code, coupé quand tu as fini de parler
-    dictation_silence_s: float = 3.5     # silence après ta dernière parole -> micro coupé
+    dictation_silence_s: float = 2.0     # silence après ta dernière parole -> micro coupé (3,5 jugé trop long)
     dictation_echo_s: float = 0.6        # on ignore la fin de « claude » juste après l'avoir dit
     dictation_no_speech_s: float = 8.0   # rien dit du tout -> micro coupé
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
