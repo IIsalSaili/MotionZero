@@ -329,3 +329,56 @@ def test_clic_vocal_date_absurde_ne_deplace_pas_le_curseur():
     core.voice("iris", clk.t, t_start=clk.t - 50.0)          # date fausse, bien plus vieille que l'historique
     acts = core.voice("clic", clk.t + 0.1, t_start=clk.t - 49.0)
     assert acts == [("click", "left")] and core.cursor == here
+
+
+# --- souris : centre, retour au centre, index = clic -----------------------------------------------
+def test_mode_souris_commence_au_centre():
+    core, clk = Core(Config()), Clock()
+    core.cursor = core._cursor_f = (100, 1000)               # curseur laissé n'importe où
+    acts = _enter_mouse(core, clk)
+    assert ("move", 960, 540) in acts
+
+
+def test_main_revenue_le_curseur_repart_du_centre():
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.7)
+    assert core.cursor[0] > 1100
+    clk.run(core, 1.0, absent=True)
+    acts = clk.run(core, 0.1, cx=0.3, cy=0.52)
+    assert ("move", 960, 540) in acts
+
+
+def _poses(core, monkeypatch, seq):
+    """Fait « voir » une suite de poses au moteur (sans vraie main en 3D)."""
+    import motionzero.core as mc
+    it = iter(seq)
+    monkeypatch.setattr(mc, "flexion", lambda w: None)
+    monkeypatch.setattr(mc, "classify", lambda f, c: (next(it), None))
+    core.pose_cents = {"x": 1}
+
+
+def test_pointer_l_index_clique_une_seule_fois(monkeypatch):
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["open"] * 10 + ["point"] * 30)
+    acts = []
+    for _ in range(40):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert [a for a in acts if a[0] == "click"] == [("click", "left")]
+
+
+def test_main_revenue_deja_pointee_ne_clique_pas(monkeypatch):
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["point"] * 30)
+    acts = []
+    for _ in range(30):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert [a for a in acts if a[0] == "click"] == []
+
+
+def hand_pts():
+    return hand("open", 0.5, 0.52)

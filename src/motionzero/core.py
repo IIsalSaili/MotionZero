@@ -19,6 +19,7 @@ from collections import deque
 from .filters import OneEuro
 from .gestures import RadialMenu, ScrollDetector, StillnessDetector, ZoneDetector
 from .hand import compute_features
+from .poses import UNSURE, PoseVoter, classify, flexion
 
 
 class Mode:
@@ -87,6 +88,10 @@ class Core:
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
         self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
+        self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
+        self.pose_voter = PoseVoter()
+        self.pose_firm = None                 # dernière pose sûre (ouverte / fermée / index)
+        self.point_since = None               # début du geste « index » (pour cliquer là où l'on visait)
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -131,7 +136,19 @@ class Core:
         self.mode_since = t
         self._reset()
         acts.append(("mode", mode))
+        if mode == Mode.MOUSE:
+            self._center(acts)                # le mode souris commence toujours au centre
         self.feed.append((f"MODE {mode}", t))
+
+    def _center(self, acts):
+        sx, sy, sw, sh = self.screen
+        self.cursor = (sx + sw // 2, sy + sh // 2)
+        self._cursor_f = [float(self.cursor[0]), float(self.cursor[1])]
+        self.cursor_hist.clear()
+        self.prev_palm = None
+        self.fx.reset()
+        self.fy.reset()
+        acts.append(("move", *self.cursor))
 
     def disable(self, t):
         acts = [("release_all",)]
@@ -144,12 +161,16 @@ class Core:
         return acts
 
     # --- boucle ------------------------------------------------------------
-    def step(self, pts, t):
+    def step(self, pts, t, world=None):
+        """world : les 21 points 3D « monde » de la même main (pour reconnaître l'index pointé)."""
         acts = []
         if self.mode == Mode.DISABLED:
             return acts
         if pts is None:
             return self._no_hand(t, acts)
+        if (self.mode == Mode.MOUSE and self.last_seen is not None
+                and t - self.last_seen >= self.cfg.recenter_absent_s):
+            self._center(acts)                # la main revient : le curseur repart du centre
         self.last_seen = t
         self.released = False
         self.features = compute_features(pts, self.cfg)
@@ -166,12 +187,48 @@ class Core:
             self._reading(palm, t, acts)
         elif self.mode == Mode.MOUSE:
             self._mouse(palm, t, acts)
+            self._index_click(world, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
+
+    def _index_click(self, world, t, acts):
+        """Pointer l'index = clic gauche (temporaire, demandé par l'utilisateur). Un seul clic par geste :
+        il faut passer d'une pose sûre (main ouverte ou fermée) à l'index, confirmé sur 6 images sur 8.
+        Le clic part de la position d'avant le début du geste (former l'index déplace la paume)."""
+        c = self.cfg
+        if self.pose_cents is None or world is None:
+            return
+        raw = classify(flexion(world), self.pose_cents)[0]
+        if raw == "point":
+            self.point_since = self.point_since if self.point_since is not None else t
+        else:
+            self.point_since = None
+        stable = self.pose_voter.update(raw)
+        if stable == UNSURE:
+            return
+        if (stable == "point" and self.pose_firm in ("open", "closed")
+                and t - self.last_click_t >= c.index_click_recovery_s):
+            target = (self.point_since if self.point_since is not None else t) - c.index_click_rewind_s
+            pos = self.cursor
+            for ht, hp in self.cursor_hist:
+                if ht > target:
+                    break
+                pos = hp
+            if pos != self.cursor:
+                self.cursor = pos
+                self._cursor_f = [float(pos[0]), float(pos[1])]
+                acts.append(("move", *pos))
+            acts.append(("click", "left"))
+            self.last_click_t = t
+            self.last_gesture = ("CLIC GAUCHE (index)", t)
+        self.pose_firm = stable
 
     def _no_hand(self, t, acts):
         self.features = None
         self.palm = None
+        self.pose_voter.reset()
+        self.pose_firm = None                 # main revenue déjà pointée : pas de clic
+        self.point_since = None
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen
