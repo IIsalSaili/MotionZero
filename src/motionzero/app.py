@@ -216,8 +216,10 @@ def main(argv=None):
     if worker.is_alive():      # moteur bloqué : tout est déjà relâché, on quitte quand même
         ctl.release_all()
         log.warning("moteur bloque a l'arret : sortie forcee")
-        logging.shutdown()
-        os._exit(0)
+    # sortie franche : un fil resté ouvert (écoute du micro) gardait le processus en vie,
+    # ce qui laissait se lancer plusieurs motionzero à la fois
+    logging.shutdown()
+    os._exit(0)
 
 
 def vscode_actions(acts, core, ctl, sounds, t):
