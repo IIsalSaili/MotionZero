@@ -86,7 +86,10 @@ def test_molette_envoyee_a_windows():
 
 
 # --- entrer en souris ---------------------------------------------------------
-def _enter_mouse(core, clk):
+BUBBLE = Config(mouse_bubble=True)   # ancienne bulle « SOURIS ? », gardée en option
+
+
+def _enter_mouse_bubble(core, clk):
     clk.run(core, 1.7, cx=0.5, cy=0.6, jitter=0.004)       # immobile (avec tremblement) -> bulle
     assert core.bubble is not None
     acts = clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)  # petit mouvement vers le haut
@@ -94,14 +97,23 @@ def _enter_mouse(core, clk):
     return acts
 
 
+def _enter_mouse(core, clk):
+    """« iris souris » (la bulle sur main immobile n'existe plus par défaut)."""
+    clk.run(core, 0.5, cx=0.5, cy=0.6)
+    core.voice("iris", clk.t)
+    acts = core.voice("souris", clk.t + 0.2)
+    assert core.mode == Mode.MOUSE
+    return acts + clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)
+
+
 def test_immobile_puis_haut_entre_en_souris():
-    core, clk = Core(Config()), Clock()
-    acts = _enter_mouse(core, clk)
+    core, clk = Core(BUBBLE), Clock()
+    acts = _enter_mouse_bubble(core, clk)
     assert ("mode", Mode.MOUSE) in acts
 
 
 def test_bulle_ignoree_ne_revient_pas_sans_bouger():
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(BUBBLE), Clock()
     clk.run(core, 1.7, cx=0.5)
     assert core.bubble is not None
     clk.run(core, 2.5, cx=0.5)          # rien : la bulle disparaît
@@ -274,3 +286,10 @@ def test_clic_vocal_la_ou_l_on_visait_avant_iris():
     core.voice("iris", clk.t, t_start=t_iris)
     acts = core.voice("clic", clk.t + 0.1, t_start=clk.t)
     assert acts == [("move", *aimed), ("click", "left")] and core.cursor == aimed
+
+
+def test_main_immobile_en_lecture_ne_propose_plus_la_souris():
+    """La bulle « SOURIS ? » est remplacée par « iris souris » : rien ne s'ouvre main immobile."""
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 10.0, cx=0.5, cy=0.6, jitter=0.004)
+    assert core.bubble is None and core.mode == Mode.READING and not core.listening(clk.t)

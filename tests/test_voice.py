@@ -86,7 +86,7 @@ def test_retour_et_tab_exigent_iris():
 
 def test_main_immobile_ouvre_l_ecoute_sans_iris():
     """Le menu (main immobile) ouvre l'écoute : on peut dire « menu » au lieu de bouger."""
-    core, clk = Core(Config()), Clock()
+    core, clk = Core(Config(mouse_bubble=True)), Clock()     # ancienne bulle, en option
     clk.run(core, 1.7, cx=0.5, cy=0.6)
     assert core.bubble is not None and core.listening(clk.t)
     assert core.voice("menu", clk.t) == [("click", "right")]
@@ -198,3 +198,17 @@ def test_des_mute_est_compris_comme_demute():
                     {"word": "des", "conf": 0.9, "start": 0.4, "end": 0.5},
                     {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
     assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
+
+
+def test_deuxieme_verification():
+    """Mesuré avec la voix de synthèse : la reconnaissance libre retrouve « iris » dans les vraies commandes,
+    et la conversation donne des phrases longues."""
+    from motionzero.voice import confirmed
+    w = lambda *names: [{"word": n} for n in names]
+    assert confirmed(w("iris", "chrome"), "iris chrome")
+    assert confirmed(w("iris", "discord"), "iris discorde")
+    assert not confirmed(w("iris", "chrome"), "je vais regarder ça sur chrome")
+    assert not confirmed(w("envoie"), "tu as vu la série hier soir")
+    assert not confirmed(w("iris", "colle"), "il colle")            # pas de « iris » prononcé
+    assert confirmed(w("stop"), "arrête stop tout de suite là")    # sécurité : jamais bloqué
+    assert confirmed(w("lâche"), "")

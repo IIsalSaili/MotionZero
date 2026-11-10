@@ -37,7 +37,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle", "retour": "RETOUR A LA FENETRE D'AVANT",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME"}
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS"}
 
 
 class Core:
@@ -211,7 +211,8 @@ class Core:
             return
         in_center = in_center and c.scroll_band_top < palm[1] < c.scroll_band_bottom
         if self.bubble is None:
-            if in_center and not self.need_move and self.still_for >= c.mouse_enter_still_s:
+            if (c.mouse_bubble and in_center and not self.need_move
+                    and self.still_for >= c.mouse_enter_still_s):
                 self.bubble = (t, palm[0], palm[1])
             return
         t0, x0, y0 = self.bubble
@@ -362,6 +363,10 @@ class Core:
             label = "ANNULE"
         elif word == "tab":
             acts.append(("alt_tab",))
+        elif word == "souris":
+            if self.mode != Mode.MOUSE:
+                self.set_mode(Mode.MOUSE, t, acts)
+            label = "SOURIS"
         elif word in ("discord", "chrome"):
             acts.append(("open_app", word))
         elif word == "mute":
@@ -467,7 +472,7 @@ class Core:
                 return ("page suivante" if self.zone_side == "next" else "page precedente", self.zone_progress)
             if self.scroll_side is not None:
                 return ("defile " + ("haut" if self.scroll_side == "up" else "bas"), self.scroll_progress)
-            if self.bubble is None and not self.need_move and self.still_for > 0.2:
+            if c.mouse_bubble and self.bubble is None and not self.need_move and self.still_for > 0.2:
                 return ("bulle SOURIS", min(self.still_for / c.mouse_enter_still_s, 1.0))
         elif self.mode == Mode.MOUSE and c.click_menu_on_still and not self.menu.is_open \
                 and self.travel >= c.rearm_px \

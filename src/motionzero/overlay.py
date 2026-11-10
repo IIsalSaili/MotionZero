@@ -20,10 +20,7 @@ HELP = {
         "  (revenir au centre entre deux pages)",
         "Paume en HAUT / en BAS > defile",
         "",
-        "Main immobile 1,5 s au centre",
-        "  > bulle SOURIS ?",
-        "  > monter un peu la main = oui",
-        "  > ne rien faire = non",
+        "IRIS SOURIS > mode souris",
     ],
     Mode.MOUSE: [
         "SOURIS",

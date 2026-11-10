@@ -35,6 +35,7 @@ WORDS = {
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
+    "souris": "souris",   # « iris souris » : mode souris
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "stop": "stop",
@@ -82,6 +83,25 @@ def accepted_words(res, min_conf=0.6, max_words=1):
     return [w for w in words if w["conf"] >= need]
 
 
+FREE_MAX_WORDS = 4          # une commande est courte ; une phrase de conversation, non
+ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
+
+
+def confirmed(words, free_text):
+    """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
+    série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
+    son doit donc confirmer : phrase courte, et « iris » vraiment prononcé s'il fait partie de la commande."""
+    names = [w["word"] for w in words]
+    if not names or set(names) & ALWAYS_HEARD:
+        return True
+    tokens = free_text.lower().split()
+    if not tokens or len(tokens) > FREE_MAX_WORDS:
+        return False
+    if names[0] == WAKE_WORD:
+        return any(tok.startswith("iri") for tok in tokens)
+    return True
+
+
 def rejection(res, min_conf=0.6):
     """Pourquoi un résultat contenant « iris » a été rejeté (pour le journal), ou None."""
     words = res.get("result", [])
@@ -127,6 +147,8 @@ class VoiceListener:
         self.model = Model(self.model_dir)
         self.rec = KaldiRecognizer(self.model, self.sr, GRAMMAR)
         self.rec.SetWords(True)
+        self.free = KaldiRecognizer(self.model, self.sr)   # sans grammaire : sert à vérifier (voir confirmed)
+        self._free_final = (0.0, "")
         self.running = True
         self.t_stream0 = time.perf_counter()
         self.samples = 0
@@ -165,10 +187,17 @@ class VoiceListener:
                 self._loud = 0.0
             if self.muted:
                 self.rec.Reset()
+                self.free.Reset()
                 continue
+            now = time.perf_counter()
+            if self.free.AcceptWaveform(block):
+                self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
             if self.rec.AcceptWaveform(block):
                 self._partial = ""
-                self._emit(json.loads(self.rec.Result()))
+                t_free, text = self._free_final
+                if now - t_free > 1.5:   # la reconnaissance libre n'a pas encore fini sa phrase
+                    text = json.loads(self.free.PartialResult()).get("partial", "")
+                self._emit(json.loads(self.rec.Result()), text)
             else:
                 # la reconnaissance entend un mot de plus (même inconnu) : c'est de la parole, quel que
                 # soit le volume du micro (mesuré : VS Code le fait chuter à ~0-300 pendant sa dictée).
@@ -178,11 +207,15 @@ class VoiceListener:
                     self.last_speech_t = time.perf_counter()
                 self._partial = partial
 
-    def _emit(self, res):
+    def _emit(self, res, free_text=None):
         why = rejection(res, self.min_conf)
         if why:
             log.info("iris rejete : %s", why)
-        for w in accepted_words(res, self.min_conf):
+        words = accepted_words(res, self.min_conf)
+        if words and free_text is not None and not confirmed(words, free_text):
+            log.info("non confirme : %s (entendu librement : '%s')", " ".join(w["word"] for w in words), free_text)
+            return
+        for w in words:
             ev =VoiceEvent(w["word"], w["conf"], self.t_stream0 + w["start"], self.t_stream0 + w["end"])
             log.info("voix %s (%.2f)", ev.word, ev.conf)
             self.events.put(ev)
