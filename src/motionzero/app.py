@@ -257,9 +257,7 @@ def vscode_actions(acts, core, ctl, sounds, t):
             discord_mute_toggle()              # le raccourci, tout simplement : aucun état retenu
             err = None
         elif a[0] == "vscode_dictation":
-            if core.dictating:                 # au début de la dictée : le raccourci Discord, sans rien retenir
-                discord_mute_toggle()
-            err = toggle_claude_dictation(send)
+            err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler

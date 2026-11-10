@@ -124,6 +124,7 @@ APPS = {
     "discord": ("discord.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Discord\Update.exe"),
                                 "--processStart", "Discord.exe"]),
     "chrome": ("chrome.exe", [r"C:\Program Files\Google\Chrome\Application\chrome.exe"]),
+    "studio": ("code.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe")]),
 }
 
 

@@ -36,7 +36,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
-                "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME",
+                "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "souris": "SOURIS"}
 
 
@@ -363,7 +363,7 @@ class Core:
             if self.mode != Mode.MOUSE:
                 self.set_mode(Mode.MOUSE, t, acts)
             label = "SOURIS"
-        elif word in ("discord", "chrome"):
+        elif word in ("discord", "chrome", "studio"):
             acts.append(("open_app", word))
         elif word == "mute":
             acts.append(("discord_mute",))
