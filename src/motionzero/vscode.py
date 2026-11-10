@@ -88,6 +88,7 @@ def toggle_claude_dictation(send_hotkey):
 # --- « Iris, retour » : revenir à la fenêtre d'avant « Iris, Claude » -----------------------------
 _previous = None   # fenêtre au premier plan juste avant qu'« Iris, Claude » passe sur VS Code
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
+discord_muted = False   # True si c'est motionzero qui a coupé Discord (le raccourci inverse l'état)
 
 
 def _title(hwnd):
@@ -133,6 +134,20 @@ def alt_tab():
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
+def discord_mute():
+    """Coupe Discord (une seule fois, même si « iris claude » est redit)."""
+    global discord_muted
+    if not discord_muted and discord_mute_toggle():
+        discord_muted = True
+
+
+def discord_unmute():
+    """Rallume Discord seulement si c'est motionzero qui l'avait coupé."""
+    global discord_muted
+    if discord_muted and discord_mute_toggle():
+        discord_muted = False
+
+
 def discord_mute_toggle():
     """Envoie Suppr du pavé numérique + « + » du pavé numérique, comme les vraies touches, dans la
     fenêtre invisible de motionzero (rien ne se tape ailleurs). Discord, lui, les capte partout.
