@@ -24,12 +24,13 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, GlassOverlay, PreviewWindow, QApplication
+from .ui import Bridge, GlassOverlay, PreviewWindow, QApplication, StopButton
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
 DETECT_MAX_FPS = 20          # plafond de détection (moins de charge)
 STALE_S = 0.5                # sans image depuis 0,5 s : caméra considérée perdue
+STOP_DWELL_S = 0.6           # main tenue sur STOP : arrêt (avant le menu de clic, qui s'ouvre à 0,8 s)
 
 
 def main(argv=None):
@@ -71,12 +72,28 @@ def main(argv=None):
     qt = QApplication.instance() or QApplication([])
     view_win = PreviewWindow()
     stop = threading.Event()
-    view_win.closed.connect(stop.set)          # fenêtre fermée = STOP
     bridge = Bridge()
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
     glass = GlassOverlay()                     # verre plein écran : curseur et anneau, clics traversants
     bridge.state.connect(glass.set_state)
+    stop_btn = StopButton()                    # arrêt d'urgence, en bas à droite
+    stop_rect = stop_btn.physical_rect()
+    bridge.stop_hover.connect(stop_btn.set_hover)
     bridge.done.connect(qt.quit)
+
+    def emergency(source):
+        """STOP : tout relâcher tout de suite (sans attendre le moteur), puis quitter."""
+        if not stop.is_set():
+            log.info("STOP (%s)", source)
+        stop.set()
+        ctl.release_all()
+        qt.quit()
+
+    view_win.closed.connect(lambda: emergency("fenetre fermee"))
+    glass.closed.connect(lambda: emergency("verre ferme"))
+    stop_btn.closed.connect(lambda: emergency("bouton ferme"))
+    stop_btn.triggered.connect(lambda: emergency("bouton STOP"))
+    qt.aboutToQuit.connect(stop.set)
 
     def show(img):
         bridge.frame.emit(img)
@@ -95,6 +112,7 @@ def main(argv=None):
         last_detect, last_frame_t = 0.0, t0
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
+        stop_since = None           # début du survol du bouton STOP par la main
         try:
             while not stop.is_set():
                 t = time.perf_counter()
@@ -130,6 +148,22 @@ def main(argv=None):
                         log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
                         if ev.word == "iris" and accepted:
                             sounds.play("ECOUTE")
+                # main tenue sur le bouton STOP : arrêt direct, aucun clic simulé sur notre propre fenêtre
+                x, y = core.cursor
+                on_stop = (core.mode == Mode.MOUSE and pts is not None
+                           and stop_rect[0] <= x < stop_rect[2] and stop_rect[1] <= y < stop_rect[3])
+                if on_stop:
+                    stop_since = t if stop_since is None else stop_since
+                    hover = (t - stop_since) / STOP_DWELL_S
+                    bridge.stop_hover.emit(min(hover, 1.0))
+                    if hover >= 1.0:
+                        log.info("STOP (main sur le bouton)")
+                        ctl.release_all()
+                        break
+                    acts = [a for a in acts if a[0] not in ("click", "key", "hotkey")]
+                elif stop_since is not None:
+                    stop_since = None
+                    bridge.stop_hover.emit(0.0)
                 acts = vscode_actions(acts, core, vscode_ctl, sounds, t)
                 ctl.execute(acts, t)
                 for a in acts:
@@ -176,9 +210,15 @@ def main(argv=None):
     worker.start()
     view_win.show()
     glass.show()
+    stop_btn.show()
     qt.exec()
     stop.set()
     worker.join(timeout=3)
+    if worker.is_alive():      # moteur bloqué : tout est déjà relâché, on quitte quand même
+        ctl.release_all()
+        log.warning("moteur bloque a l'arret : sortie forcee")
+        logging.shutdown()
+        os._exit(0)
 
 
 def vscode_actions(acts, core, ctl, sounds, t):
