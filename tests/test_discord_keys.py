@@ -26,13 +26,6 @@ def test_base_absente():
     assert parse_keybinds(None) == {}
 
 
-def test_etat_micro_et_sourdine():
-    from motionzero.discord_keys import parse_voice_state
-    raw = b"\x01" + json.dumps({"default": {"mute": True, "deaf": False}, "stream": {"mute": False}}).encode()
-    assert parse_voice_state(raw) == (True, False)
-    assert parse_voice_state(None) is None
-
-
 def test_icones_discord():
     from motionzero.ui import discord_icons
     assert discord_icons(None) == [] and discord_icons((False, False)) == []
@@ -41,10 +34,20 @@ def test_icones_discord():
     assert discord_icons((False, True)) == ["headphone-off", "mic-off"]
 
 
-def test_mute_selon_l_etat_reel():
-    from motionzero.discord_keys import mute_needed
-    assert mute_needed(True, (False, False))          # allumé + « mute » : on coupe
-    assert not mute_needed(True, (True, False))       # déjà coupé : rien (sinon ça rallumerait)
-    assert mute_needed(False, (True, False))          # coupé + « démute » : on rallume
-    assert not mute_needed(False, (False, False))     # déjà allumé : rien
-    assert mute_needed(True, None) and mute_needed(False, None)   # état illisible : on envoie
+def test_memoire_mute_demute_defun(monkeypatch):
+    """Au lancement : allumé. mute -> coupé (une seule fois), démute -> allumé, défun bascule la sourdine."""
+    from motionzero import app, vscode
+    sent = []
+    monkeypatch.setattr(vscode, "discord_mute_toggle", lambda: sent.append("mute") or True)
+    monkeypatch.setattr(vscode, "send_discord", lambda action: sent.append(action) or True)
+
+    class C:
+        last_gesture = None
+    d = {"mute": False, "deaf": False}
+    for word in ("discord_mute", "discord_mute"):
+        app.vscode_actions([(word,)], C(), None, None, 0.0, d)
+    assert d["mute"] and sent == ["mute"]                          # 2e « mute » : rien
+    app.vscode_actions([("discord_unmute",)], C(), None, None, 0.0, d)
+    assert not d["mute"] and sent == ["mute", "mute"]
+    app.vscode_actions([("discord_deafen",)], C(), None, None, 0.0, d)
+    assert d["deaf"] and sent[-1] == "TOGGLE_DEAFEN"

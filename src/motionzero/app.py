@@ -67,13 +67,9 @@ def main(argv=None):
     from .ask import Asker
     asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
     asker.preload()
-    discord_voice = {"state": None}            # (micro coupé, sourdine), relu dans Discord chaque seconde
-
-    def watch_discord():
-        from .discord_keys import voice_state
-        while not stop.is_set():
-            discord_voice["state"] = voice_state()
-            stop.wait(1.0)
+    # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
+    # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
+    discord_voice = {"mute": False, "deaf": False}
 
     # VS Code (micro de Claude, Entrée) : toujours envoyé pour de vrai, même en simulation,
     # sinon la dictée ne peut pas être essayée. Seules ces touches-là, et seulement vers VS Code.
@@ -183,7 +179,7 @@ def main(argv=None):
                              listener.last_rms, listener.ambient, t - listener.last_speech_t)
                 if listener is not None:
                     acts = question_actions(acts, listener, asker)
-                acts = vscode_actions(acts, core, vscode_ctl, sounds, t)
+                acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                 ctl.execute(acts, t)
                 for a in acts:
                     if a[0] == "mode":
@@ -225,7 +221,7 @@ def main(argv=None):
                                          and t - core.last_word[1] < 0.5),
                         "toast_age": t - toast[1] if toast else 1e9,
                         "qa": asker.snapshot() if listener is not None else None,
-                        "discord": discord_voice["state"] if listener is not None else None,
+                        "discord": (discord_voice["mute"], discord_voice["deaf"]),
                     })
                 else:
                     time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
@@ -241,7 +237,6 @@ def main(argv=None):
             landmarker.close()
             log.info("arret (images rejetees=%d, reconnexions=%d)", cam.rejected, cam.reconnections)
 
-    threading.Thread(target=watch_discord, name="discord", daemon=True).start()   # après « stop »
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
     view_win.show()
@@ -282,7 +277,7 @@ def question_actions(acts, listener, asker):
     return rest
 
 
-def vscode_actions(acts, core, ctl, sounds, t):
+def vscode_actions(acts, core, ctl, sounds, t, discord=None):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
     from .vscode import alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app, toggle_claude_dictation
 
@@ -304,13 +299,21 @@ def vscode_actions(acts, core, ctl, sounds, t):
         elif a[0] == "open_app":
             err = open_app(a[1])
         elif a[0] in ("discord_mute", "discord_unmute"):
-            # simple interrupteur. Mesuré le 10/11 : l'état enregistré par Discord (MediaEngineStore) n'est
-            # PAS mis à jour au moment du changement ; s'y fier faisait refuser « démute ».
-            discord_mute_toggle()
+            # mémoire de motionzero : « mute » déjà coupé ou « démute » déjà allumé ne font rien
+            # (le raccourci de Discord inverse l'état : sinon un « mute » répété rallumerait)
+            want = a[0] == "discord_mute"
+            discord = discord if discord is not None else {"mute": not want, "deaf": False}
             err = None
+            if discord["mute"] != want:
+                if discord_mute_toggle():
+                    discord["mute"] = want
+            else:
+                core.last_gesture = ("DISCORD : DEJA " + ("COUPE" if want else "ALLUME"), t)
         elif a[0] == "discord_deafen":
             from .vscode import send_discord
             err = None if send_discord("TOGGLE_DEAFEN") else "SOURDINE : RACCOURCI DISCORD INTROUVABLE"
+            if not err and discord is not None:
+                discord["deaf"] = not discord["deaf"]
         elif a[0] == "vscode_dictation":
             err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
             if not err and core.dictating:
