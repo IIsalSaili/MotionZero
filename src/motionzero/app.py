@@ -328,7 +328,7 @@ def main(argv=None):
                             "toast_age": t - toast[1] if toast else 1e9,
                             "qa": asker.snapshot() if listener is not None else None,
                             "discord": (discord_voice["mute"], discord_voice["deaf"]),
-                            "reminders": desk.state(t),
+                            "reminders": desk.state(t, calendar_open=t < core.calendar_until),
                             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
                         })
                     else:

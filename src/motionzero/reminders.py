@@ -328,6 +328,8 @@ class Desk:
         self._last_tick = -1e9
         self._last_ring = -1e9
         self._announced_missed = False
+        from .calendar_view import Calendar
+        self.cal = Calendar()
 
     # ---- fil « rappel » ----
     def submit(self, audio):
@@ -456,13 +458,24 @@ class Desk:
                 core.last_gesture = (f"RAPPEL A {again.when:%H:%M}" if again else "AUCUN RAPPEL AFFICHE", t)
             elif k == "alarm_stop":
                 self.r.silence()
+            elif k == "cal_open":
+                self.cal.show(now.date())
+                self.list_until = -1e9
+            elif k == "cal_close":
+                self.cal.close()
+            elif k == "cal":
+                if not self.cal.open:
+                    self.cal.show(now.date())
+                self.cal.command(a[1], now.date(), t)
             else:
                 rest.append(a)
         return rest
 
-    def state(self, t):
-        """Pour l'île : rappel affiché, liste, prochain rappel."""
+    def state(self, t, calendar_open=True):
+        """Pour l'île : rappel affiché, liste, calendrier, prochain rappel."""
         now = self.clock()
+        if self.cal.open and not calendar_open:      # fermé par inactivité (Core) : on suit
+            self.cal.close()
         cur = self.r.active[0] if self.r.active else None
         nxt = self.r.next()
         return {
@@ -470,5 +483,6 @@ class Desk:
                                                  "missed": cur.missed, "more": len(self.r.active) - 1,
                                                  "when": cur.when.strftime("%H:%M")},
             "list": self.list_lines if t < self.list_until else None,
+            "calendar": self.cal.view(self.r.items, now) if self.cal.open else None,
             "next": None if nxt is None else short_when(nxt, now),   # pour la future vue calendrier
         }
