@@ -53,3 +53,12 @@ def test_espace_et_space():
         core = Core(Config())
         core.voice("iris", 1.0)
         assert core.voice(word, 1.5) == [("hotkey", ["space"])]
+
+
+def test_slash():
+    from motionzero.typer import spoken_symbols
+    assert spoken_symbols("Slash clear.") == "/clear"
+    assert spoken_symbols("slash, Compact") == "/compact"
+    assert spoken_symbols("Slash code-review high.") == "/code-review high"
+    assert spoken_symbols("un texte normal.") == "un texte normal."
+    assert spoken_symbols("et/ou slash fin") == "et/ou /fin"
