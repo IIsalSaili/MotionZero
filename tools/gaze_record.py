@@ -1,6 +1,6 @@
 """Enregistrement pour mesurer la précision du regard par webcam. Aucune image n'est gardée.
 
-  python tools/gaze_record.py recordings/regard_1.jsonl
+  python tools/gaze_record.py recordings/regard_1.jsonl [1920x1080]
 
 Plein écran noir : un point apparaît à 25 endroits (9 de calibration puis 16 de test), 1,5 s chacun.
 Il suffit de regarder le point, sans bouger la tête. Pour chaque image on garde seulement les points
@@ -38,12 +38,13 @@ def targets(w, h):
 
 def main():
     out_path = sys.argv[1]
+    cw, ch = (int(v) for v in (sys.argv[2] if len(sys.argv) > 2 else "640x480").split("x"))
     ctypes.windll.user32.SetProcessDPIAware()
     w, h = ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1)
     fl = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "face_landmarker.task")),
         running_mode=vision.RunningMode.VIDEO, num_faces=1, output_facial_transformation_matrixes=True))
-    cam = Camera().start()
+    cam = Camera(0, cw, ch).start()
     cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
     cv2.setWindowProperty(WIN, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
     blank = np.zeros((h, w, 3), np.uint8)
@@ -55,7 +56,8 @@ def main():
     seq, last_ts, n = 0, -1, 0
     try:
         with open(out_path, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps({"screen": [w, h], "dwell_s": DWELL_S}) + "\n")
+            fh.write(json.dumps({"screen": [w, h], "dwell_s": DWELL_S, "camera": cam.info}) + "\n")
+            shapes = set()
             while True:
                 now = time.perf_counter() - t0
                 img = blank.copy()
@@ -75,6 +77,7 @@ def main():
                 frame, new_seq = cam.read(seq)
                 if frame is not None and k is not None:
                     seq = new_seq
+                    shapes.add(frame.shape[:2][::-1])
                     view = cv2.flip(frame, 1)
                     ts = max(int(now * 1000), last_ts + 1)
                     last_ts = ts
@@ -97,7 +100,8 @@ def main():
         cam.stop()
         fl.close()
         cv2.destroyAllWindows()
-    print(f"{n} images enregistrees dans {out_path}")
+    print(f"{n} images enregistrees dans {out_path} | camera {cam.info} | images recues {shapes} | "
+          f"cadence reelle ~{n / (len(plan) * DWELL_S):.0f} images/s")
 
 
 if __name__ == "__main__":
