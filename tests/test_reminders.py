@@ -279,3 +279,43 @@ def test_vue_de_l_ile():
     assert "stop" in meta and "Iris merci" in meta
     assert reminder_texts("list", ["a", "b"])[1] == "a\nb"
     assert reminder_texts("current", {**cur, "alarm": False, "missed": True})[0].startswith("RAPPEL MANQUÉ")
+
+
+# ---- plusieurs horaires par jour ----
+POIGNETS = {"action": "create", "text": "travailler mes poignets", "at": "2026-11-12T12:00", "repeat": "daily",
+            "times": ["12:00", "14:00", "16:00", "18:00", "20:00", "22:00"]}
+
+
+def test_toutes_les_2_heures_a_partir_de_midi():
+    kind, rem = validate(POIGNETS, datetime(2026, 11, 12, 13, 5), set())
+    assert kind == "create" and rem.at == "2026-11-12T14:00"            # midi passé : 14 h
+    assert describe(rem, datetime(2026, 11, 12, 13, 5)) == "tous les jours toutes les 2 h de 12:00 à 22:00"
+    assert next_after(rem, datetime(2026, 11, 12, 22, 30)) == datetime(2026, 11, 13, 12, 0)   # lendemain midi
+
+
+def test_horaires_qui_s_enchainent(tmp_path):
+    rs = Reminders(str(tmp_path / "r.json"))
+    kind, rem = validate(POIGNETS, datetime(2026, 11, 12, 11, 0), set())
+    rs.add(rem)
+    seen = []
+    for h in (12, 14, 16, 18, 20, 22):
+        fired = rs.tick(datetime(2026, 11, 12, h, 0))
+        seen += [x.text for x in fired]
+        rs.dismiss()
+    assert len(seen) == 6 and rs.items[0].at == "2026-11-13T12:00"
+
+
+def test_horaires_irreguliers_et_un_seul_jour():
+    kind, rem = validate({"action": "create", "text": "x", "at": "2026-11-12T09:00", "repeat": "weekdays",
+                          "times": ["21:00", "09:00", "09:00"]}, NOW, set())
+    assert rem.times == ["09:00", "21:00"] and describe(rem, NOW) == "en semaine à 09:00 et 21:00"
+    kind, today = validate({"action": "create", "text": "x", "at": "2026-11-11T22:30", "repeat": None,
+                            "times": ["22:30", "23:30"]}, NOW, set())
+    assert next_after(today, datetime(2026, 11, 11, 23, 0)) == datetime(2026, 11, 11, 23, 30)
+    assert next_after(today, datetime(2026, 11, 11, 23, 45)) is None    # pas répété : fini ce soir
+
+
+@pytest.mark.parametrize("times, why", [(["midi"], "horaires incompris"),
+                                        ([f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 20, 40)], "trop")])
+def test_horaires_refuses(times, why):
+    assert why in validate({**POIGNETS, "times": times}, NOW, set())[1]

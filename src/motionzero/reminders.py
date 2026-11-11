@@ -27,7 +27,7 @@ PARSE_SYSTEM = (
     "Tu convertis une demande de rappel dictée en français en UN objet JSON, sans aucun autre texte. "
     "Formats possibles :\n"
     '{"action":"create","text":"<ce qu\'il faut rappeler, court>","at":"AAAA-MM-JJTHH:MM",'
-    '"repeat":null|"daily"|"weekdays"|"weekly","days":[0-6],"alarm":true|false}\n'
+    '"repeat":null|"daily"|"weekdays"|"weekly","days":[0-6],"times":["HH:MM",...],"alarm":true|false}\n'
     '{"action":"list"}\n'
     '{"action":"cancel","id":"<id d\'un rappel existant>"}\n'
     '{"action":"error","reason":"<pourquoi, en quelques mots>"}\n'
@@ -35,6 +35,9 @@ PARSE_SYSTEM = (
     "« dans 20 minutes » = maintenant + 20 min. Une heure sans date = aujourd'hui, ou demain si elle est passée. "
     "Une date sans heure = 9:00. « tous les jours » = daily ; « en semaine » = weekdays ; "
     "« tous les lundis et jeudis » = weekly avec days (0 = lundi … 6 = dimanche). "
+    "Plusieurs horaires dans la même journée (« toutes les 2 heures à partir de midi », « à 9 h et à 21 h », "
+    "« toutes les 30 minutes entre 14 h et 16 h ») : « times » liste TOUS les horaires de la journée ; sans heure "
+    "de fin, s'arrêter à 22:00 inclus ; sans jour précisé, c'est tous les jours (daily). Un seul horaire : times vide. "
     "alarm = true seulement si la demande parle de réveil, d'alarme ou de sonnerie. "
     "« text » reprend l'objet du rappel sans les mots de temps (« appeler le médecin »). "
     "Pour annuler, choisis l'id du rappel existant qui correspond ; aucun ne correspond : error. "
@@ -49,6 +52,7 @@ class Reminder:
     repeat: str | None = None
     days: list[int] = field(default_factory=list)
     alarm: bool = False
+    times: list[str] = field(default_factory=list)   # plusieurs horaires par jour (« HH:MM ») ; vide : celui de `at`
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:6])
     missed: bool = False                     # déclenché pendant que le PC était éteint
 
@@ -57,40 +61,69 @@ class Reminder:
         return datetime.strptime(self.at, FMT)
 
 
+def _day_ok(r: Reminder, day) -> bool:
+    return (r.repeat == "daily" or (r.repeat == "weekdays" and day.weekday() < 5)
+            or (r.repeat == "weekly" and day.weekday() in r.days))
+
+
+def _hours(r: Reminder):
+    return sorted(datetime.strptime(h, "%H:%M").time() for h in r.times) if r.times else [r.when.time()]
+
+
 def next_after(r: Reminder, after: datetime) -> datetime | None:
-    """Prochaine échéance strictement après `after` (None : rappel unique déjà passé)."""
+    """Prochaine échéance strictement après `after` (None : plus rien à venir).
+    Plusieurs horaires (`times`) : le premier encore à venir ; sans répétition, seulement le jour de `at`."""
     t = r.when
     if r.repeat is None:
-        return t if t > after else None
-    step = timedelta(days=1)
-    cand = t
-    if cand <= after:                                      # saute directement près de `after`
-        cand = datetime.combine(after.date(), t.time())
+        if not r.times:
+            return t if t > after else None
+        for h in _hours(r):
+            cand = datetime.combine(t.date(), h)
+            if cand > after and cand >= t:
+                return cand
+        return None
+    day = max(t.date(), after.date())
     for _ in range(9):
-        if cand > after and (r.repeat == "daily"
-                             or (r.repeat == "weekdays" and cand.weekday() < 5)
-                             or (r.repeat == "weekly" and cand.weekday() in r.days)):
-            return cand
-        cand += step
+        if _day_ok(r, day):
+            for h in _hours(r):
+                cand = datetime.combine(day, h)
+                if cand > after and cand >= t:
+                    return cand
+        day += timedelta(days=1)
     return None
+
+
+def hours_label(r: Reminder) -> str:
+    """« 09:00 », « 09:00 et 21:00 », « toutes les 2 h de 12:00 à 22:00 »."""
+    hs = _hours(r)
+    txt = [h.strftime("%H:%M") for h in hs]
+    if len(hs) == 1:
+        return f"à {txt[0]}"
+    mins = [h.hour * 60 + h.minute for h in hs]
+    gaps = {b - a for a, b in zip(mins, mins[1:])}
+    if len(hs) >= 3 and len(gaps) == 1:
+        g = gaps.pop()
+        step = f"{g // 60} h" if g % 60 == 0 else (f"{g} min" if g < 60 else f"{g // 60} h {g % 60:02d}")
+        return f"toutes les {step} de {txt[0]} à {txt[-1]}"
+    return "à " + ", ".join(txt[:-1]) + " et " + txt[-1]
 
 
 def describe(r: Reminder, now: datetime) -> str:
     """« tous les jours à 9:00 », « demain à 18:30 », « le 03/12 à 10:00 »."""
     t = r.when
-    hm = t.strftime("%H:%M")
+    hm = hours_label(r) if (r.repeat or r.times) else f"à {t:%H:%M}"
     if r.repeat == "daily":
-        return f"tous les jours à {hm}"
+        return f"tous les jours {hm}"
     if r.repeat == "weekdays":
-        return f"en semaine à {hm}"
+        return f"en semaine {hm}"
     if r.repeat == "weekly":
         names = " et ".join(DAYS_FR[d] for d in sorted(r.days)) or "chaque semaine"
-        return f"le {names} à {hm}" if len(r.days) != 1 else f"chaque {DAYS_FR[r.days[0]]} à {hm}"
+        return f"le {names} {hm}" if len(r.days) != 1 else f"chaque {DAYS_FR[r.days[0]]} {hm}"
     if t.date() == now.date():
-        return f"à {hm}"
+        return hm if r.times else f"à {t:%H:%M}"
     if t.date() == (now + timedelta(days=1)).date():
-        return f"demain à {hm}"
-    return f"le {t:%d/%m} à {hm}"
+        return f"demain {hm}"
+    return f"le {t:%d/%m} {hm}"
 
 
 def short_when(r: Reminder, now: datetime) -> str:
@@ -136,8 +169,19 @@ def validate(data: dict, now: datetime, known_ids) -> tuple[str, object]:
     days = sorted({int(d) for d in (data.get("days") or []) if str(d).isdigit() and 0 <= int(d) <= 6})
     if repeat == "weekly" and not days:
         return "error", "jours de la semaine manquants"
+    times = set()
+    for h in data.get("times") or []:
+        try:
+            times.add(datetime.strptime(str(h).strip()[:5], "%H:%M").strftime("%H:%M"))
+        except ValueError:
+            return "error", "horaires incompris"
+    if len(times) > 48:
+        return "error", "trop d'horaires dans la journée"
+    times = sorted(times) if len(times) > 1 else []
+    if times:                     # la première échéance est le premier horaire de la liste, ce jour-là
+        at = datetime.combine(at.date(), datetime.strptime(times[0], "%H:%M").time())
     r = Reminder(text=text[:120], at=at.strftime(FMT), repeat=repeat, days=days if repeat == "weekly" else [],
-                 alarm=bool(data.get("alarm")))
+                 alarm=bool(data.get("alarm")), times=times)
     nxt = next_after(r, now)
     if nxt is None:
         return "error", "cette heure est déjà passée"
@@ -214,7 +258,7 @@ class Reminders:
         for r in list(self.items):
             if r.when > now:
                 continue
-            shown = Reminder(**{**asdict(r), "id": uuid.uuid4().hex[:6]})
+            shown = Reminder(**{**asdict(r), "id": uuid.uuid4().hex[:6], "times": []})
             fired.append(shown)
             self.active.append(shown)
             nxt = next_after(r, now) if r.repeat else None
@@ -244,7 +288,7 @@ class Reminders:
         if not self.active:
             return None
         r = self.active.pop(0)
-        again = Reminder(text=r.text, at=(now + SNOOZE).strftime(FMT), alarm=r.alarm)
+        again = Reminder(text=r.text, at=(now + SNOOZE).strftime(FMT), alarm=r.alarm)   # une seule fois
         self.add(again)
         return again
 
