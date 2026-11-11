@@ -25,6 +25,8 @@ WORDS = {
     "défile": "défile",
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
+    "espace": "espace",   # « iris espace » / « iris space » : touche Espace
+    "space": "space",
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
     "colle": "colle",
