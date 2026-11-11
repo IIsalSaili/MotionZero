@@ -468,8 +468,10 @@ class Core:
             self.bubble = None
             acts.append(("vscode_dictation",))
         elif word == "envoie":
-            acts.append(("vscode_keys", [["enter"]]))      # envoie le message de Claude, à tout moment
-            label = "MESSAGE ENVOYE A CLAUDE"
+            # touche Entrée dans la fenêtre active (avant : toujours vers VS Code, demande de l'utilisateur).
+            # Juste après « iris claude », « envoie » passe par _confirm et vise toujours Claude.
+            acts.append(("hotkey", ["enter"]))
+            label = "TOUCHE ENTREE"
         elif word == "annule":
             acts.append(("annule",))       # vide le message de Claude si VS Code est devant, sinon Échap
             label = "ANNULE"
