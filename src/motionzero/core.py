@@ -32,7 +32,8 @@ class Mode:
 
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "LECTURE"}
 WAKE_WORD = "iris"
-VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"]}
+VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
+                 "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -44,7 +45,8 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
-                "lis": "LECTURE DISCORD ACTIVE"}
+                "lis": "LECTURE DISCORD ACTIVE",
+                "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
