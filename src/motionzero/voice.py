@@ -162,6 +162,7 @@ class VoiceListener:
         self._partial = ""          # dernier texte provisoire de la reconnaissance
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
+        self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
 
     def start(self):
         import sounddevice as sd
@@ -240,6 +241,8 @@ class VoiceListener:
             partial = json.loads(self.rec.PartialResult()).get("partial", "").strip()
             if partial and partial != self._partial:
                 self.last_speech_t = time.perf_counter()
+                if WAKE_WORD in partial.split():
+                    self.iris_heard_t = time.perf_counter()
             self._partial = partial
 
     def _emit(self, res, free_text=None):

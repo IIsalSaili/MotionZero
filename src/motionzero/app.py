@@ -171,6 +171,8 @@ def main(argv=None):
                 if listener is not None:
                     acts = acts + core.dictation_tick(t, listener.last_speech_t)
                     acts = acts + core.ask_tick(t, listener.last_speech_t)
+                    if t - listener.iris_heard_t < 0.5:
+                        core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                     for ev in listener.poll():
                         acts = acts + core.voice(ev.word, ev.t_end, t_start=ev.t_start)
                         accepted = core.last_word and core.last_word[2]
