@@ -530,12 +530,12 @@ class Core:
         return []
 
     def type_tick(self, t, last_speech_t):
-        """« iris type » : fin de la dictée au même silence que pour Claude, puis 3 s pour envoie / annule."""
+        """« iris type » : fin de la dictée après 2 s de silence, puis 3 s pour envoie / annule."""
         if not self.typing:
             return []
         c = self.cfg
         spoke = last_speech_t > self.type_t0 + c.dictation_echo_s
-        if spoke and t - last_speech_t >= c.dictation_silence_s:
+        if spoke and t - last_speech_t >= c.type_silence_s:
             self.typing = False
             self.confirm_until = t + c.type_confirm_s
             self.confirm_kind = "type"

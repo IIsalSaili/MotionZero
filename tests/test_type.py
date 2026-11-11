@@ -8,7 +8,8 @@ def _typed():
     core.voice("iris", 1.0)
     assert core.voice("type", 2.0) == [("type_start",)] and core.typing
     assert core.voice("clic", 3.0) == []                              # pendant la dictée : du texte
-    assert core.type_tick(6.85, last_speech_t=4.0) == [("type_stop",)]  # même silence que Claude
+    assert core.type_tick(5.9, last_speech_t=4.0) == []
+    assert core.type_tick(6.05, last_speech_t=4.0) == [("type_stop",)]  # 2 s de silence
     assert not core.typing and core.confirming(7.0)
     return core
 
