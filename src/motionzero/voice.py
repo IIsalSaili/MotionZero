@@ -34,6 +34,7 @@ WORDS = {
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
+    "home": "home",       # « iris home » : la fenêtre d aperçu de motionzero au premier plan
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)

@@ -177,9 +177,42 @@ def find_app_window(exe):
     return found[0] if found else None
 
 
+def _title_of(hwnd):
+    u = ctypes.windll.user32
+    buf = ctypes.create_unicode_buffer(u.GetWindowTextLengthW(hwnd) + 1)
+    u.GetWindowTextW(hwnd, buf, len(buf))
+    return buf.value
+
+
+def open_home():
+    """« iris home » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan, à sa taille normale."""
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        pid = wintypes.DWORD()
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == os.getpid() and _title_of(hwnd) == "motionzero":
+            found.append(hwnd)
+            return False
+        return True
+
+    u.EnumWindows(cb, 0)
+    if not found:
+        return "APERCU INTROUVABLE"
+    u.ShowWindow(found[0], 9)   # SW_RESTORE : taille normale (rouvre une fenêtre réduite ou agrandie)
+    if not bring_to_front(found[0]):
+        return "APERCU PAS AU PREMIER PLAN"
+    log.info("apercu motionzero au premier plan")
+    return None
+
+
 def open_app(name):
     """Met l'appli au premier plan, ou la lance si elle n'est pas ouverte. Renvoie None ou une erreur."""
     import subprocess
+    if name == "home":
+        return open_home()
     exe, cmd = APPS[name]
     hwnd = find_app_window(exe)
     if hwnd:
