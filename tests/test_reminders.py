@@ -332,3 +332,16 @@ def test_iris_heure_et_date():
     core.voice("date", 20.5)
     assert core.clock_until == 20.5 + Config().clock_s
     assert core.voice("heure", 40.0) == [] and core.clock_until == 20.5 + Config().clock_s   # sans « iris »
+
+
+def test_animation_du_logo():
+    from motionzero.ui import CLOCK_ANIM_S, clock_anim
+    assert clock_anim(1.0, None, None) == (0.0, 0.0)                      # au repos
+    k, a = clock_anim(0.0, 0.0, None)
+    assert k == 0.0 and a == 0.0
+    k, a = clock_anim(CLOCK_ANIM_S / 2, 0.0, None)
+    assert 0 < k < 1 and a < 0                                            # aller : tourne à gauche
+    assert clock_anim(3.0, 0.0, None) == (1.0, -360.0)                    # pleine taille
+    k, a = clock_anim(5.0 + CLOCK_ANIM_S / 2, 0.0, 5.0)
+    assert 0 < k < 1 and a > 0                                            # retour : tourne à droite
+    assert clock_anim(5.0 + CLOCK_ANIM_S, 0.0, 5.0) == (0.0, 360.0)       # revenu
