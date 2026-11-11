@@ -49,7 +49,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
-                "plus tard": "RAPPEL DANS 10 MIN"}
+                "plus tard": "RAPPEL DANS 10 MIN", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop"}
@@ -113,6 +113,7 @@ class Core:
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
+        self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
@@ -529,6 +530,8 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
+        elif word in ("heure", "date"):
+            self.clock_until = t + c.clock_s
         elif word == "merci":
             acts.append(("rappel_merci",))
         elif word == "plus tard":

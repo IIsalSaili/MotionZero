@@ -560,6 +560,14 @@ REMINDER_W = 560
 ALARM_RED = (190, 30, 40)
 
 
+DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
+def clock_text(now):
+    """« jeudi 12/11/2026 · 14:05 ». Pur : testable."""
+    return f"{DAYS[now.weekday()]} {now:%d/%m/%Y · %H:%M}"
+
+
 def reminder_view(st):
     """Ce que l'île montre pour les rappels : ("current", dict) | ("list", lignes) | None. Pur : testable.
     Le rappel déclenché passe avant tout (il reste jusqu'à « iris merci »), puis la liste demandée."""
@@ -653,7 +661,7 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF")):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
                 self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
@@ -675,7 +683,7 @@ class _IslandPainter:
         qa = st.get("qa") or {}
         self.qa = qa if qa.get("phase") in ("answer", "error") else None
         self.rem = reminder_view(st)
-        self.next_rem = (st.get("reminders") or {}).get("next")
+        self.next_rem = st.get("clock")        # « jeudi 12/11/2026 · 14:05 », seulement après « iris heure »
         if self.rem:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else None
@@ -833,7 +841,7 @@ class _IslandPainter:
         p.restore()
 
     def _paint_next(self, p, right_x, y):
-        """Pastille « cloche + heure » du prochain rappel, à gauche de la pastille Discord / de l'îlot."""
+        """Pastille « horloge + jour, date, heure » (« iris heure »), à gauche de la pastille Discord / de l'îlot."""
         if not self.next_rem:
             return
         fm = QFontMetrics(self.font_small)
@@ -846,9 +854,9 @@ class _IslandPainter:
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))
         p.drawRoundedRect(QRectF(x, top, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
-        bell = self.icons.get("bell")
-        if bell is not None:
-            bell.render(p, QRectF(x + pad, top + (ISLAND_H - ICON) / 2, ICON, ICON))
+        clock = self.icons.get("clock")
+        if clock is not None:
+            clock.render(p, QRectF(x + pad, top + (ISLAND_H - ICON) / 2, ICON, ICON))
         p.setPen(QColor(255, 255, 255))
         p.setFont(self.font_small)
         p.drawText(QRectF(x + pad + ICON + gap, top, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, self.next_rem)

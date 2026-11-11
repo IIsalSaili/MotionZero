@@ -319,3 +319,16 @@ def test_horaires_irreguliers_et_un_seul_jour():
                                         ([f"{h:02d}:{m:02d}" for h in range(24) for m in (0, 20, 40)], "trop")])
 def test_horaires_refuses(times, why):
     assert why in validate({**POIGNETS, "times": times}, NOW, set())[1]
+
+
+# ---- « iris heure / date » ----
+def test_iris_heure_et_date():
+    from motionzero.ui import clock_text
+    core = Core(Config())
+    assert clock_text(datetime(2026, 11, 12, 14, 5)) == "jeudi 12/11/2026 · 14:05"
+    core.voice("iris", 1.0)
+    assert core.voice("heure", 1.5) == [] and core.clock_until == 1.5 + Config().clock_s
+    core.voice("iris", 20.0)
+    core.voice("date", 20.5)
+    assert core.clock_until == 20.5 + Config().clock_s
+    assert core.voice("heure", 40.0) == [] and core.clock_until == 20.5 + Config().clock_s   # sans « iris »

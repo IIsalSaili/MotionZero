@@ -27,7 +27,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, EyeButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
+from .ui import Bridge, clock_text, EyeButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
@@ -329,6 +329,7 @@ def main(argv=None):
                             "qa": asker.snapshot() if listener is not None else None,
                             "discord": (discord_voice["mute"], discord_voice["deaf"]),
                             "reminders": desk.state(t),
+                            "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
                         })
                     else:
                         time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur

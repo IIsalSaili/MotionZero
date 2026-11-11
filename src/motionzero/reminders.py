@@ -470,5 +470,5 @@ class Desk:
                                                  "missed": cur.missed, "more": len(self.r.active) - 1,
                                                  "when": cur.when.strftime("%H:%M")},
             "list": self.list_lines if t < self.list_until else None,
-            "next": None if nxt is None else short_when(nxt, now),
+            "next": None if nxt is None else short_when(nxt, now),   # pour la future vue calendrier
         }

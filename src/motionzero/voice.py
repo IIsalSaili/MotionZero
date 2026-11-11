@@ -63,6 +63,8 @@ WORDS = {
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
     "merci": "merci",     # « iris merci » : le rappel affiché disparaît
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
+    "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
+    "date": "date",
     "stop": "stop",
 }
 WAKE_WORD = "iris"
