@@ -118,6 +118,7 @@ class Config:
     dictation_silence_s: float = 2.75    # silence après ta dernière parole -> micro coupé (2 s trop court, 4 s trop long)
     dictation_echo_s: float = 0.6        # on ignore la fin de « claude » juste après l'avoir dit
     dictation_no_speech_s: float = 8.0   # rien dit du tout -> micro coupé
+    type_confirm_s: float = 3.0          # « iris type » : temps pour dire « envoie » / « annule » (sinon : rien)
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
 
     # sécurité et confort

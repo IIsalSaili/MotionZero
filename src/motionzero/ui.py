@@ -433,6 +433,8 @@ def island_text(st):
         return mode, "Question : échec", True
     if st.get("dictating"):
         return mode, "Claude t'écoute", True
+    if st.get("typing"):
+        return mode, "Dicte ton texte…", True
     if st.get("confirming"):
         return mode, "Dis ENVOIE ou ANNULE", True
     if st.get("listening"):
