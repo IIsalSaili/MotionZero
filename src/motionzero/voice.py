@@ -218,8 +218,9 @@ class VoiceListener:
             return
         start_samples = self.samples
         self.samples += len(block) // 2
-        if self.capture is not None:
-            self.capture.append(block)
+        capture = self.capture   # lu une seule fois : stop_capture (autre fil) peut le remettre à None
+        if capture is not None:
+            capture.append(block)
         rms = _rms(block)
         self.last_rms = rms
         if rms < self.ambient * 1.5:  # seulement les moments calmes : la voix ne fausse pas le bruit de fond
