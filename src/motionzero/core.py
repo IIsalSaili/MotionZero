@@ -114,6 +114,9 @@ class Core:
         # « iris type » : la dictée est en cours d'enregistrement (texte écrit à l'endroit du curseur)
         self.typing = False
         self.type_t0 = -1e9
+        self.opening = False                  # « iris ouvre » : le nom de l'appli est en cours d'enregistrement
+        self.open_t0 = -1e9
+        self.open_kind = "open"               # « open » (iris ouvre) ou « close » (iris ferme)
         # pour l'affichage
         self.still_for = 0.0
         self.zone_progress = 0.0
@@ -362,7 +365,7 @@ class Core:
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
         c = self.cfg
         acts = []
-        if self.dictating or self.asking or self.typing:
+        if self.dictating or self.asking or self.typing or self.opening:
             return acts  # dictée ou question en cours : tes mots sont du texte, pas des commandes
         if self.confirming(t) and self.confirm_kind == "type" and word != WAKE_WORD:
             # après « iris type » : envoie (Entrée) ou annule (efface le texte écrit) ; tout autre mot :
@@ -456,6 +459,12 @@ class Core:
             self.ask_t0 = t
             acts.append(("ask_start",))
             label = "POSE TA QUESTION"
+        elif word == "ouvre":
+            self.opening = True
+            self.open_t0 = t
+            self.open_kind = "open"
+            acts.append(("open_start",))
+            label = "OUVRE : dis le nom de l'appli"
         elif word == "type":
             self.typing = True
             self.type_t0 = t
@@ -463,7 +472,12 @@ class Core:
             self.bubble = None
             acts.append(("type_start",))
         elif word == "ferme":
-            acts.append(("ask_close",))
+            # retire la réponse affichée (comme avant) ET écoute un éventuel nom d'appli à fermer
+            acts += [("ask_close",), ("open_start",)]
+            self.opening = True
+            self.open_t0 = t
+            self.open_kind = "close"
+            label = "FERME : dis le nom de l'appli"
             label = "FERME"
         elif word == "lecture":
             if self.mode != Mode.READING:
@@ -546,6 +560,25 @@ class Core:
             self.typing = False
             self.last_gesture = ("RIEN ENTENDU : dictee annulee", t)
             return [("type_cancel",)]
+        return []
+
+    def open_tick(self, t, last_speech_t):
+        """« iris ouvre / ferme » : le nom est court, l'écoute se coupe après un court silence.
+        Rien dit : abandon sans bruit pour « ferme » (il a déjà retiré la réponse affichée)."""
+        if not self.opening:
+            return []
+        c = self.cfg
+        close = self.open_kind == "close"
+        spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
+        if spoke and t - last_speech_t >= c.open_silence_s:
+            self.opening = False
+            self.last_gesture = ("FERME : je cherche l'appli…" if close else "OUVRE : je cherche l'appli…", t)
+            return [("close_stop",) if close else ("open_stop",)]
+        if not spoke and t - self.open_t0 >= (c.close_no_speech_s if close else c.open_no_speech_s):
+            self.opening = False
+            if not close:
+                self.last_gesture = ("RIEN ENTENDU : ouvre annule", t)
+            return [("open_cancel",)]
         return []
 
     def _confirm(self, word, t):

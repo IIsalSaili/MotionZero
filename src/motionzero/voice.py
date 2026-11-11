@@ -40,6 +40,7 @@ WORDS = {
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
+    "ouvre": "ouvre",     # « iris ouvre » puis le nom d'une appli (Whisper) : n'importe quelle appli
     "type": "type",       # « iris type » : dicter du texte, écrit là où se trouve le curseur
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
@@ -54,8 +55,12 @@ LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
          ("des", "fun"): "défun", ("dis", "fun"): "défun"}
-GRAMMAR = json.dumps([w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT] + ["[unk]"],
-                     ensure_ascii=False)
+def grammar():
+    phrases = [w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT]
+    return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
+
+
+GRAMMAR = grammar()
 
 
 def _join_demute(words):

@@ -10,6 +10,7 @@ import argparse
 import ctypes
 import logging
 import os
+import queue
 import threading
 import time
 
@@ -73,6 +74,17 @@ def main(argv=None):
     asker.preload()
     from .typer import Typer
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
+    launcher = None
+    if listener is not None:                   # « iris ouvre » + nom de l'appli (Whisper)
+        from .apps import Launcher
+
+        app_messages = queue.Queue()
+
+        def app_message(msg):
+            # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
+            # (Modifier core.last_gesture ici changeait l'historique pendant son affichage : plantage.)
+            app_messages.put(msg)
+        launcher = Launcher(asker, app_message)
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -170,6 +182,9 @@ def main(argv=None):
                     acts = acts + core.dictation_tick(t, listener.last_speech_t)
                     acts = acts + core.ask_tick(t, listener.last_speech_t)
                     acts = acts + core.type_tick(t, listener.last_speech_t)
+                    acts = acts + core.open_tick(t, listener.last_speech_t)
+                    while launcher is not None and not app_messages.empty():
+                        core.last_gesture = (app_messages.get_nowait(), t)
                     if t - listener.iris_heard_t < 0.5:
                         core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                     for ev in listener.poll():
@@ -187,6 +202,7 @@ def main(argv=None):
                 if listener is not None:
                     acts = question_actions(acts, listener, asker)
                     acts = type_actions(acts, listener, typer, sounds)
+                    acts = open_actions(acts, listener, launcher)
                 acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                 ctl.execute(acts, t)
                 for a in acts:
@@ -221,7 +237,7 @@ def main(argv=None):
                         "lost": pts is None,
                         "mode": core.mode,
                         "dictating": core.dictating,
-                        "typing": core.typing,
+                        "typing": core.typing or core.opening,
                         "confirming": core.confirming(t),
                         "listening": core.listening(t),
                         "toast": toast[0] if toast else None,
@@ -283,6 +299,23 @@ def question_actions(acts, listener, asker):
             asker.cancel()
         elif a[0] == "ask_close":
             asker.close()
+        else:
+            rest.append(a)
+    return rest
+
+
+def open_actions(acts, listener, launcher):
+    """« iris ouvre » : le nom de l'appli est enregistré, transcrit, puis rapproché de la liste."""
+    rest = []
+    for a in acts:
+        if a[0] == "open_start":
+            listener.start_capture()
+        elif a[0] == "open_stop":
+            launcher.open_spoken(listener.stop_capture())
+        elif a[0] == "close_stop":
+            launcher.close_spoken(listener.stop_capture())
+        elif a[0] == "open_cancel":
+            listener.stop_capture()
         else:
             rest.append(a)
     return rest
