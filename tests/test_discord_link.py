@@ -274,7 +274,7 @@ def test_evenements_du_bot():
     dv = {"mute": False, "deaf": False}
     link.kinds[7] = "move"
     for m in ({"t": "message", "author": "Bob", "channel": "général", "content": "yo"},
-              {"t": "voice_state", "self_mute": True, "self_deaf": False},
+              {"t": "voice_state", "channel": "Jeux", "self_mute": True, "self_deaf": False},
               {"t": "result", "req": 7, "ok": False, "error": "pas_en_vocal"},
               {"t": "inconnu"}):
         link.inbox.put(m)
