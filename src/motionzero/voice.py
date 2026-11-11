@@ -10,9 +10,16 @@ import os
 import queue
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass
 
 log = logging.getLogger("motionzero.voice")
+
+# reconnaissance libre (2e avis) réveillée seulement par la parole : ~moitié moins de processeur au repos
+FREE_WAKE_RATIO = 2.0     # volume au-dessus du bruit de fond qui la réveille
+FREE_TAIL_S = 2.0         # elle continue 2 s après le dernier son (le temps de finir sa phrase)
+FREE_PREROLL_S = 1.0      # son gardé pendant son sommeil et rejoué au réveil
+MAX_CAPTURE_S = 60.0      # enregistrement (question, type, ouvre) plafonné : jamais de mémoire sans fin
 
 # mot reconnu -> façon de le prononcer (pour les tests par voix de synthèse)
 WORDS = {
@@ -183,6 +190,9 @@ class VoiceListener:
         self.rec.SetWords(True)
         self.free = KaldiRecognizer(self.model, self.sr)   # sans grammaire : sert à vérifier (voir confirmed)
         self._free_final = (0.0, "")
+        self._free_pre = deque(maxlen=int(FREE_PREROLL_S / 0.03))
+        self._free_until = 0.0
+        self._was_muted = False
         self.running = True
         self.t_stream0 = time.perf_counter()
         self.samples = 0
@@ -219,7 +229,7 @@ class VoiceListener:
         start_samples = self.samples
         self.samples += len(block) // 2
         capture = self.capture   # lu une seule fois : stop_capture (autre fil) peut le remettre à None
-        if capture is not None:
+        if capture is not None and len(capture) < MAX_CAPTURE_S / 0.03:
             capture.append(block)
         rms = _rms(block)
         self.last_rms = rms
@@ -232,12 +242,26 @@ class VoiceListener:
         else:
             self._loud = 0.0
         if self.muted:
-            self.rec.Reset()
-            self.free.Reset()
+            if not self._was_muted:          # une seule remise à zéro, pas une à chaque morceau
+                self.rec.Reset()
+                self.free.Reset()
+                self._free_pre.clear()
+                self._was_muted = True
             return
+        self._was_muted = False
         now = time.perf_counter()
-        if self.free.AcceptWaveform(block):
-            self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
+        # Reconnaissance libre (la plus chère) : seulement quand quelqu'un parle. Le reste du temps, le
+        # son est gardé ~1 s et lui est redonné au réveil, pour ne pas perdre le début de la phrase.
+        if rms >= self.ambient * FREE_WAKE_RATIO or self._partial:
+            self._free_until = now + FREE_TAIL_S
+        if now < self._free_until:
+            for old in self._free_pre:
+                self.free.AcceptWaveform(old)
+            self._free_pre.clear()
+            if self.free.AcceptWaveform(block):
+                self._free_final = (now, json.loads(self.free.Result()).get("text", ""))
+        else:
+            self._free_pre.append(block)
         if self.rec.AcceptWaveform(block):
             self._partial = ""
             t_free, text = self._free_final
@@ -275,8 +299,7 @@ class VoiceListener:
         last_end = max(w["end"] for w in words)
         for w in words:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
-            log.info("voix %s (%.2f)", ev.word, ev.conf)
-            self.events.put(ev)
+            self.events.put(ev)   # noté au journal par la boucle (avec « acceptée / ignorée »)
 
     def start_capture(self):
         self.capture = []
