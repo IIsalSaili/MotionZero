@@ -133,6 +133,7 @@ def discord_mute_toggle():
 
 
 # --- « Iris, Discord » / « Iris, Chrome » : passer sur l'appli (ou la lancer) ------------------------
+HOME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # le dossier du projet
 APPS = {
     "discord": ("discord.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Discord\Update.exe"),
                                 "--processStart", "Discord.exe"]),
@@ -159,8 +160,9 @@ def _exe_of(hwnd):
         k.CloseHandle(h)
 
 
-def find_app_window(exe):
-    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None."""
+def find_app_window(exe, title=None):
+    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None.
+    title : ne garder que les fenêtres dont le titre contient ce texte."""
     u = ctypes.windll.user32
     found = []
 
@@ -168,7 +170,8 @@ def find_app_window(exe):
     def cb(hwnd, _):
         if (u.IsWindowVisible(hwnd) and u.GetWindowTextLengthW(hwnd) > 0
                 and not u.GetWindow(hwnd, 4)           # GW_OWNER : pas une fenêtre secondaire
-                and _exe_of(hwnd) == exe):
+                and _exe_of(hwnd) == exe
+                and (title is None or title in _title_of(hwnd).lower())):
             found.append(hwnd)
             return False
         return True
@@ -177,9 +180,36 @@ def find_app_window(exe):
     return found[0] if found else None
 
 
+def _title_of(hwnd):
+    u = ctypes.windll.user32
+    buf = ctypes.create_unicode_buffer(u.GetWindowTextLengthW(hwnd) + 1)
+    u.GetWindowTextW(hwnd, buf, len(buf))
+    return buf.value
+
+
+def open_home():
+    """« iris home » : la fenêtre VS Code du projet motionzero, au premier plan et en plein écran."""
+    import subprocess
+    hwnd = find_app_window("code.exe", "motionzero")
+    if not hwnd:
+        try:
+            subprocess.Popen([APPS["studio"][1][0], HOME_DIR], close_fds=True)
+        except OSError:
+            return "VS CODE INTROUVABLE"
+        log.info("motionzero ouvert dans VS Code")
+        return None
+    ctypes.windll.user32.ShowWindow(hwnd, 3)   # SW_MAXIMIZE
+    if not bring_to_front(hwnd):
+        return "MOTIONZERO PAS AU PREMIER PLAN"
+    log.info("motionzero au premier plan, plein écran")
+    return None
+
+
 def open_app(name):
     """Met l'appli au premier plan, ou la lance si elle n'est pas ouverte. Renvoie None ou une erreur."""
     import subprocess
+    if name == "home":
+        return open_home()
     exe, cmd = APPS[name]
     hwnd = find_app_window(exe)
     if hwnd:
