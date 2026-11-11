@@ -133,7 +133,6 @@ def discord_mute_toggle():
 
 
 # --- « Iris, Discord » / « Iris, Chrome » : passer sur l'appli (ou la lancer) ------------------------
-HOME_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # le dossier du projet
 APPS = {
     "discord": ("discord.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Discord\Update.exe"),
                                 "--processStart", "Discord.exe"]),
@@ -160,9 +159,8 @@ def _exe_of(hwnd):
         k.CloseHandle(h)
 
 
-def find_app_window(exe, title=None):
-    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None.
-    title : ne garder que les fenêtres dont le titre contient ce texte."""
+def find_app_window(exe):
+    """Fenêtre principale visible d'un programme (la plus haute à l'écran), ou None."""
     u = ctypes.windll.user32
     found = []
 
@@ -170,8 +168,7 @@ def find_app_window(exe, title=None):
     def cb(hwnd, _):
         if (u.IsWindowVisible(hwnd) and u.GetWindowTextLengthW(hwnd) > 0
                 and not u.GetWindow(hwnd, 4)           # GW_OWNER : pas une fenêtre secondaire
-                and _exe_of(hwnd) == exe
-                and (title is None or title in _title_of(hwnd).lower())):
+                and _exe_of(hwnd) == exe):
             found.append(hwnd)
             return False
         return True
@@ -188,20 +185,26 @@ def _title_of(hwnd):
 
 
 def open_home():
-    """« iris home » : la fenêtre VS Code du projet motionzero, au premier plan et en plein écran."""
-    import subprocess
-    hwnd = find_app_window("code.exe", "motionzero")
-    if not hwnd:
-        try:
-            subprocess.Popen([APPS["studio"][1][0], HOME_DIR], close_fds=True)
-        except OSError:
-            return "VS CODE INTROUVABLE"
-        log.info("motionzero ouvert dans VS Code")
-        return None
-    ctypes.windll.user32.ShowWindow(hwnd, 3)   # SW_MAXIMIZE
-    if not bring_to_front(hwnd):
-        return "MOTIONZERO PAS AU PREMIER PLAN"
-    log.info("motionzero au premier plan, plein écran")
+    """« iris home » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan et en plein écran."""
+    u = ctypes.windll.user32
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        pid = wintypes.DWORD()
+        u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        if pid.value == os.getpid() and _title_of(hwnd) == "motionzero":
+            found.append(hwnd)
+            return False
+        return True
+
+    u.EnumWindows(cb, 0)
+    if not found:
+        return "APERCU INTROUVABLE"
+    u.ShowWindow(found[0], 3)   # SW_MAXIMIZE (rouvre aussi une fenêtre réduite)
+    if not bring_to_front(found[0]):
+        return "APERCU PAS AU PREMIER PLAN"
+    log.info("apercu motionzero au premier plan, plein ecran")
     return None
 
 
