@@ -98,6 +98,8 @@ class Core:
         self.closed_frames = 0                # images de suite main fermée
         self.pressing = False                 # bouton gauche enfoncé (main gardée ouverte plus de 2 s)
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
+        self.armed = False                    # souris : la paume est passée au centre de l'image
+        self.arm_since = None                 # instant d'entrée dans la zone d'armement
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -161,6 +163,8 @@ class Core:
         self._cursor_f = [float(self.cursor[0]), float(self.cursor[1])]
         self.cursor_hist.clear()
         self.prev_palm = None
+        self.armed = False                    # le curseur attend que la paume revienne au centre de l'image
+        self.arm_since = None
         self.fx.reset()
         self.fy.reset()
         acts.append(("move", *self.cursor))
@@ -333,6 +337,20 @@ class Core:
             if choice:
                 self.travel = 0.0
                 self.still.reset()
+            return
+
+        if not self.armed:
+            # course égale dans chaque direction : on part du centre de l'image (issue #15)
+            ax, ay = c.arm_center
+            if math.hypot(palm[0] - ax, palm[1] - ay) > c.arm_radius:
+                self.arm_since = None
+                return
+            if self.arm_since is None:
+                self.arm_since = t
+            if t - self.arm_since < c.arm_hold_s:
+                return
+            self.armed = True                 # prev_palm = cette paume : aucun saut au départ
+            self.last_gesture = ("SOURIS ARMEE", t)
             return
 
         if self.prev_palm is not None and t >= self.freeze_until:

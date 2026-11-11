@@ -84,6 +84,12 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
             cv2.addWeighted(np.full_like(roi, (120, 90, 20)), a, roi, 1 - a, 0, roi)
             _text(cam, label, ((xl + xr) // 2 - 40, (y0 + y1) // 2 + 6), 0.55, WHITE, 2)
 
+    # souris pas encore armée : zone où amener la paume
+    if core.mode == Mode.MOUSE and not core.armed:
+        ac = _px(cam, cfg.arm_center)
+        cv2.circle(cam, ac, int(cfg.arm_radius * w), (0, 165, 255), 3)
+        _text(cam, "MAIN AU CENTRE", (ac[0] - 75, ac[1] - int(cfg.arm_radius * w) - 10), 0.6, (0, 165, 255), 2)
+
     # mains : l'active en couleur, l'autre en gris
     for tr in tracks or []:
         is_active = tr["id"] == active_id
