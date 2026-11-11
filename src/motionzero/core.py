@@ -34,6 +34,7 @@ MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC"
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
+REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -108,6 +109,7 @@ class Core:
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
+        self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -421,6 +423,13 @@ class Core:
             self.last_word = (word, t, True)
             self.last_gesture = (VOICE_LABELS["lâche"], t)
             return [("release", "mouse", "left")]
+        if t < self.repeat_until:
+            if word in REPEATABLE:            # « skip, skip, skip » : chaque mot relance la fenêtre de 2 s
+                self.repeat_until = t + c.repeat_s
+                self.last_word = (word, t, True)
+                self.last_gesture = (VOICE_LABELS[word], t)
+                return [("hotkey", VOICE_HOTKEYS[word])]
+            self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
         if word == WAKE_WORD:
             self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
@@ -462,6 +471,8 @@ class Core:
             label = "DEFILE : monte / descends la main"
         elif word in VOICE_HOTKEYS:
             acts.append(("hotkey", VOICE_HOTKEYS[word]))
+            if word in REPEATABLE:
+                self.repeat_until = t + c.repeat_s
         elif word == "claude":
             self.dictating = True
             self.dictation_t0 = t

@@ -96,3 +96,35 @@ def test_iris_skip_et_back():
     core.voice("iris", 2.0)
     assert core.voice("back", 2.5) == [("hotkey", ["left"])]
     assert core.voice("skip", 10.0) == []          # sans « iris » : ignoré
+
+
+def test_skip_repete_sans_iris():
+    """Après « iris skip » : « skip » / « back » seuls marchent tant qu'ils arrivent à moins de 2 s d'écart."""
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("skip", 1.5) == [("hotkey", ["right"])]
+    assert core.voice("skip", 3.0) == [("hotkey", ["right"])]      # 1,5 s après : marche
+    assert core.voice("skip", 4.8) == [("hotkey", ["right"])]      # la fenêtre a été relancée
+    assert core.voice("back", 6.0) == [("hotkey", ["left"])]       # back aussi
+    assert core.voice("skip", 8.5) == []                            # plus de 2 s : fini
+
+
+def test_skip_puis_autre_mot():
+    """Un autre mot coupe la répétition : il suit le comportement habituel (sans « iris » : ignoré)."""
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("skip", 1.5)
+    assert core.voice("clic", 2.0) == []                            # sans « iris » : ignoré
+    assert core.voice("skip", 2.5) == []                            # la répétition est finie
+    core.voice("iris", 5.0)
+    assert core.voice("clic", 5.5) == [("click", "left")]           # « iris clic » : normal
+
+
+def test_skip_seul_sans_iris_avant():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    assert Core(Config()).voice("skip", 1.0) == []
