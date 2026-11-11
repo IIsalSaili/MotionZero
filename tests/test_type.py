@@ -62,3 +62,36 @@ def test_slash():
     assert spoken_symbols("Slash code-review high.") == "/code-review high"
     assert spoken_symbols("un texte normal.") == "un texte normal."
     assert spoken_symbols("et/ou slash fin") == "et/ou /fin"
+
+
+def test_appli_favorite_seulement_avec_iris():
+    core = Core(Config())
+    core.app_words = {"steam", "bloc notes"}
+    assert core.voice("steam", 1.0) == []
+    core.voice("iris", 2.0)
+    assert core.voice("bloc notes", 2.5) == [("open_fav", "bloc notes")]
+
+
+def test_ouvre():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("ouvre", 1.5) == [("open_start",)]
+    assert core.voice("clic", 2.0) == []
+    assert core.open_tick(4.3, last_speech_t=3.0) == [("open_stop",)]
+
+
+def test_voix_appli_en_deux_mots():
+    from motionzero import voice
+    voice.set_app_words(["bloc notes", "steam"])
+    w = lambda x, c=0.95: {"word": x, "conf": c, "start": 0, "end": 0.1}
+    got = voice.accepted_words({"result": [w("iris"), w("bloc"), w("notes")]})
+    assert [x["word"] for x in got] == ["iris", "bloc notes"]
+    assert voice.accepted_words({"result": [w("steam")]}) == []      # sans « iris » : jamais
+
+
+def test_rapprochement():
+    from motionzero.apps import best_match
+    apps = {"Bloc-notes": "a", "Calculatrice": "b", "DaVinci Resolve": "c", "Gestionnaire des tâches": "d"}
+    assert best_match("Bloc-notes.", apps) == "Bloc-notes"
+    assert best_match("le gestionnaire des tâches", apps) == "Gestionnaire des tâches"
+    assert best_match("truc machin", apps) is None

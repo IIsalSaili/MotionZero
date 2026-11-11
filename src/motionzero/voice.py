@@ -40,6 +40,7 @@ WORDS = {
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
+    "ouvre": "ouvre",     # « iris ouvre » puis le nom d'une appli (Whisper) : n'importe quelle appli
     "type": "type",       # « iris type » : dicter du texte, écrit là où se trouve le curseur
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
@@ -54,8 +55,26 @@ LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
          ("des", "fun"): "défun", ("dis", "fun"): "défun"}
-GRAMMAR = json.dumps([w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT] + ["[unk]"],
-                     ensure_ascii=False)
+APP_WORDS = set()   # applis favorites (« iris steam », « iris bloc notes ») : jamais acceptées sans « iris »
+
+
+def grammar(apps=()):
+    """Grammaire fermée : commandes fixes + noms des applis favorites (en deux mots : recollés ensuite)."""
+    phrases = [w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT]
+    return json.dumps(phrases + [a for a in apps if a not in phrases] + ["[unk]"], ensure_ascii=False)
+
+
+def set_app_words(apps):
+    """Déclare les noms d'applis : les noms en deux mots sont recollés comme « des mute »."""
+    APP_WORDS.clear()
+    APP_WORDS.update(apps)
+    for a in apps:
+        parts = a.split()
+        if len(parts) == 2:
+            SPLIT[tuple(parts)] = a
+
+
+GRAMMAR = grammar()
 
 
 def _join_demute(words):
@@ -92,7 +111,7 @@ def accepted_words(res, min_conf=0.6, max_words=1):
             return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
         if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
             return [words[i], nxt]
-    if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
+    if any(w["word"] == "[unk]" or w["word"] in APP_WORDS for w in words) or len(words) > max_words:
         return []
     # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
     # « démute » à 0,81 étaient des faux déclenchements
@@ -167,6 +186,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
+        self._new_grammar = None    # applis favorites prêtes : la grammaire est refaite dans le fil d'écoute
 
     def start(self):
         import sounddevice as sd
@@ -174,7 +194,7 @@ class VoiceListener:
 
         SetLogLevel(-1)
         self.model = Model(self.model_dir)
-        self.rec = KaldiRecognizer(self.model, self.sr, GRAMMAR)
+        self.rec = KaldiRecognizer(self.model, self.sr, grammar(APP_WORDS))
         self.rec.SetWords(True)
         self.free = KaldiRecognizer(self.model, self.sr)   # sans grammaire : sert à vérifier (voir confirmed)
         self._free_final = (0.0, "")
@@ -205,8 +225,19 @@ class VoiceListener:
             except Exception:
                 log.exception("erreur dans l'ecoute vocale (on continue)")
 
+    def set_apps(self, apps):
+        """Applis favorites : ajoutées à la grammaire (prise en compte au prochain morceau de son)."""
+        set_app_words(apps)
+        self._new_grammar = grammar(APP_WORDS)
+
     def _step(self):
         """Traite un morceau de son (30 ms)."""
+        if self._new_grammar is not None:
+            from vosk import KaldiRecognizer
+            self.rec = KaldiRecognizer(self.model, self.sr, self._new_grammar)
+            self.rec.SetWords(True)
+            self._new_grammar = None
+            log.info("grammaire refaite avec %d applis", len(APP_WORDS))
         try:
             block = self.audio.get(timeout=0.2)
         except queue.Empty:
