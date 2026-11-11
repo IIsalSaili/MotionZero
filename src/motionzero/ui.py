@@ -11,7 +11,7 @@ import time as _time
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
                            QPainterPath, QPen, QPixmap)
-from PySide6.QtWidgets import QApplication, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 __all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton",
            "set_capture_visible"]
@@ -22,6 +22,140 @@ class Bridge(QObject):
     state = Signal(object)   # état pour le verre : curseur, progression, main perdue
     stop_hover = Signal(float)  # survol du bouton STOP par la main (0..1)
     done = Signal()          # le moteur s'est arrêté
+    stats = Signal(object)   # mesures de consommation (panneau de la page d'accueil)
+
+
+class ConsoPanel(QWidget):
+    """Panneau « Consommation » de la page d'accueil : motionzero face au PC entier (voir stats.py)."""
+    APP, PC, BG, TXT, DIM = QColor(80, 200, 255), QColor(150, 150, 160), QColor(24, 24, 28), QColor(235, 235, 240), \
+        QColor(140, 140, 150)
+
+    def __init__(self):
+        super().__init__()
+        self.setFixedWidth(340)
+        self.setMinimumHeight(560)
+        self.s = None
+
+    def set_stats(self, s):
+        self.s = s
+        self.update()
+
+    def _bar(self, p, x, y, w, h, frac, color, base=None):
+        p.fillRect(x, y, w, h, QColor(50, 50, 58))
+        if base is not None:   # PC entier en gris, motionzero par-dessus en couleur
+            p.fillRect(x, y, int(w * min(max(base, 0), 1)), h, self.PC)
+        p.fillRect(x, y, int(w * min(max(frac, 0), 1)), h, color)
+
+    def _curve(self, p, x, y, w, h, values, color, top=100.0):
+        if len(values) < 2:
+            return
+        pen = QPen(color, 1.5)
+        p.setPen(pen)
+        step = w / (60 - 1)
+        x0 = x + w - step * (len(values) - 1)
+        pts = [QPointF(x0 + i * step, y + h - h * min(v, top) / top) for i, v in enumerate(values)]
+        for a, b in zip(pts, pts[1:]):
+            p.drawLine(a, b)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.fillRect(self.rect(), self.BG)
+        f = QFont("Segoe UI", 10)
+        p.setFont(f)
+        s, x, w, y = self.s, 14, self.width() - 28, 26
+
+        def text(t, yy, color=None, bold=False, right=None):
+            f.setBold(bold)
+            p.setFont(f)
+            p.setPen(color or self.TXT)
+            if right is not None:
+                p.drawText(QRect(x, yy - 14, w, 18), Qt.AlignmentFlag.AlignRight, right)
+            if t:
+                p.drawText(x, yy, t)
+
+        text("CONSOMMATION", y, bold=True)
+        f.setBold(False)
+        p.setFont(f)
+        fm = QFontMetrics(f)
+        lx = x + w - fm.horizontalAdvance("motionzero") - fm.horizontalAdvance("PC") - 44
+        for label, color in (("motionzero", self.APP), ("PC", self.PC)):
+            p.fillRect(lx, y - 9, 8, 8, color)
+            p.setPen(self.DIM)
+            p.drawText(lx + 12, y, label)
+            lx += 12 + fm.horizontalAdvance(label) + 14
+        if s is None:
+            text("mesure en cours…", y + 30, self.DIM)
+            p.end()
+            return
+        g = lambda k, d=None: s.get(k, d)
+        y += 30
+        # processeur
+        text("Processeur", y, bold=True, right=f"{g('app_cpu', 0):.1f} %  /  PC {g('pc_cpu', 0):.0f} %")
+        y += 8
+        self._bar(p, x, y, w, 10, g("app_cpu", 0) / 100, self.APP, g("pc_cpu", 0) / 100)
+        y += 16
+        text(f"motionzero : {g('app_cpu_core', 0):.0f} % d'un cœur  ·  {g('n_threads', 0)} fils", y + 10, self.DIM)
+        y += 20
+        hist = g("history", {})
+        p.fillRect(x, y, w, 44, QColor(32, 32, 38))
+        self._curve(p, x, y, w, 44, hist.get("pc_cpu", []), self.PC)
+        self._curve(p, x, y, w, 44, hist.get("app_cpu", []), self.APP, top=max(10.0, max(hist.get("app_cpu", [0]) or [0]) * 1.2))
+        y += 58
+        # cœurs
+        cores = g("cores", [])
+        text(f"Cœurs ({len(cores)})", y, bold=True)
+        y += 8
+        if cores:
+            cw = (w - (len(cores) - 1) * 4) / len(cores)
+            for i, c in enumerate(cores):
+                cx = int(x + i * (cw + 4))
+                p.fillRect(cx, y, int(cw), 40, QColor(50, 50, 58))
+                hh = int(40 * min(c, 100) / 100)
+                p.fillRect(cx, y + 40 - hh, int(cw), hh, QColor(255, 120, 80) if c > 85 else self.PC)
+        y += 60
+        # détail par fil
+        text("Par partie de motionzero (% d'un cœur)", y, bold=True)
+        y += 6
+        for label, pct in (g("threads") or [])[:6]:
+            y += 18
+            text(label, y, self.DIM, right=f"{pct:.0f} %")
+        y += 26
+        # mémoire
+        text("Mémoire (RAM)", y, bold=True,
+             right=f"{g('app_private', 0):.0f} Mo  /  PC {g('pc_ram_used', 0):.1f} sur {g('pc_ram_total', 0):.0f} Go")
+        y += 8
+        tot = max(g("pc_ram_total", 1), 1e-6) * 1024
+        self._bar(p, x, y, w, 10, g("app_private", 0) / tot, self.APP, g("pc_ram_used", 0) * 1024 / tot)
+        y += 34
+        # carte graphique
+        if g("pc_vram_total") is None:
+            text("Carte graphique : indisponible", y, bold=True)
+            y += 26
+        else:
+            text("Carte graphique", y, bold=True, right=f"{g('app_gpu', 0):.0f} %  /  PC {g('pc_gpu', 0):.0f} %")
+            y += 8
+            self._bar(p, x, y, w, 10, g("app_gpu", 0) / 100, self.APP, g("pc_gpu", 0) / 100)
+            y += 26
+            text("Mémoire vidéo", y, self.DIM,
+                 right=f"{g('app_vram', 0) / 1024:.1f} Go  /  PC {g('pc_vram_used', 0) / 1024:.1f} sur "
+                       f"{g('pc_vram_total', 0) / 1024:.0f} Go")
+            y += 8
+            vt = max(g("pc_vram_total", 1), 1e-6)
+            self._bar(p, x, y, w, 10, g("app_vram", 0) / vt, self.APP, g("pc_vram_used", 0) / vt)
+            y += 34
+        # état
+        text("État", y, bold=True)
+        rows = [("Whisper", "chargé" if g("whisper") else "déchargé (carte graphique libre)"),
+                ("Détection de la main", f"{g('detect_hz', 0):.0f} fois / s"),
+                ("2e avis vocal", "éveillé" if g("free_awake") else "endormi"),
+                ("Priorité", g("priority", "?"))]
+        if not g("voice_on", True):
+            rows[2] = ("2e avis vocal", "voix coupée")
+        for k, v in rows:
+            y += 18
+            text(k, y, self.DIM, right=v)
+        p.end()
 
 
 class PreviewWindow(QWidget):
@@ -32,9 +166,12 @@ class PreviewWindow(QWidget):
         self.setWindowTitle("motionzero")
         self.label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.label.setText("Démarrage de la caméra…")
-        lay = QVBoxLayout(self)
+        self.conso = ConsoPanel()
+        lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(self.label)
+        lay.setSpacing(0)
+        lay.addWidget(self.label, 1)
+        lay.addWidget(self.conso)
         self._sized = False
         self.visible_flag = True   # lu par le moteur : réduite, l'aperçu n'est plus dessiné
 
@@ -56,7 +193,7 @@ class PreviewWindow(QWidget):
         qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888).copy()
         self.label.setPixmap(QPixmap.fromImage(qimg))
         if not self._sized:
-            self.resize(w, h)
+            self.resize(w + self.conso.width(), max(h, self.conso.minimumHeight()))
             self._sized = True
 
     def closeEvent(self, event):
