@@ -128,3 +128,42 @@ def test_ouvre_lancement_qui_echoue(monkeypatch):
     la, got = _launcher(_FakeAsker("steam"), {"Steam": "y"})
     la._open_spoken(b"")
     assert got and "ECHEC" in got[0]
+
+
+def test_ferme_avec_nom():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("ferme", 1.5) == [("ask_close",), ("open_start",)]
+    assert core.voice("clic", 2.0) == []
+    assert core.open_tick(4.3, last_speech_t=3.0) == [("close_stop",)]
+
+
+def test_ferme_seul_retire_juste_la_reponse():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("ferme", 1.5)
+    assert core.open_tick(3.0, last_speech_t=0.0) == []
+    assert core.open_tick(4.1, last_speech_t=0.0) == [("open_cancel",)]
+    assert not core.opening
+    core.voice("iris", 5.0)
+    assert core.voice("clic", 5.5) == [("click", "left")]       # les commandes remarchent
+
+
+def test_ferme_appli_pas_ouverte_ou_inconnue(monkeypatch):
+    from motionzero import apps
+    monkeypatch.setattr(apps, "find_window", lambda n, a: None)
+    la, got = _launcher(_FakeAsker("steam"), {"Steam": "y"})
+    la._spoken(b"", la._close)
+    assert got == ["STEAM N'EST PAS OUVERT"]
+    la, got = _launcher(_FakeAsker("blabla truc"), {"Steam": "y"})
+    la._spoken(b"", la._close)
+    assert got[0].startswith("PAS COMPRIS")
+
+
+def test_rapprochement_articles_et_debut_du_nom():
+    from motionzero.apps import best_match
+    apps = {"Bloc-notes": "a", "Explorateur de fichiers": "b", "Calculatrice": "c", "Paramètres": "d"}
+    assert best_match("la calculatrice", apps) == "Calculatrice"
+    assert best_match("l'explorateur", apps) == "Explorateur de fichiers"
+    assert best_match("les paramètres.", apps) == "Paramètres"
+    assert best_match("la", apps) is None

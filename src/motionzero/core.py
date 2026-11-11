@@ -116,6 +116,7 @@ class Core:
         self.type_t0 = -1e9
         self.opening = False                  # « iris ouvre » : le nom de l'appli est en cours d'enregistrement
         self.open_t0 = -1e9
+        self.open_kind = "open"               # « open » (iris ouvre) ou « close » (iris ferme)
         # pour l'affichage
         self.still_for = 0.0
         self.zone_progress = 0.0
@@ -461,6 +462,7 @@ class Core:
         elif word == "ouvre":
             self.opening = True
             self.open_t0 = t
+            self.open_kind = "open"
             acts.append(("open_start",))
             label = "OUVRE : dis le nom de l'appli"
         elif word == "type":
@@ -470,7 +472,12 @@ class Core:
             self.bubble = None
             acts.append(("type_start",))
         elif word == "ferme":
-            acts.append(("ask_close",))
+            # retire la réponse affichée (comme avant) ET écoute un éventuel nom d'appli à fermer
+            acts += [("ask_close",), ("open_start",)]
+            self.opening = True
+            self.open_t0 = t
+            self.open_kind = "close"
+            label = "FERME : dis le nom de l'appli"
             label = "FERME"
         elif word == "lecture":
             if self.mode != Mode.READING:
@@ -556,18 +563,21 @@ class Core:
         return []
 
     def open_tick(self, t, last_speech_t):
-        """« iris ouvre » : le nom est court, l'écoute se coupe après un court silence."""
+        """« iris ouvre / ferme » : le nom est court, l'écoute se coupe après un court silence.
+        Rien dit : abandon sans bruit pour « ferme » (il a déjà retiré la réponse affichée)."""
         if not self.opening:
             return []
         c = self.cfg
+        close = self.open_kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
         if spoke and t - last_speech_t >= c.open_silence_s:
             self.opening = False
-            self.last_gesture = ("OUVRE : je cherche l'appli…", t)
-            return [("open_stop",)]
-        if not spoke and t - self.open_t0 >= c.open_no_speech_s:
+            self.last_gesture = ("FERME : je cherche l'appli…" if close else "OUVRE : je cherche l'appli…", t)
+            return [("close_stop",) if close else ("open_stop",)]
+        if not spoke and t - self.open_t0 >= (c.close_no_speech_s if close else c.open_no_speech_s):
             self.opening = False
-            self.last_gesture = ("RIEN ENTENDU : ouvre annule", t)
+            if not close:
+                self.last_gesture = ("RIEN ENTENDU : ouvre annule", t)
             return [("open_cancel",)]
         return []
 

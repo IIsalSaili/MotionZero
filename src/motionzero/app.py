@@ -312,6 +312,8 @@ def open_actions(acts, listener, launcher):
             listener.start_capture()
         elif a[0] == "open_stop":
             launcher.open_spoken(listener.stop_capture())
+        elif a[0] == "close_stop":
+            launcher.close_spoken(listener.stop_capture())
         elif a[0] == "open_cancel":
             listener.stop_capture()
         else:

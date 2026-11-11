@@ -121,6 +121,7 @@ class Config:
     type_silence_s: float = 2.0          # « iris type » : silence qui coupe l'écoute (plus court que pour Claude)
     open_silence_s: float = 1.2          # « iris ouvre » : silence après le nom de l'appli
     open_no_speech_s: float = 5.0        # « iris ouvre » sans nom : abandon
+    close_no_speech_s: float = 2.5       # « iris ferme » sans nom : seulement la réponse retirée
     type_confirm_s: float = 3.0          # « iris type » : temps pour dire « envoie » / « annule » (sinon : rien)
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
 

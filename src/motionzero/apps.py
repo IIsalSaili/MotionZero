@@ -107,7 +107,7 @@ def build():
 def best_match(text, apps, recent=()):
     """« iris ouvre » : l'appli dont le nom ressemble le plus au texte entendu, ou None si pas assez sûr.
     Les applis lancées récemment ont un petit bonus (départage deux noms proches)."""
-    said = norm(text)
+    said = re.sub(r"^(?:le|la|les|l|un|une|mon|ma|mes)\s+", "", norm(text))   # « la calculatrice »
     if not said:
         return None
     best, score = None, 0.0
@@ -115,6 +115,8 @@ def best_match(text, apps, recent=()):
         n = norm(name)
         short = " ".join(w for w in n.split() if w not in FILLER)
         s = max(difflib.SequenceMatcher(None, said, n).ratio(), difflib.SequenceMatcher(None, said, short).ratio())
+        if len(said) >= 5 and (short + " ").startswith(said + " "):
+            s = max(s, 0.9)          # début du nom : « explorateur » = Explorateur de fichiers
         if name in recent:
             s += RECENT_BONUS
         if s > score:
@@ -158,6 +160,16 @@ def find_window(name, appid):
     return hits["aumid"] or hits["exe"] or hits["title"]
 
 
+def close_entry(name, appid):
+    """Ferme l'appli comme la croix de sa fenêtre (WM_CLOSE : elle peut demander d'enregistrer)."""
+    hwnd = find_window(name, appid)
+    if not hwnd:
+        return f"{norm(name).upper()} N'EST PAS OUVERT"
+    ctypes.windll.user32.PostMessageW(hwnd, 0x0010, 0, 0)   # WM_CLOSE
+    log.info("%s fermee", name)
+    return None
+
+
 def open_entry(name, appid):
     """Premier plan si ouverte, sinon lancement. Renvoie None ou un message d'erreur pour l'île."""
     from .vscode import bring_to_front
@@ -194,7 +206,18 @@ class Launcher:
         threading.Thread(target=load, name="applis", daemon=True).start()
 
     def open_spoken(self, audio):
-        self.threading.Thread(target=self._open_spoken, args=(audio,), name="ouvre", daemon=True).start()
+        self.threading.Thread(target=self._spoken, args=(audio, self._open), name="ouvre", daemon=True).start()
+
+    def close_spoken(self, audio):
+        self.threading.Thread(target=self._spoken, args=(audio, self._close), name="ferme", daemon=True).start()
+
+    def _close(self, name, appid):
+        try:
+            err = close_entry(name, appid)
+        except Exception as exc:
+            log.exception("fermeture de %s", name)
+            err = f"{norm(name).upper()} : ECHEC ({exc})"[:60]
+        self.on_message(err or f"{norm(name).upper()} FERME")
 
     def _open(self, name, appid):
         try:
@@ -205,6 +228,9 @@ class Launcher:
         self.on_message(err or norm(name).upper())
 
     def _open_spoken(self, audio):
+        self._spoken(audio, self._open)
+
+    def _spoken(self, audio, action):
         try:
             text = self.asker._transcribe(audio, 16000)
         except Exception:
@@ -217,4 +243,4 @@ class Launcher:
         if not name:
             self.on_message(f"PAS COMPRIS : {text.strip(' .') or 'rien entendu'}"[:60])
             return
-        self._open(name, self.all[name])
+        action(name, self.all[name])
