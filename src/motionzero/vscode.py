@@ -185,7 +185,7 @@ def _title_of(hwnd):
 
 
 def open_home():
-    """« iris home » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan et en plein écran."""
+    """« iris home » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan, à sa taille normale."""
     u = ctypes.windll.user32
     found = []
 
@@ -201,10 +201,10 @@ def open_home():
     u.EnumWindows(cb, 0)
     if not found:
         return "APERCU INTROUVABLE"
-    u.ShowWindow(found[0], 3)   # SW_MAXIMIZE (rouvre aussi une fenêtre réduite)
+    u.ShowWindow(found[0], 9)   # SW_RESTORE : taille normale (rouvre une fenêtre réduite ou agrandie)
     if not bring_to_front(found[0]):
         return "APERCU PAS AU PREMIER PLAN"
-    log.info("apercu motionzero au premier plan, plein ecran")
+    log.info("apercu motionzero au premier plan")
     return None
 
 
