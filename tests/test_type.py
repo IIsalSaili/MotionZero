@@ -83,3 +83,48 @@ def test_rapprochement():
     assert best_match("Bloc-notes.", apps) == "Bloc-notes"
     assert best_match("le gestionnaire des tâches", apps) == "Gestionnaire des tâches"
     assert best_match("truc machin", apps) is None
+
+
+class _FakeAsker:
+    def __init__(self, text=None, error=False):
+        self.text, self.error = text, error
+
+    def _transcribe(self, audio, sr):
+        if self.error:
+            raise RuntimeError("whisper en panne")
+        return self.text
+
+
+def _launcher(asker, apps):
+    from motionzero.apps import Launcher
+    got = []
+    la = Launcher.__new__(Launcher)
+    la.all, la.recent, la.asker, la.on_message = apps, [], asker, got.append
+    return la, got
+
+
+def test_ouvre_appli_inconnue_ne_plante_pas():
+    la, got = _launcher(_FakeAsker("J'ai force expérience."), {"Calculatrice": "x", "Steam": "y"})
+    la._open_spoken(b"")
+    assert got and got[0].startswith("PAS COMPRIS")
+
+
+def test_ouvre_rien_entendu_ou_whisper_en_panne():
+    for asker in (_FakeAsker(""), _FakeAsker(error=True)):
+        la, got = _launcher(asker, {"Steam": "y"})
+        la._open_spoken(b"")
+        assert got == ["PAS COMPRIS : rien entendu"]
+
+
+def test_ouvre_liste_pas_prete():
+    la, got = _launcher(_FakeAsker("steam"), {})
+    la._open_spoken(b"")
+    assert got == ["LISTE DES APPLIS PAS PRETE"]
+
+
+def test_ouvre_lancement_qui_echoue(monkeypatch):
+    from motionzero import apps
+    monkeypatch.setattr(apps, "open_entry", lambda n, a: (_ for _ in ()).throw(OSError("non")))
+    la, got = _launcher(_FakeAsker("steam"), {"Steam": "y"})
+    la._open_spoken(b"")
+    assert got and "ECHEC" in got[0]

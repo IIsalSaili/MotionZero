@@ -10,6 +10,7 @@ import argparse
 import ctypes
 import logging
 import os
+import queue
 import threading
 import time
 
@@ -77,8 +78,12 @@ def main(argv=None):
     if listener is not None:                   # « iris ouvre » + nom de l'appli (Whisper)
         from .apps import Launcher
 
+        app_messages = queue.Queue()
+
         def app_message(msg):
-            core.last_gesture = (msg, time.perf_counter())
+            # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
+            # (Modifier core.last_gesture ici changeait l'historique pendant son affichage : plantage.)
+            app_messages.put(msg)
         launcher = Launcher(asker, app_message)
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
@@ -178,6 +183,8 @@ def main(argv=None):
                     acts = acts + core.ask_tick(t, listener.last_speech_t)
                     acts = acts + core.type_tick(t, listener.last_speech_t)
                     acts = acts + core.open_tick(t, listener.last_speech_t)
+                    while launcher is not None and not app_messages.empty():
+                        core.last_gesture = (app_messages.get_nowait(), t)
                     if t - listener.iris_heard_t < 0.5:
                         core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                     for ev in listener.poll():

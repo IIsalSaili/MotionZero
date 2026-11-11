@@ -210,6 +210,9 @@ class Launcher:
         except Exception:
             log.exception("transcription ouvre")
             text = ""
+        if not self.all:
+            self.on_message("LISTE DES APPLIS PAS PRETE")
+            return
         name = best_match(text, self.all, self.recent) if text else None
         if not name:
             self.on_message(f"PAS COMPRIS : {text.strip(' .') or 'rien entendu'}"[:60])
