@@ -7,6 +7,7 @@ de travail, dans l'ordre : « envoie » dit pendant la transcription attend que 
 import ctypes
 import logging
 import queue
+import re
 import threading
 
 from .output import INPUT, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP, VK
@@ -37,6 +38,19 @@ def type_text(text):
             inp.ki = KEYBDINPUT(0, unit, KEYEVENTF_UNICODE | (KEYEVENTF_KEYUP if up else 0), 0, 0)
             inputs.append(inp)
     _send_inputs(inputs)
+
+
+SLASH_RE = re.compile(r"\b(?:slash|slashe|slache)\b[\s.,]*", re.I)
+
+
+def spoken_symbols(text):
+    """« slash clear » -> « /clear » : le mot « slash » devient le symbole, collé au mot suivant.
+    Une commande (texte qui commence par /) perd le point final que Whisper ajoute."""
+    text = SLASH_RE.sub("/", text).strip()
+    if text.startswith("/"):
+        text = text.rstrip(".!?, ")
+        text = "/" + text[1:].lower() if " " not in text else text
+    return text
 
 
 def _utf16_units(text):
@@ -72,7 +86,7 @@ class Typer:
             kind, audio = self.jobs.get()
             try:
                 if kind == "type":
-                    text = self.asker._transcribe(audio, 16000)
+                    text = spoken_symbols(self.asker._transcribe(audio, 16000))
                     log.info("dictee : %s", text)
                     type_text(text)
                     self.last_len = len(_utf16_units(text))
