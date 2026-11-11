@@ -290,3 +290,12 @@ def test_unmute_vaut_demute():
                     {"word": "un", "conf": 0.9, "start": 0.4, "end": 0.5},
                     {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
     assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
+
+
+def test_iris_accueil_ouvre_la_page_d_accueil_et_home_n_existe_plus():
+    """« home » se confondait avec « chrome » : remplacé par « accueil » (demande de l'utilisateur, 11/11)."""
+    from motionzero.voice import WORDS
+    assert "accueil" in WORDS and "home" not in WORDS
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("accueil", 1.5) == [("open_app", "accueil")]

@@ -40,7 +40,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
                 "type": "DICTEE : parle",
-                "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "home": "APERCU MOTIONZERO",
+                "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE"}
 
@@ -484,7 +484,7 @@ class Core:
             if self.mode != Mode.READING:
                 self.set_mode(Mode.READING, t, acts)
             label = "LECTURE"
-        elif word in ("discord", "chrome", "studio", "home"):
+        elif word in ("discord", "chrome", "studio", "accueil"):
             acts.append(("open_app", word))
         elif word == "mute":
             acts.append(("discord_mute",))

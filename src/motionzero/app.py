@@ -136,6 +136,18 @@ def main(argv=None):
     stop = threading.Event()
     bridge = Bridge()
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
+    # panneau « Consommation » de la page d'accueil : mesuré seulement quand la page est visible
+    live = {"detect_hz": DETECT_MAX_FPS}       # écrit par la boucle, lu par le fil de mesure
+
+    def model_info():
+        return {"whisper": asker._whisper is not None, "detect_hz": live["detect_hz"],
+                "voice_on": listener is not None,
+                "free_awake": listener is not None and time.perf_counter() < getattr(listener, "_free_until", 0)}
+
+    bridge.stats.connect(view_win.conso.set_stats)
+    from .stats import run_sampler
+    threading.Thread(target=run_sampler, args=(lambda: view_win.visible_flag, bridge.stats.emit, model_info, stop),
+                     name="mesures", daemon=True).start()
     glass = GlassOverlay("ui")                 # île, logo, pastille Discord : visibles dans les partages
     cursor_glass = GlassOverlay("cursor")      # curseur de la main + loupe : jamais dans les captures
     bridge.state.connect(glass.set_state)
@@ -191,6 +203,7 @@ def main(argv=None):
                     t = time.perf_counter()
                     frame, new_seq = cam.read(seq)
                     disabled = core.mode == Mode.DISABLED
+                    live["detect_hz"] = 0 if disabled else 1.0 / detect_period(False, last_hand_t, t)
                     if frame is not None and t - last_detect >= detect_period(disabled, last_hand_t, t):
                         seq = new_seq
                         last_detect = last_frame_t = t
