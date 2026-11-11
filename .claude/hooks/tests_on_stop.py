@@ -4,6 +4,8 @@ import os
 import subprocess
 import sys
 
+sys.stderr.reconfigure(encoding="utf-8")
+
 root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 try:
