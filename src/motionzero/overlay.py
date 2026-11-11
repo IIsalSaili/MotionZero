@@ -203,6 +203,7 @@ VOICE_HELP = [  # (mot à dire, ce qui se passe) — un mot par ligne
     ("glisse", "tenir le bouton (glisser)"),
     ("lache", "relacher le bouton"),
     ("entree", "touche Entree"),
+    ("espace", "touche Espace (ou SPACE)"),
     ("annule", "touche Echap"),
     ("copie", "Ctrl+C"),
     ("colle", "Ctrl+V"),

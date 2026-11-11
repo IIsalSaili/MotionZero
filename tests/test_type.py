@@ -46,3 +46,10 @@ def test_rien_dit():
     core.voice("iris", 1.0)
     core.voice("type", 2.0)
     assert core.type_tick(10.5, last_speech_t=0.0) == [("type_cancel",)]
+
+
+def test_espace_et_space():
+    for word in ("espace", "space"):
+        core = Core(Config())
+        core.voice("iris", 1.0)
+        assert core.voice(word, 1.5) == [("hotkey", ["space"])]
