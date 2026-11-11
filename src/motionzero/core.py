@@ -42,7 +42,13 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "type": "DICTEE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
-                "lecture": "LECTURE"}
+                "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
+                "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
+                "lis": "LECTURE DISCORD ACTIVE"}
+# « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
+OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop"}
+OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
+             "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…"}
 
 
 class Core:
@@ -498,6 +504,17 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
+        elif word in ("message", "salon"):
+            self.opening = True
+            self.open_t0 = t
+            self.open_kind = word
+            self.menu.close()
+            self.bubble = None
+            acts.append(("open_start",))
+        elif word == "silence":
+            acts.append(("discord_hush",))
+        elif word == "lis":
+            acts.append(("discord_read",))
         elif word == "lecture":
             if self.mode != Mode.READING:
                 self.set_mode(Mode.READING, t, acts)
@@ -587,16 +604,20 @@ class Core:
         if not self.opening:
             return []
         c = self.cfg
-        close = self.open_kind == "close"
+        kind = self.open_kind
+        close = kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
-        if spoke and t - last_speech_t >= c.open_silence_s:
+        # un message est une phrase : même silence que la dictée ; un nom (appli, salon) est court
+        silence = c.type_silence_s if kind == "message" else c.open_silence_s
+        if spoke and t - last_speech_t >= silence:
             self.opening = False
-            self.last_gesture = ("FERME : je cherche l'appli…" if close else "OUVRE : je cherche l'appli…", t)
-            return [("close_stop",) if close else ("open_stop",)]
+            self.last_gesture = (OPEN_WAIT[kind], t)
+            return [(OPEN_STOP[kind],)]
         if not spoke and t - self.open_t0 >= (c.close_no_speech_s if close else c.open_no_speech_s):
             self.opening = False
             if not close:
-                self.last_gesture = ("RIEN ENTENDU : ouvre annule", t)
+                self.last_gesture = ({"open": "RIEN ENTENDU : ouvre annule", "message": "RIEN ENTENDU : message annule",
+                                      "salon": "RIEN ENTENDU : salon annule"}[kind], t)
             return [("open_cancel",)]
         return []
 
