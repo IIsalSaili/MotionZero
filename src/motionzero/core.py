@@ -87,6 +87,7 @@ class Core:
         self.last_click_t = -1e9
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
+        self.freeze_until = -1e9              # curseur figé (de « iris » à la commande) : clic vocal précis
         self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
         self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
         self.pose_voter = PoseVoter()
@@ -324,7 +325,7 @@ class Core:
                 self.still.reset()
             return
 
-        if self.prev_palm is not None:
+        if self.prev_palm is not None and t >= self.freeze_until:
             dt = max(t - self.prev_t, 1e-3)
             dx, dy = palm[0] - self.prev_palm[0], palm[1] - self.prev_palm[1]
             gain = self._gain(math.hypot(dx, dy) / dt)
@@ -381,6 +382,7 @@ class Core:
             if self.mode == Mode.DISABLED:
                 self.set_mode(Mode.NEUTRAL, t, acts)
             self.listen_until = t + c.listen_s
+            self.freeze_for_voice(t)          # « iris » seul : le curseur reste figé le temps de la commande
             self.last_word = (word, t, True)
             self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
             return acts
@@ -389,12 +391,11 @@ class Core:
             self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
             return acts
         self.last_word = (word, t, True)
+        self.freeze_until = -1e9              # commande reçue : le curseur est libéré après elle
         # une seule commande par « iris » : la fenêtre se ferme (avant, 8 s prolongées à chaque commande :
         # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
         self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
-        if word in ("clic", "double", "menu", "glisse"):
-            acts += self._aim_back(t, t_start)
         if word in ("clic", "double", "menu"):
             if word == "menu":
                 acts.append(("click", "right"))
@@ -464,31 +465,6 @@ class Core:
         self.last_gesture = (label, t)
         return acts
 
-    def _aim_back(self, t, t_start):
-        """Clic vocal : la main a pu bouger pendant « iris, clic ». On remet le curseur là où il était
-        juste avant le début de la phrase (« iris » s'il vient d'être dit, sinon le mot lui-même)."""
-        c = self.cfg
-        if self.mode != Mode.MOUSE or not self.cursor_hist:
-            return []
-        start = t_start if t_start is not None else t
-        if 0 <= start - self.wake_t <= c.voice_click_window_s:
-            start = self.wake_t
-        target = start - c.voice_click_rewind_s
-        # garde-fou : un instant plus vieux que l'historique, ou trop loin en arrière, est une erreur de
-        # date. Le curseur reste alors où il est : il ne doit jamais sauter si la main n'a pas bougé.
-        if target < self.cursor_hist[0][0] or t - target > c.voice_click_window_s:
-            return []
-        pos = self.cursor_hist[0][1]
-        for ht, hp in self.cursor_hist:
-            if ht > target:
-                break
-            pos = hp
-        if pos == self.cursor:
-            return []
-        self.cursor = pos
-        self._cursor_f = [float(pos[0]), float(pos[1])]
-        return [("move", *pos)]
-
     # --- dictée Claude (VS Code) ---------------------------------------------
     def confirming(self, t):
         return t < self.confirm_until
@@ -510,6 +486,12 @@ class Core:
             self.last_gesture = ("RIEN ENTENDU : micro coupe", t)
             return [("vscode_dictation",)]
         return []
+
+    def freeze_for_voice(self, t):
+        """« iris » vient d'être repéré (texte provisoire) : en mode souris, le curseur ne bouge plus
+        jusqu'à la commande (ou 3,5 s), pour que « iris clic » clique exactement là où l'on visait."""
+        if self.mode == Mode.MOUSE:
+            self.freeze_until = max(self.freeze_until, t + self.cfg.listen_s)
 
     def ask_tick(self, t, last_speech_t):
         """Fin de la question : comme la dictée, après un silence ; rien dit du tout : abandon."""

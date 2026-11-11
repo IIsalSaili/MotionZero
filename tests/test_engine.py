@@ -287,19 +287,20 @@ def test_main_immobile_n_ouvre_rien_ni_clic():
     assert not core.menu.is_open and kinds(acts, "click") == [] and core.progress() is None
 
 
-def test_clic_vocal_la_ou_l_on_visait_avant_iris():
-    """La main bouge pendant « iris, clic » : le clic part de la position d'avant « iris »."""
+def test_iris_fige_le_curseur_jusqu_au_clic():
+    """« iris » repéré : le curseur ne bouge plus, même si la main bouge ; « clic » clique à cet endroit,
+    sans aucun déplacement ; ensuite le curseur suit de nouveau la main."""
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
     clk.run(core, 0.5, cx=0.5, cy=0.52, to_cx=0.6)
-    clk.run(core, 1.0, cx=0.6, cy=0.52)                    # on vise, immobile
     aimed = core.cursor
-    t_iris = clk.t
-    clk.run(core, 0.6, cx=0.6, cy=0.52, to_cx=0.66)        # la main dérive en parlant
-    assert core.cursor != aimed
-    core.voice("iris", clk.t, t_start=t_iris)
-    acts = core.voice("clic", clk.t + 0.1, t_start=clk.t)
-    assert acts == [("move", *aimed), ("click", "left")] and core.cursor == aimed
+    core.freeze_for_voice(clk.t)                            # « iris » apparaît dans le texte provisoire
+    acts = clk.run(core, 0.6, cx=0.6, cy=0.52, to_cx=0.66)  # la main dérive en parlant
+    assert core.cursor == aimed and kinds(acts, "move") == []
+    core.voice("iris", clk.t)
+    assert core.voice("clic", clk.t + 0.1) == [("click", "left")] and core.cursor == aimed
+    acts = clk.run(core, 0.5, cx=0.66, cy=0.52, to_cx=0.5)
+    assert kinds(acts, "move")                              # libéré après la commande
 
 
 def test_main_immobile_en_lecture_ne_propose_plus_la_souris():
