@@ -13,6 +13,7 @@ import os
 import queue
 import threading
 import time
+from collections import deque
 
 import cv2
 import mediapipe as mp
@@ -31,7 +32,30 @@ from .ui import Bridge, EyeButton, GlassOverlay, KeySink, PreviewWindow, QApplic
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
 DETECT_MAX_FPS = 20          # plafond de détection (moins de charge)
+IDLE_DETECT_FPS = 5          # sans main depuis IDLE_AFTER_S (ou appli en pause) : détection ralentie
+IDLE_AFTER_S = 2.0
 STALE_S = 0.5                # sans image depuis 0,5 s : caméra considérée perdue
+
+
+def lower_priority():
+    """Priorité « inférieure à la normale » : un jeu ou une appli lourde passe toujours avant motionzero."""
+    try:
+        BELOW_NORMAL = 0x4000
+        k32 = ctypes.windll.kernel32
+        # handle typé : en entier simple, le « -1 » du processus courant était tronqué (appel sans effet)
+        k32.GetCurrentProcess.restype = ctypes.c_void_p
+        k32.SetPriorityClass.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        if not k32.SetPriorityClass(k32.GetCurrentProcess(), BELOW_NORMAL):
+            raise OSError(ctypes.GetLastError())
+    except Exception:
+        logging.getLogger("motionzero").warning("priorite du processus non changee")
+
+
+def detect_period(disabled, last_hand_t, t):
+    """Intervalle entre deux détections : pleine vitesse avec une main, ralenti sinon."""
+    if disabled or t - last_hand_t >= IDLE_AFTER_S:
+        return 1.0 / IDLE_DETECT_FPS
+    return 1.0 / DETECT_MAX_FPS
 
 
 def main(argv=None):
@@ -44,9 +68,14 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     os.makedirs(os.path.join(ROOT, "logs"), exist_ok=True)
-    logging.basicConfig(filename=os.path.join(ROOT, "logs", "motionzero.log"), level=logging.INFO,
-                        format="%(asctime)s %(name)s %(message)s")
+    # journal tournant (3 x 2 Mo) : l'appli reste ouverte en permanence, le fichier ne grossit plus sans fin
+    from logging.handlers import RotatingFileHandler
+    handler = RotatingFileHandler(os.path.join(ROOT, "logs", "motionzero.log"), maxBytes=2_000_000,
+                                  backupCount=3, encoding="utf-8")
+    logging.basicConfig(handlers=[handler], level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     log = logging.getLogger("motionzero")
+    logging.getLogger("faster_whisper").setLevel(logging.WARNING)   # une ligne par transcription : inutile
+    lower_priority()
     # erreurs dans l'interface (Qt) ou dans un fil : notées dans le journal, jamais silencieuses
     # (lancé par le raccourci du bureau, sans console, elles étaient perdues)
     import sys
@@ -77,7 +106,8 @@ def main(argv=None):
         listener = VoiceListener(default_model_dir(ROOT)).start()
     from .ask import Asker
     asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
-    asker.preload()
+    if listener is not None:                   # sans la voix, Whisper ne sert à rien : pas chargé
+        asker.preload()
     from .typer import Typer
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     launcher = None
@@ -153,38 +183,48 @@ def main(argv=None):
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
         last_level_log = 0.0
-        errors = []
+        last_hand_t = t0
+        errors = deque(maxlen=20)
         try:
             while not stop.is_set():
                 try:
                     t = time.perf_counter()
                     frame, new_seq = cam.read(seq)
-                    if frame is not None and t - last_detect >= 1.0 / DETECT_MAX_FPS:
+                    disabled = core.mode == Mode.DISABLED
+                    if frame is not None and t - last_detect >= detect_period(disabled, last_hand_t, t):
                         seq = new_seq
                         last_detect = last_frame_t = t
                         view = cv2.flip(frame, 1)
-                        ts = max(int((t - t0) * 1000), last_ts + 1)
-                        last_ts = ts
-                        rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
-                        res = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                        all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
+                        all_hands, world_hands = [], []
+                        if not disabled:   # en pause, la main ne sert à rien : pas de MediaPipe
+                            ts = max(int((t - t0) * 1000), last_ts + 1)
+                            last_ts = ts
+                            rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
+                            res = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+                            all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
+                            world_hands = res.hand_world_landmarks
                         pts = tracker.update(all_hands, t)  # les deux mains suivies ; celle qui bouge agit
+                        if all_hands:
+                            last_hand_t = t
                         world = None                        # la même main en 3D (index pointé = clic)
                         for j, h in enumerate(all_hands):
-                            if h is pts and j < len(res.hand_world_landmarks):
-                                world = [(p.x, p.y, p.z) for p in res.hand_world_landmarks[j]]
+                            if h is pts and j < len(world_hands):
+                                world = [(p.x, p.y, p.z) for p in world_hands[j]]
                         acts = core.step(pts, t, world)
                         frames += 1
                         if t - fps_t >= 1.0:
                             fps, frames, fps_t = frames / (t - fps_t), 0, t
-                    elif t - last_frame_t > STALE_S:
+                    elif t - last_frame_t > STALE_S + detect_period(disabled, last_hand_t, t):
                         # caméra muette : on traite comme « main absente » (relâche tout, puis repos)
                         view, pts = last_view.copy() // 3, None
                         acts = core.step(None, t)
                     else:
                         view, acts = None, []
                         if frame is not None:
-                            time.sleep(0.005)  # image dispo mais plafond atteint : pas de boucle active
+                            # image dispo mais plafond atteint : on dort jusqu'à la prochaine détection
+                            # (au plus 20 ms, pour que la voix reste réactive)
+                            wait = last_detect + detect_period(disabled, last_hand_t, t) - t
+                            time.sleep(min(max(wait, 0.005), 0.02))
 
                     if listener is not None:
                         acts = acts + core.dictation_tick(t, listener.last_speech_t)
@@ -229,9 +269,11 @@ def main(argv=None):
                         if pts is not None or frame is not None:
                             last_view = view.copy()
                         status = cam.status if t - last_frame_t <= STALE_S else (cam.status if cam.status != OK else "perdue")
-                        shown = render(view, core, tracker.tracks if pts is not None else [], fps, args.simulation,
-                                       status, tracker.active_id, voice_on=listener is not None)
-                        show(shown)
+                        # fenêtre d'aperçu réduite : on ne dessine plus l'image (20 fois par seconde pour rien)
+                        if view_win.visible_flag or args.screenshot:
+                            shown = render(view, core, tracker.tracks if pts is not None else [], fps,
+                                           args.simulation, status, tracker.active_id, voice_on=listener is not None)
+                            show(shown)
                         prog = core.progress()
                         # île : la dernière chose comprise (ou refusée), la plus récente des deux
                         toast = core.last_gesture

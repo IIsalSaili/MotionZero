@@ -36,6 +36,19 @@ class PreviewWindow(QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
         lay.addWidget(self.label)
         self._sized = False
+        self.visible_flag = True   # lu par le moteur : réduite, l'aperçu n'est plus dessiné
+
+    def changeEvent(self, event):
+        super().changeEvent(event)
+        self.visible_flag = self.isVisible() and not self.isMinimized()
+
+    def hideEvent(self, event):
+        super().hideEvent(event)
+        self.visible_flag = False
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.visible_flag = not self.isMinimized()
 
     def set_frame(self, img):
         h, w = img.shape[:2]
