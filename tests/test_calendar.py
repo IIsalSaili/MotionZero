@@ -144,3 +144,44 @@ def test_mots_dans_la_grammaire():
     from motionzero.voice import GRAMMAR
     words = json.loads(GRAMMAR)
     assert all(w in words for w in WORDS) and "calendrier" in words
+
+
+# ---- mois précisés ----
+def test_annee_la_plus_proche():
+    from motionzero.calendar_view import nearest_date
+    assert nearest_date(TODAY, 1, 1) == date(2027, 1, 1)                 # en novembre : janvier prochain
+    assert nearest_date(TODAY, 11, 1) == date(2026, 11, 1)               # il y a 11 jours : cette année
+    assert nearest_date(TODAY, 9, 1) == date(2026, 9, 1)                 # il y a 72 jours : encore récent
+    assert nearest_date(TODAY, 5, 14) == date(2027, 5, 14)               # il y a 6 mois : le prochain
+    assert nearest_date(TODAY, 11, 12) == TODAY
+    assert nearest_date(date(2027, 1, 3), 12, 25) == date(2026, 12, 25)  # début janvier : Noël récent
+    assert nearest_date(TODAY, 2, 30) is None
+    assert nearest_date(TODAY, 2, 29) == date(2028, 2, 29)               # prochaine année bissextile
+
+
+def test_premier_janvier():
+    cal = Calendar()
+    cal.show(TODAY)
+    cal.command("premier", TODAY, t=10.0)
+    cal.command("janvier", TODAY, t=10.4)
+    assert cal.focus == date(2027, 1, 1) and cal.week == date(2026, 12, 28)
+    assert cal.view([], NOW)["month"] == "Décembre 2026"                  # semaine à cheval : mois du jeudi
+    cal.command("deuxième", TODAY, t=20.0)
+    cal.command("mars", TODAY, t=20.5)
+    assert cal.focus == date(2027, 3, 2)
+    cal.command("dix-huit", TODAY, t=30.0)
+    cal.command("février", TODAY, t=40.0)                                # trop tard : mois seul = le 1er
+    assert cal.focus == date(2027, 2, 1)
+    cal.command("trente", TODAY, t=50.0)                                 # 30 du mois affiché (février : rien)
+    before = cal.focus
+    cal.command("février", TODAY, t=50.2)                                # « trente février » : ne bouge pas
+    assert cal.focus == before
+
+
+def test_voix_premier_janvier():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("calendrier", 1.5)
+    assert core.voice("premier", 3.0) == [("cal", "premier")]
+    assert core.voice("janvier", 3.3) == [("cal", "janvier")]
+    assert core.voice("janvier", 200.0) == []                            # calendrier fermé : rien

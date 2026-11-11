@@ -4,6 +4,8 @@
 - « suivant » / « précédent » : semaine suivante / précédente (ou jour, si un jour est ouvert en grand) ;
 - « lundi » … « dimanche » : ce jour en grand ; « aujourd'hui » : retour à aujourd'hui ;
 - « premier », « deux » … « trente-et-un » : la semaine de ce jour du mois affiché ;
+- « janvier » … « décembre », seul ou après un jour (« premier janvier ») : l'année la plus proche
+  d'aujourd'hui (en novembre 2026, « premier janvier » = 2027 ; « premier novembre » = 2026) ;
 - « ferme » / « merci » / « stop » : ferme. Une minute sans commande : se ferme seul.
 Fonctions pures (testables) ; l'état vit dans la boucle principale, via le Desk des rappels.
 """
@@ -18,8 +20,12 @@ NUMBERS = ["premier", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", 
            "vingt-deux", "vingt-trois", "vingt-quatre", "vingt-cinq", "vingt-six", "vingt-sept", "vingt-huit",
            "vingt-neuf", "trente", "trente-et-un"]
 DAY_OF = {w: i + 1 for i, w in enumerate(NUMBERS)}
+DAY_OF["deuxième"] = 2
+MONTH_OF = {m: i + 1 for i, m in enumerate(MONTHS_FR)}
+RECENT_DAYS = 90        # une date passée de moins de 3 mois reste dans le passé
+WITH_DAY_S = 3.0        # « dix-huit … janvier » : le mois suit le jour de moins de 3 s
 WEEKDAY_OF = {d: i for i, d in enumerate(DAYS_FR)}
-WORDS = ["suivant", "précédent", "aujourd'hui"] + DAYS_FR + NUMBERS     # actifs seulement calendrier ouvert
+WORDS = ["suivant", "précédent", "aujourd'hui", "deuxième"] + DAYS_FR + NUMBERS + MONTHS_FR   # calendrier ouvert
 MAX_ITEMS = 3            # rendez-vous par carte ; au-delà : « + N autres »
 
 
@@ -37,6 +43,23 @@ def occurrences(r: Reminder, day: date):
     if day < start or not _day_ok(r, day):
         return []
     return [h.strftime("%H:%M") for h in _hours(r)]
+
+
+def nearest_date(today: date, month: int, day: int) -> date | None:
+    """Le jour/mois demandé : la date passée la plus récente si elle date de moins de 3 mois (« premier
+    novembre », le 12 novembre), sinon la prochaine (« premier janvier » en novembre = l'an prochain).
+    None si ce jour n'existe dans aucune des années proches (« trente février »)."""
+    cands = []
+    for y in range(today.year - 1, today.year + 5):           # le 29 février peut attendre 4 ans
+        try:
+            cands.append(date(y, month, day))
+        except ValueError:
+            continue
+    past = [d for d in cands if d < today]
+    if past and (today - past[-1]).days <= RECENT_DAYS:
+        return past[-1]
+    future = [d for d in cands if d >= today]
+    return future[0] if future else None
 
 
 def _cap(s: str) -> str:
@@ -76,6 +99,7 @@ class Calendar:
         self.week = None          # lundi de la semaine affichée
         self.detail = None        # jour ouvert en grand, ou None
         self.focus = None         # jour mis en avant (« iris 18 »)
+        self.last_num = None      # (jour, instant) : « premier » attend peut-être « janvier »
 
     def show(self, today: date):
         self.open, self.week, self.detail, self.focus = True, monday(today), None, today
@@ -83,8 +107,17 @@ class Calendar:
     def close(self):
         self.open, self.detail = False, None
 
-    def command(self, word: str, today: date) -> bool:
+    def command(self, word: str, today: date, t: float = 0.0) -> bool:
         """Applique une commande ; False si le mot n'est pas une commande du calendrier."""
+        if word in MONTH_OF:
+            day = 1
+            if self.last_num is not None and t - self.last_num[1] <= WITH_DAY_S:
+                day = self.last_num[0]
+            self.last_num = None
+            target = nearest_date(today, MONTH_OF[word], day)
+            if target is not None:
+                self.week, self.detail, self.focus = monday(target), None, target
+            return True
         if word in ("suivant", "précédent"):
             step = 1 if word == "suivant" else -1
             if self.detail is not None:
@@ -101,6 +134,7 @@ class Calendar:
             self.detail = self.week + timedelta(days=WEEKDAY_OF[word])
             return True
         if word in DAY_OF:
+            self.last_num = (DAY_OF[word], t)
             ref = self.week + timedelta(days=3)               # le mois affiché : celui du jeudi de la semaine
             try:
                 target = date(ref.year, ref.month, DAY_OF[word])

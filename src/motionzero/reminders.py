@@ -466,7 +466,7 @@ class Desk:
             elif k == "cal":
                 if not self.cal.open:
                     self.cal.show(now.date())
-                self.cal.command(a[1], now.date())
+                self.cal.command(a[1], now.date(), t)
             else:
                 rest.append(a)
         return rest

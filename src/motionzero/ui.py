@@ -955,7 +955,7 @@ class _IslandPainter:
             self._paint_cal_week(p, left, top, cal["days"])
 
         hint = ("« suivant » / « précédent » : jour · « lundi »… : autre jour · « ferme »" if cal.get("detail") else
-                "« suivant » / « précédent » : semaine · « jeudi » : le jour en grand · « dix-huit » : aller au 18 · « ferme »")
+                "« suivant » / « précédent » · « jeudi » : le jour en grand · « dix-huit » / « premier janvier » · « ferme »")
         hw = fm_s.horizontalAdvance(hint) + 36
         hy = top + CAL_H - 44 + 12
         p.setPen(Qt.PenStyle.NoPen)
