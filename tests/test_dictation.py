@@ -84,3 +84,15 @@ def test_iris_envoie_et_iris_annule_a_tout_moment():
     assert core.voice("envoie", 1.5) == [("hotkey", ["enter"])]
     core.voice("iris", 2.0)
     assert core.voice("annule", 2.5) == [("annule",)]
+
+
+def test_iris_skip_et_back():
+    """« iris skip » / « iris back » : une flèche droite / gauche dans la fenêtre active."""
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("skip", 1.5) == [("hotkey", ["right"])]
+    core.voice("iris", 2.0)
+    assert core.voice("back", 2.5) == [("hotkey", ["left"])]
+    assert core.voice("skip", 10.0) == []          # sans « iris » : ignoré

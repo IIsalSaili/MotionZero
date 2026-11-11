@@ -58,6 +58,8 @@ WORDS = {
     "salon": "salon",     # « iris salon » puis le nom d'un salon vocal : le bot t'y déplace
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
     "lis": "lis",         # « iris lis » : la remet
+    "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
+    "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "stop": "stop",
 }
 WAKE_WORD = "iris"
