@@ -154,6 +154,7 @@ def test_libelles():
     assert result_label({"ok": False, "error": "bizarre"}) == "DISCORD : ERREUR BIZARRE"
     assert speech_for({"author": "Bob", "dm": True, "content": "salut"}) == "Bob, en privé : salut"
     assert speech_for({"author": "Bob", "channel": "général", "content": "yo"}) == "Bob, dans général : yo"
+    assert speech_for({"author": "Bob", "channel": "général", "content": "yo", "mention_me": True})         == "Bob te mentionne dans général : yo"
 
 
 class FakeVoice:

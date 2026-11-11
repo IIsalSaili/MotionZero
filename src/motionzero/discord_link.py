@@ -223,4 +223,6 @@ def speech_for(msg):
     """Phrase lue à voix haute pour un message Discord."""
     who = msg.get("author") or "quelqu'un"
     where = "en privé" if msg.get("dm") else f"dans {msg.get('channel') or 'un salon'}"
+    if msg.get("mention_me") and not msg.get("mention"):
+        return f"{who} te mentionne {where} : {msg.get('content', '')}"
     return f"{who}, {where} : {msg.get('content', '')}"
