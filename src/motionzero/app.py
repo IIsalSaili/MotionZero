@@ -439,9 +439,11 @@ def bot_events(bot, core, speaker, discord_voice, t):
             if speaker is not None:
                 speaker.say(speech_for(msg))
         elif kind == "voice_state":
-            # état réel vu par Discord : remplace la simple mémoire des raccourcis
-            discord_voice["mute"] = bool(msg.get("self_mute"))
-            discord_voice["deaf"] = bool(msg.get("self_deaf"))
+            # état réel vu par Discord (#6) : remplace la simple mémoire des raccourcis.
+            # Hors vocal, Discord ne dit rien du micro (None) : la mémoire reste telle quelle.
+            if msg.get("channel") is not None and msg.get("self_mute") is not None:
+                discord_voice["mute"] = bool(msg["self_mute"])
+                discord_voice["deaf"] = bool(msg.get("self_deaf"))
         elif kind == "result":
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"), "send")), t)
         elif kind == "link" and not msg.get("connected") and bot.was_connected:

@@ -286,3 +286,14 @@ def test_evenements_du_bot():
     link.inbox.put({"t": "link", "connected": False})
     app.bot_events(link, core, None, dv, 2.0)                       # sans voix : sans planter
     assert core.last_gesture[0] == "BOT DISCORD DECONNECTE"
+
+
+def test_etat_micro_reel_et_hors_vocal():
+    core, link = Core(Config()), FakeLink()
+    dv = {"mute": False, "deaf": False}
+    link.inbox.put({"t": "voice_state", "channel": "Jeux", "self_mute": True, "self_deaf": True})
+    app.bot_events(link, core, None, dv, 1.0)
+    assert dv == {"mute": True, "deaf": True}
+    link.inbox.put({"t": "voice_state", "channel": None, "self_mute": None, "self_deaf": None})
+    app.bot_events(link, core, None, dv, 2.0)
+    assert dv == {"mute": True, "deaf": True}                       # sorti du vocal : rien d'inventé
