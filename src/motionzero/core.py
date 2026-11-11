@@ -202,7 +202,8 @@ class Core:
             self._reading(palm, t, acts)
         elif self.mode == Mode.MOUSE:
             self._mouse(palm, t, acts)
-            self._index_click(world, t, acts)
+            if self.cfg.hand_click_enabled:
+                self._index_click(world, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
 

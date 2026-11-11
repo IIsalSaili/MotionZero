@@ -99,6 +99,7 @@ class Config:
     click_menu_on_still: bool = False  # main immobile -> menu de clic. Désactivé : réfléchir ne doit rien ouvrir
     recenter_absent_s: float = 0.5     # souris : main absente au moins 0,5 s puis revenue -> curseur au centre
     index_click_recovery_s: float = 0.8 # deux clics par l'index : au moins 0,8 s d'écart
+    hand_click_enabled: bool = False   # clic en rouvrant la main : désactivé (fatigant, peu fiable) ; clic à la voix, pédale plus tard
     click_pose: str = "open"           # pose qui clique : ouvrir la main détendue (après main fermée)
     hold_after_s: float = 2.0          # main gardée ouverte plus de 2 s après le clic : bouton maintenu
     index_click_frames: int = 3        # 3 images de suite dans cette pose (~0,15 s), sans bouger le curseur
