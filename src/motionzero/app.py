@@ -71,6 +71,8 @@ def main(argv=None):
     from .ask import Asker
     asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
     asker.preload()
+    from .typer import Typer
+    typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -167,6 +169,7 @@ def main(argv=None):
                 if listener is not None:
                     acts = acts + core.dictation_tick(t, listener.last_speech_t)
                     acts = acts + core.ask_tick(t, listener.last_speech_t)
+                    acts = acts + core.type_tick(t, listener.last_speech_t)
                     if t - listener.iris_heard_t < 0.5:
                         core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                     for ev in listener.poll():
@@ -183,6 +186,7 @@ def main(argv=None):
                              listener.last_rms, listener.ambient, t - listener.last_speech_t)
                 if listener is not None:
                     acts = question_actions(acts, listener, asker)
+                    acts = type_actions(acts, listener, typer, sounds)
                 acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                 ctl.execute(acts, t)
                 for a in acts:
@@ -217,6 +221,7 @@ def main(argv=None):
                         "lost": pts is None,
                         "mode": core.mode,
                         "dictating": core.dictating,
+                        "typing": core.typing,
                         "confirming": core.confirming(t),
                         "listening": core.listening(t),
                         "toast": toast[0] if toast else None,
@@ -278,6 +283,27 @@ def question_actions(acts, listener, asker):
             asker.cancel()
         elif a[0] == "ask_close":
             asker.close()
+        else:
+            rest.append(a)
+    return rest
+
+
+def type_actions(acts, listener, typer, sounds):
+    """« iris type » : enregistre, puis transcription et écriture au curseur dans un fil à part."""
+    rest = []
+    for a in acts:
+        if a[0] == "type_start":
+            listener.start_capture()
+            sounds.play("PARLE")
+        elif a[0] == "type_stop":
+            typer.submit(listener.stop_capture())
+            sounds.play("COUPE")
+        elif a[0] == "type_cancel":
+            listener.stop_capture()
+        elif a[0] == "type_send":
+            typer.send()
+        elif a[0] == "type_erase":
+            typer.erase()
         else:
             rest.append(a)
     return rest

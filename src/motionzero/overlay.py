@@ -209,6 +209,8 @@ VOICE_HELP = [  # (mot à dire, ce qui se passe) — un mot par ligne
     ("claude", "micro Claude (VS Code)"),
     ("", "  coupe au silence, puis"),
     ("", "  ENVOIE ou ANNULE"),
+    ("type", "dicter du texte au curseur"),
+    ("", "  puis ENVOIE / ANNULE (3 s)"),
     ("pause", "tout desactiver"),
     ("stop", "tout annuler (toujours ecoute)"),
 ]

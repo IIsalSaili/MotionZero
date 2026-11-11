@@ -38,6 +38,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
+                "type": "DICTEE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "home": "APERCU MOTIONZERO",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE"}
@@ -108,6 +109,10 @@ class Core:
         self.dictating = False
         self.dictation_t0 = -1e9
         self.confirm_until = -1e9
+        self.confirm_kind = "claude"          # « claude » (VS Code) ou « type » (texte écrit à l'endroit actif)
+        # « iris type » : la dictée est en cours d'enregistrement (texte écrit à l'endroit du curseur)
+        self.typing = False
+        self.type_t0 = -1e9
         # pour l'affichage
         self.still_for = 0.0
         self.zone_progress = 0.0
@@ -356,9 +361,17 @@ class Core:
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
         c = self.cfg
         acts = []
-        if self.dictating or self.asking:
-            return acts  # dictée Claude ou question en cours : tes mots sont pour Claude, pas des commandes
-        if self.confirming(t) and word in ("envoie", "annule", "claude"):
+        if self.dictating or self.asking or self.typing:
+            return acts  # dictée ou question en cours : tes mots sont du texte, pas des commandes
+        if self.confirming(t) and self.confirm_kind == "type" and word != WAKE_WORD:
+            # après « iris type » : envoie (Entrée) ou annule (efface le texte écrit) ; tout autre mot :
+            # le texte reste tel quel et le mot est traité normalement
+            self.confirm_until = -1e9
+            if word in ("envoie", "annule"):
+                self.last_word = (word, t, True)
+                self.last_gesture = ("TEXTE ENVOYE" if word == "envoie" else "TEXTE EFFACE", t)
+                return [("type_send",)] if word == "envoie" else [("type_erase",)]
+        if self.confirming(t) and self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
             # juste après la dictée : envoie / annule / claude marchent aussi sans « iris ».
             # Aucun verrou : toutes les autres commandes « iris + … » restent utilisables.
             return self._confirm(word, t)
@@ -442,6 +455,12 @@ class Core:
             self.ask_t0 = t
             acts.append(("ask_start",))
             label = "POSE TA QUESTION"
+        elif word == "type":
+            self.typing = True
+            self.type_t0 = t
+            self.menu.close()
+            self.bubble = None
+            acts.append(("type_start",))
         elif word == "ferme":
             acts.append(("ask_close",))
             label = "FERME"
@@ -479,6 +498,7 @@ class Core:
         if spoke and t - last_speech_t >= c.dictation_silence_s:
             self.dictating = False
             self.confirm_until = t + c.send_confirm_s
+            self.confirm_kind = "claude"
             self.last_gesture = ("MICRO COUPE : dis ENVOIE ou ANNULE", t)
             return [("vscode_dictation",)]
         if not spoke and t - self.dictation_t0 >= c.dictation_no_speech_s:
@@ -507,6 +527,24 @@ class Core:
             self.asking = False
             self.last_gesture = ("RIEN ENTENDU : question annulee", t)
             return [("ask_cancel",)]
+        return []
+
+    def type_tick(self, t, last_speech_t):
+        """« iris type » : fin de la dictée après 2 s de silence, puis 3 s pour envoie / annule."""
+        if not self.typing:
+            return []
+        c = self.cfg
+        spoke = last_speech_t > self.type_t0 + c.dictation_echo_s
+        if spoke and t - last_speech_t >= c.type_silence_s:
+            self.typing = False
+            self.confirm_until = t + c.type_confirm_s
+            self.confirm_kind = "type"
+            self.last_gesture = ("TEXTE ECRIT : ENVOIE ou ANNULE ?", t)
+            return [("type_stop",)]
+        if not spoke and t - self.type_t0 >= c.dictation_no_speech_s:
+            self.typing = False
+            self.last_gesture = ("RIEN ENTENDU : dictee annulee", t)
+            return [("type_cancel",)]
         return []
 
     def _confirm(self, word, t):

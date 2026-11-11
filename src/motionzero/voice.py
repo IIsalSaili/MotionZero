@@ -38,6 +38,7 @@ WORDS = {
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
+    "type": "type",       # « iris type » : dicter du texte, écrit là où se trouve le curseur
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
