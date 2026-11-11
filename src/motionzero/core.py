@@ -114,7 +114,6 @@ class Core:
         # « iris type » : la dictée est en cours d'enregistrement (texte écrit à l'endroit du curseur)
         self.typing = False
         self.type_t0 = -1e9
-        self.app_words = set()                # applis favorites (« iris steam »)
         self.opening = False                  # « iris ouvre » : le nom de l'appli est en cours d'enregistrement
         self.open_t0 = -1e9
         # pour l'affichage
@@ -459,9 +458,6 @@ class Core:
             self.ask_t0 = t
             acts.append(("ask_start",))
             label = "POSE TA QUESTION"
-        elif word in self.app_words:
-            acts.append(("open_fav", word))
-            label = word.upper()
         elif word == "ouvre":
             self.opening = True
             self.open_t0 = t

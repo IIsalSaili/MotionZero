@@ -1,9 +1,9 @@
 """« Iris + nom d'appli » (issue #8).
 
 - La liste des applis vient du menu Démarrer (Get-StartApps : nom + AppID, applis classiques et du Store).
-- Les favorites (commandes directes, rapides) : les applis lancées le plus récemment, d'après le registre
-  UserAssist de Windows, dont le nom est connu de la reconnaissance vocale.
-- Toutes les autres : « iris ouvre » puis le nom, transcrit par Whisper et rapproché de la liste.
+- « iris ouvre » puis le nom, transcrit par Whisper et rapproché de la liste. Jamais « iris + nom » seul :
+  trop de risques de déclenchement sur un mot mal entendu.
+- Les applis lancées récemment (registre UserAssist de Windows) départagent deux noms proches.
 - Lancement : shell:AppsFolder\\<AppID> (même méthode pour toutes). Si l'appli est déjà ouverte : premier plan.
 """
 import codecs
@@ -16,27 +16,19 @@ import os
 import re
 import struct
 import subprocess
-import sys
 import unicodedata
 from ctypes import wintypes
 
 log = logging.getLogger("motionzero.apps")
 FAVORITES_MAX = 20
-FUZZY_MIN = 0.8            # « iris ouvre » : en dessous, rien ne s'ouvre (« PAS COMPRIS »)
+FUZZY_MIN = 0.8
+RECENT_BONUS = 0.05            # « iris ouvre » : en dessous, rien ne s'ouvre (« PAS COMPRIS »)
 NOISE_RE = re.compile(r"uninstall|désinstall|desinstall|documentation|manual|help|aide|readme|release notes|"
                       r"website|visit|learn more|sample|tools for|faq|module docs|support", re.I)
 NOISE_EXT = (".url", ".html", ".htm", ".chm", ".pdf", ".msc", ".txt")
-# mots qui ne nomment pas l'appli : retirés pour trouver un nom court à dire
+# mots qui ne nomment pas l'appli : ignorés dans le rapprochement
 FILLER = {"microsoft", "windows", "google", "app", "desktop", "launcher", "client", "the", "de", "du", "la", "le",
           "des", "for", "x64", "x86", "64", "bit", "of", "gx", "center", "light", "launcher"}
-# premier mot trop vague pour être dit seul : seulement dans le nom en deux mots (« bloc notes », « game bar »)
-GENERIC = {"game", "lecteur", "navigateur", "mobile", "bloc", "outil", "gigabyte", "centre", "gestion", "store",
-           "battle", "editeur", "éditeur", "invite", "connexion", "assistance", "sécurité", "panneau"}
-# déjà des commandes, ou trop proches d'autres commandes / de la conversation
-RESERVED = {"chrome", "discord", "studio", "home", "code", "claude", "type", "question", "ferme", "souris", "lecture",
-            "pause", "stop", "clic", "double", "menu", "glisse", "lâche", "défile", "entrée", "espace", "space",
-            "annule", "copie", "colle", "envoie", "tab", "mute", "ouvre", "iris", "notes", "photos", "word", "zoom",
-            "musique"}
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
@@ -102,57 +94,19 @@ def recent_appids():
     return seen
 
 
-def spoken(name):
-    """Mots du nom tels que le modèle vocal les connaît : minuscules, accents gardés, sans ponctuation."""
-    s = re.sub(r"\(.*?\)|®|™", " ", name.lower())
-    return [w for w in re.sub(r"[^\w\s]", " ", s).split()
-            if not re.fullmatch(r"\d[\d.]*", w) and strip_accents(w) not in FILLER]
-
-
-def aliases(name):
-    """Façons de dire le nom : les deux premiers mots utiles (« bloc notes ») ; le premier seul s'il est
-    distinctif (« steam », « whatsapp », « explorateur »)."""
-    words = spoken(name)
-    out = []
-    if len(words) >= 2:
-        out.append(" ".join(words[:2]))
-    if words and words[0] not in GENERIC:
-        out.append(words[0])
-    return [a for a in dict.fromkeys(out) if a and a not in RESERVED and len(a) >= 3]
-
-
-def missing_words(model_dir, words):
-    """Mots absents du vocabulaire Vosk (le modèle l'écrit dans son journal ; mesuré dans un processus à part)."""
-    code = ("import json,sys\nfrom vosk import Model,KaldiRecognizer,SetLogLevel\nSetLogLevel(0)\n"
-            "m=Model(sys.argv[1])\nKaldiRecognizer(m,16000,json.dumps(json.load(sys.stdin),ensure_ascii=False))\n")
-    out = subprocess.run([sys.executable, "-c", code, model_dir], input=json.dumps(sorted(words) + ["[unk]"]),
-                         capture_output=True, text=True, encoding="utf-8", timeout=60, creationflags=NO_WINDOW)
-    return set(re.findall(r"missing in vocabulary\W+(\S+?)['\"]?\s*$", out.stderr, re.M)) | \
-        set(re.findall(r"Ignoring word missing in vocabulary: '([^']+)'", out.stderr))
-
-
-def build(model_dir):
-    """(favorites, toutes) : favorites = {mot ou phrase à dire: (nom, AppID)} ; toutes = {nom: AppID}."""
+def build():
+    """(toutes, récentes) : toutes = {nom: AppID} ; récentes = noms lancés le plus récemment d'abord."""
     apps = list_start_apps()
-    recent = recent_appids()
     by_id = {appid: name for name, appid in apps.items()}
-    ranked = sorted(((t, by_id[k]) for k, t in recent.items() if k in by_id), reverse=True)
-    names = list(dict.fromkeys(n for _, n in ranked))
-    cand = {n: aliases(n) for n in names}
-    missing = missing_words(model_dir, {w for al in cand.values() for a in al for w in a.split()})
-    fav = {}
-    for n in names:
-        ok = [a for a in cand[n] if not set(a.split()) & missing and a not in fav]
-        for a in ok:
-            fav[a] = (n, apps[n])
-        if len({v[0] for v in fav.values()}) >= FAVORITES_MAX:
-            break
-    log.info("applis : %d au menu Demarrer, favorites : %s", len(apps), ", ".join(sorted(fav)))
-    return fav, apps
+    ranked = sorted(((t, by_id[k]) for k, t in recent_appids().items() if k in by_id), reverse=True)
+    recent = list(dict.fromkeys(n for _, n in ranked))[:FAVORITES_MAX]
+    log.info("applis : %d au menu Demarrer, recentes : %s", len(apps), ", ".join(recent))
+    return apps, recent
 
 
-def best_match(text, apps):
-    """« iris ouvre » : l'appli dont le nom ressemble le plus au texte entendu, ou None si pas assez sûr."""
+def best_match(text, apps, recent=()):
+    """« iris ouvre » : l'appli dont le nom ressemble le plus au texte entendu, ou None si pas assez sûr.
+    Les applis lancées récemment ont un petit bonus (départage deux noms proches)."""
     said = norm(text)
     if not said:
         return None
@@ -161,6 +115,8 @@ def best_match(text, apps):
         n = norm(name)
         short = " ".join(w for w in n.split() if w not in FILLER)
         s = max(difflib.SequenceMatcher(None, said, n).ratio(), difflib.SequenceMatcher(None, said, short).ratio())
+        if name in recent:
+            s += RECENT_BONUS
         if s > score:
             best, score = name, s
     log.info("ouvre : '%s' -> %s (%.2f)", text, best, score)
@@ -222,31 +178,23 @@ def open_entry(name, appid):
 
 
 class Launcher:
-    """Liste des applis (construite en arrière-plan au démarrage) et ouvertures, dans un fil à part."""
+    """« iris ouvre » : liste des applis construite en arrière-plan au démarrage, ouvertures dans un fil à part."""
 
-    def __init__(self, model_dir, asker, on_ready, on_message):
+    def __init__(self, asker, on_message):
         import threading
-        self.fav, self.all = {}, {}
+        self.all, self.recent = {}, []
         self.asker, self.on_message = asker, on_message
         self.threading = threading
 
         def load():
             try:
-                self.fav, self.all = build(model_dir)
-                on_ready(sorted(self.fav))
+                self.all, self.recent = build()
             except Exception:
                 log.exception("liste des applis impossible")
         threading.Thread(target=load, name="applis", daemon=True).start()
 
-    def _bg(self, fn, *args):
-        self.threading.Thread(target=fn, args=args, name="ouvre", daemon=True).start()
-
-    def open_favorite(self, word):
-        if word in self.fav:
-            self._bg(self._open, *self.fav[word])
-
     def open_spoken(self, audio):
-        self._bg(self._open_spoken, audio)
+        self.threading.Thread(target=self._open_spoken, args=(audio,), name="ouvre", daemon=True).start()
 
     def _open(self, name, appid):
         try:
@@ -262,7 +210,7 @@ class Launcher:
         except Exception:
             log.exception("transcription ouvre")
             text = ""
-        name = best_match(text, self.all) if text else None
+        name = best_match(text, self.all, self.recent) if text else None
         if not name:
             self.on_message(f"PAS COMPRIS : {text.strip(' .') or 'rien entendu'}"[:60])
             return

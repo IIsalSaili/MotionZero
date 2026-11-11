@@ -74,16 +74,12 @@ def main(argv=None):
     from .typer import Typer
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     launcher = None
-    if listener is not None:                   # « iris + appli » : favorites d'après les derniers lancements
+    if listener is not None:                   # « iris ouvre » + nom de l'appli (Whisper)
         from .apps import Launcher
-
-        def apps_ready(words):
-            listener.set_apps(words)
-            core.app_words = set(words)
 
         def app_message(msg):
             core.last_gesture = (msg, time.perf_counter())
-        launcher = Launcher(default_model_dir(ROOT), asker, apps_ready, app_message)
+        launcher = Launcher(asker, app_message)
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -302,12 +298,10 @@ def question_actions(acts, listener, asker):
 
 
 def open_actions(acts, listener, launcher):
-    """« iris + appli favorite » et « iris ouvre » (nom transcrit puis rapproché de la liste)."""
+    """« iris ouvre » : le nom de l'appli est enregistré, transcrit, puis rapproché de la liste."""
     rest = []
     for a in acts:
-        if a[0] == "open_fav":
-            launcher.open_favorite(a[1])
-        elif a[0] == "open_start":
+        if a[0] == "open_start":
             listener.start_capture()
         elif a[0] == "open_stop":
             launcher.open_spoken(listener.stop_capture())
