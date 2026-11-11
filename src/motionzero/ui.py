@@ -5,10 +5,11 @@ Les signaux Qt émis depuis ce fil arrivent dans le fil de l'interface par la fi
 """
 import ctypes
 import os as _os
+import math
 import random as _random
 import time as _time
 
-from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
                            QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
@@ -262,6 +263,10 @@ class GlassOverlay(QWidget):
         self.progress = 0.0
         self.lost = False
         self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
+        self._last_st = {}
+        self._anim = QTimer(self)                 # tourne seulement pendant une animation (logo, alarme)
+        self._anim.setInterval(16)
+        self._anim.timeout.connect(self._anim_tick)
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -286,8 +291,12 @@ class GlassOverlay(QWidget):
         self.progress = st.get("progress", 0.0)
         self.lost = st.get("lost", False)
         if self.island is not None:
-            if self.island.update(st, _time.perf_counter()):
+            self._last_st = st
+            now = _time.perf_counter()
+            if self.island.update(st, now):
                 self.update(self.island.rect())
+            if self.island.animating(now) and not self._anim.isActive():
+                self._anim.start()
             self.cursor = None                # le curseur et la loupe sont dans la fenêtre « cursor »
             return
         old_loupe = self._loupe_box()
@@ -300,6 +309,13 @@ class GlassOverlay(QWidget):
             self.update(self._box(old))
         if self.cursor is not None:
             self.update(self._box(self.cursor))
+
+    def _anim_tick(self):
+        now = _time.perf_counter()
+        self.island.update(self._last_st, now)
+        self.update(self.island.rect())
+        if not self.island.animating(now):
+            self._anim.stop()
 
     def _loupe_center(self):
         """En haut à droite du curseur ; de l'autre côté près des bords de l'écran."""
@@ -555,6 +571,66 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
 
 
+REMINDER_W = 560
+ALARM_RED = (190, 30, 40)
+
+
+CLOCK_GAP = 8            # écart entre l'île et la fiche de l'heure, en dessous
+CLOCK_BIG = 2 * ISLAND_H + CLOCK_GAP   # logo agrandi : la hauteur des deux bandeaux empilés
+CLOCK_ANIM_S = 0.6       # durée de l'agrandissement (et du retour)
+
+
+def _ease(u):
+    """Accélère puis ralentit (0 -> 1)."""
+    u = min(max(u, 0.0), 1.0)
+    return 4 * u ** 3 if u < 0.5 else 1 - (-2 * u + 2) ** 3 / 2
+
+
+def clock_anim(now, start, end):
+    """(agrandissement 0..1, angle en degrés) du logo pendant « iris heure ». Pur : testable.
+    Aller : rotation vers la gauche en grossissant ; retour : vers la droite en rapetissant."""
+    if start is None:
+        return 0.0, 0.0
+    if end is None:
+        e = _ease((now - start) / CLOCK_ANIM_S)
+        return e, -360.0 * e
+    e = _ease((now - end) / CLOCK_ANIM_S)
+    return 1.0 - e, 360.0 * e
+
+
+DAYS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
+def clock_text(now):
+    """« jeudi 12/11/2026 · 14:05 ». Pur : testable."""
+    return f"{DAYS[now.weekday()]} {now:%d/%m/%Y · %H:%M}"
+
+
+def reminder_view(st):
+    """Ce que l'île montre pour les rappels : ("current", dict) | ("list", lignes) | None. Pur : testable.
+    Le rappel déclenché passe avant tout (il reste jusqu'à « iris merci »), puis la liste demandée."""
+    rem = st.get("reminders") or {}
+    if rem.get("current"):
+        return "current", rem["current"]
+    if rem.get("list"):
+        return "list", rem["list"]
+    return None
+
+
+def reminder_texts(kind, data):
+    """(titre, texte, ligne du bas) de la carte des rappels. Pur : testable."""
+    if kind == "list":
+        return ("RAPPELS À VENIR", "\n".join(data), "« Iris rappel » pour en ajouter ou en supprimer")
+    title = ("ALARME" if data.get("alarm") else "RAPPEL") + (" MANQUÉ" if data.get("missed") else "")
+    title += f" · {data.get('when', '')}"
+    meta = "« Iris merci » : noté · « Iris plus tard » : +10 min"
+    if data.get("ringing"):
+        meta = "« stop » : silence · " + meta
+    if data.get("more"):
+        title += f" · +{data['more']} en attente"
+    return title, data.get("text", ""), meta
+
+
 def islet_logo(st, blinking):
     """Nom du logo à afficher. Pur : testable. Vert pendant la validation (sans clignement)."""
     if st.get("ok_flash"):
@@ -623,12 +699,17 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name in ("mic-off", "headphone-off"):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
-                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", DISCORD_RED).encode()))
+                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
             except OSError:
                 pass
+        self.rem = None          # ("current", dict) | ("list", lignes) | None
+        self.next_rem = None     # texte de l'heure (« iris heure »), gardé pendant l'animation de retour
+        self.clk_start = None    # début de l'agrandissement du logo
+        self.clk_end = None      # début du retour
+        self.font_rem = QFont("Atkinson Hyperlegible", 22, QFont.Weight.Bold)
         self.discord = []
         self.blink_until = 0.0
         self.next_blink = 0.0
@@ -641,7 +722,26 @@ class _IslandPainter:
         mode, msg, active = island_text(st)
         qa = st.get("qa") or {}
         self.qa = qa if qa.get("phase") in ("answer", "error") else None
-        content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None)
+        self.rem = reminder_view(st)
+        clock = st.get("clock")                # « jeudi 12/11/2026 · 14:05 », seulement après « iris heure »
+        if clock and (self.clk_start is None or self.clk_end is not None):
+            self.clk_start, self.clk_end = now, None          # (re)commence l'aller
+        elif not clock and self.clk_start is not None and self.clk_end is None:
+            self.clk_end = now                                 # le retour commence
+        if self.clk_end is not None and now - self.clk_end >= CLOCK_ANIM_S:
+            self.clk_start = self.clk_end = None               # le logo a repris sa place
+        if clock:
+            self.next_rem = clock
+        elif self.clk_start is None:
+            self.next_rem = None
+        self.anim_now = now
+        if self.next_rem:
+            active = True
+        if self.rem:
+            active = True
+        rem_key = (self.rem[0], str(self.rem[1])) if self.rem else None
+        content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
+                   rem_key, self.next_rem)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -656,14 +756,25 @@ class _IslandPainter:
             self.discord, self.last_change = discord, now
         idle = now - self.last_change
         target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
-        changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo
+        ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
+        changed = (abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo or ringing
+                   or self.animating(now))
         self.opacity, self.logo = target, logo
         return changed
+
+    def animating(self, now):
+        """Vrai pendant l'animation du logo ou une alarme qui pulse : redessiner à 60 images/s."""
+        moving = self.clk_start is not None and (self.clk_end is not None or now - self.clk_start < CLOCK_ANIM_S)
+        ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
+        return moving or ringing
 
     def paint(self, p):
         if not self.content:
             return
         mode, msg = self.content[0], self.content[1]
+        if self.rem:
+            self._paint_reminder(p, *self.rem)
+            return
         if getattr(self, "qa", None):
             self._paint_answer(p, mode, msg)
             return
@@ -694,6 +805,30 @@ class _IslandPainter:
             p.setFont(self.font_msg)
             mx = tx + fm_mode.horizontalAdvance(mode) + gap
             p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
+        p.restore()
+        self._paint_clock(p, x, y + ISLAND_H + CLOCK_GAP)
+
+    def _paint_clock(self, p, x, y):
+        """Fiche « horloge + jour, date, heure », sous l'île ; apparaît avec l'agrandissement du logo."""
+        if not self.next_rem:
+            return
+        k, _ = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end)
+        if k <= 0.01:
+            return
+        fm = QFontMetrics(self.font_msg)
+        pad, gap = 18, 10
+        w = 2 * pad + ICON + gap + fm.horizontalAdvance(self.next_rem)
+        p.save()
+        p.setOpacity(k)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        clock = self.icons.get("clock")
+        if clock is not None:
+            clock.render(p, QRectF(x + pad, y + (ISLAND_H - ICON) / 2, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_msg)
+        p.drawText(QRectF(x + pad + ICON + gap, y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, self.next_rem)
         p.restore()
 
     def _paint_answer(self, p, mode, header):
@@ -743,8 +878,55 @@ class _IslandPainter:
         p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
         p.restore()
 
+    def _paint_reminder(self, p, kind, data):
+        """Carte du rappel déclenché (rouge qui pulse si l'alarme sonne) ou liste des rappels."""
+        import time as _t
+        pad, top = 22, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        gx = (self.width - (ISLET + ISLET_GAP + REMINDER_W)) / 2
+        x = gx + ISLET + ISLET_GAP
+        inner = REMINDER_W - 2 * pad
+        flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+        title, body, meta = reminder_texts(kind, data)
+        font_body = self.font_rem if kind == "current" else self.font_answer
+        alarm = kind == "current" and data.get("alarm")
+        ringing = kind == "current" and data.get("ringing")
+        fm_b, fm_s = QFontMetrics(font_body), QFontMetrics(self.font_small)
+        b_rect = fm_b.boundingRect(QRect(0, 0, inner, 1000), flags, body)
+        h = min(ANSWER_MAX_H, 46 + b_rect.height() + 44)
+        if ringing:      # pulsation : 1 s, entre rouge sombre et rouge vif
+            k = 0.5 + 0.5 * math.sin(_t.monotonic() * 2 * math.pi)
+            bg = QColor(int(ALARM_RED[0] * (0.6 + 0.4 * k)), ALARM_RED[1], ALARM_RED[2], 245)
+        elif alarm:
+            bg = QColor(120, 20, 28, 240)
+        elif kind == "current":
+            bg = QColor(28, 38, 70, 245)       # bleu nuit : se distingue du noir habituel
+        else:
+            bg = QColor(0, 0, 0, 240)
+        p.save()
+        self._paint_islet(p, gx, ISLAND_TOP)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(bg)
+        p.drawRoundedRect(QRectF(x, top, REMINDER_W, h), 22, 22)
+        bell = self.icons.get("bell")
+        if bell is not None:
+            bell.render(p, QRectF(x + pad, top + 11, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_mode)
+        p.drawText(QRectF(x + pad + ICON + 10, top, inner, 46), Qt.AlignmentFlag.AlignVCenter, title)
+        p.setFont(font_body)
+        p.save()
+        p.setClipRect(QRectF(x + pad, top + 46, inner, max(0, h - 46 - 36)))
+        p.drawText(QRectF(x + pad, top + 46, inner, b_rect.height()), flags, body)
+        p.restore()
+        p.setPen(QColor(255, 255, 255, 170))
+        p.setFont(self.font_small)
+        p.drawText(QRectF(x + pad, top + h - 30, inner, 22), Qt.AlignmentFlag.AlignVCenter,
+                   fm_s.elidedText(meta, Qt.TextElideMode.ElideRight, inner))
+        p.restore()
+
     def _paint_discord(self, p, islet_x, y):
-        """Pastille noire à gauche de l'îlot, icônes rouges ; ne s'estompe jamais, comme le logo."""
+        """Pastille noire à gauche de l'îlot, icônes rouges ; ne s'estompe jamais, comme le logo.
+        La pastille du prochain rappel se place encore à sa gauche."""
         if not self.discord:
             return
         pad, gap = 12, 6
@@ -765,9 +947,25 @@ class _IslandPainter:
         p.restore()
 
     def _paint_islet(self, p, x, y):
+        """Logo à sa place, ou en cours d'animation (« iris heure ») : il grossit vers la gauche en tournant
+        jusqu'à couvrir l'île et la fiche de l'heure, son bord droit restant collé à l'île."""
+        k, angle = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end)
+        size = ISLET + (CLOCK_BIG - ISLET) * k
+        right = x + ISLET
+        bars_top = ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        cy = (y + ISLET / 2) + ((bars_top + CLOCK_BIG / 2) - (y + ISLET / 2)) * k
+        self._paint_discord(p, right - size, y)
+        p.save()
+        p.translate(right - size / 2, cy)
+        p.rotate(angle)
+        p.scale(size / ISLET, size / ISLET)
+        p.translate(-ISLET / 2, -ISLET / 2)
+        self._draw_logo(p, 0, 0)
+        p.restore()
+
+    def _draw_logo(self, p, x, y):
         """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
         par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
-        self._paint_discord(p, x, y)
         circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
         # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
         p.setPen(Qt.PenStyle.NoPen)

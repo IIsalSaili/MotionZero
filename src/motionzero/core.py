@@ -47,11 +47,15 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
-                "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)"}
+                "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
+                "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
+                "plus tard": "RAPPEL DANS 10 MIN", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
-OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop"}
+OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
+             "rappel": "rappel_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
-             "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…"}
+             "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
+             "rappel": "RAPPEL : Haiku reflechit…"}
 
 
 class Core:
@@ -109,6 +113,7 @@ class Core:
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
+        self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
@@ -408,8 +413,14 @@ class Core:
             # juste après la dictée : envoie / annule / claude marchent aussi sans « iris ».
             # Aucun verrou : toutes les autres commandes « iris + … » restent utilisables.
             return self._confirm(word, t)
+        if self.confirming(t) and self.confirm_kind == "rappel" and word in ("envoie", "annule"):
+            # « iris rappel » : Iris a répété ce qu'elle a compris ; envoie / annule sans « iris »
+            self.confirm_until = -1e9
+            self.last_word = (word, t, True)
+            return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
         if word == "stop":  # toujours écouté, prioritaire
             acts.append(("release_all",))
+            acts.append(("alarm_stop",))      # une alarme qui sonne se tait aussi
             self.menu.close()
             self.bubble = None
             self.voice_scroll_until = self.listen_until = -1e9
@@ -519,7 +530,13 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
-        elif word in ("message", "salon"):
+        elif word in ("heure", "date"):
+            self.clock_until = t + c.clock_s
+        elif word == "merci":
+            acts.append(("rappel_merci",))
+        elif word == "plus tard":
+            acts.append(("rappel_tard",))
+        elif word in ("message", "salon", "rappel"):
             self.opening = True
             self.open_t0 = t
             self.open_kind = word
@@ -551,6 +568,11 @@ class Core:
         return acts
 
     # --- dictée Claude (VS Code) ---------------------------------------------
+    def ask_confirm(self, kind, t, seconds):
+        """Une question attend « envoie » / « annule » (sans « iris ») pendant `seconds`."""
+        self.confirm_kind = kind
+        self.confirm_until = t + seconds
+
     def confirming(self, t):
         return t < self.confirm_until
 
@@ -623,7 +645,7 @@ class Core:
         close = kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
         # un message est une phrase : même silence que la dictée ; un nom (appli, salon) est court
-        silence = c.type_silence_s if kind == "message" else c.open_silence_s
+        silence = c.type_silence_s if kind in ("message", "rappel") else c.open_silence_s
         if spoke and t - last_speech_t >= silence:
             self.opening = False
             self.last_gesture = (OPEN_WAIT[kind], t)
@@ -632,7 +654,8 @@ class Core:
             self.opening = False
             if not close:
                 self.last_gesture = ({"open": "RIEN ENTENDU : ouvre annule", "message": "RIEN ENTENDU : message annule",
-                                      "salon": "RIEN ENTENDU : salon annule"}[kind], t)
+                                      "salon": "RIEN ENTENDU : salon annule",
+                                      "rappel": "RIEN ENTENDU : rappel annule"}[kind], t)
             return [("open_cancel",)]
         return []
 
