@@ -1,4 +1,4 @@
-"""Consommation de motionzero et du PC, pour le panneau de la page d'accueil (« iris home »).
+"""Consommation de motionzero et du PC, pour le panneau de la page d'accueil (« iris accueil »).
 
 Mesuré une fois par seconde, et SEULEMENT quand la page est visible : réduite, rien n'est mesuré.
 Chaque source (processeur, carte graphique…) peut manquer : elle vaut alors None, sans plantage.

@@ -185,7 +185,7 @@ def _title_of(hwnd):
 
 
 def open_home():
-    """« iris home » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan, à sa taille normale."""
+    """« iris accueil » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan, à sa taille normale."""
     u = ctypes.windll.user32
     found = []
 
@@ -211,7 +211,7 @@ def open_home():
 def open_app(name):
     """Met l'appli au premier plan, ou la lance si elle n'est pas ouverte. Renvoie None ou une erreur."""
     import subprocess
-    if name == "home":
+    if name == "accueil":
         return open_home()
     exe, cmd = APPS[name]
     hwnd = find_app_window(exe)
