@@ -60,6 +60,9 @@ WORDS = {
     "lis": "lis",         # « iris lis » : la remet
     "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
+    "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
+    "merci": "merci",     # « iris merci » : le rappel affiché disparaît
+    "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
     "stop": "stop",
 }
 WAKE_WORD = "iris"
@@ -67,7 +70,8 @@ END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la r
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
-         ("des", "fun"): "défun", ("dis", "fun"): "défun"}
+         ("des", "fun"): "défun", ("dis", "fun"): "défun",
+         ("plus", "tard"): "plus tard"}
 def grammar():
     phrases = [w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)

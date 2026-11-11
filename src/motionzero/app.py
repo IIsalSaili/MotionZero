@@ -124,7 +124,14 @@ def main(argv=None):
     from .discord_link import BotLink
     from .speech import Speaker
     bot = BotLink(launch=not args.simulation and not args.duration).start()
-    speaker = Speaker() if bot.enabled else None
+    speaker = Speaker()                        # voix Windows : messages Discord et rappels
+    # rappels et alarmes (issue #20) : « iris rappel » -> Whisper -> Haiku -> « envoie »
+    import datetime
+    from .ask import ask_claude
+    from .reminders import PARSE_SYSTEM, Desk, Reminders
+    desk = Desk(Reminders(os.path.join(ROOT, "reminders.json")).load(datetime.datetime.now()),
+                speaker, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),
+                transcribe=lambda audio: asker._transcribe(audio, 16000))
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -252,6 +259,7 @@ def main(argv=None):
                     while not app_messages.empty():
                         core.last_gesture = (app_messages.get_nowait(), t)
                     bot_events(bot, core, speaker, discord_voice, t)
+                    desk.events(core, t)
                     if listener is not None:
                         if t - listener.iris_heard_t < 0.5:
                             core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
@@ -270,7 +278,8 @@ def main(argv=None):
                     if listener is not None:
                         acts = question_actions(acts, listener, asker)
                         acts = type_actions(acts, listener, typer, sounds)
-                        acts = open_actions(acts, listener, launcher, asker, bot, app_message)
+                        acts = open_actions(acts, listener, launcher, asker, bot, app_message, desk)
+                    acts = desk.actions(acts, core, t)
                     acts = discord_actions(acts, speaker)
                     acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                     ctl.execute(acts, t)
@@ -319,6 +328,7 @@ def main(argv=None):
                             "toast_age": t - toast[1] if toast else 1e9,
                             "qa": asker.snapshot() if listener is not None else None,
                             "discord": (discord_voice["mute"], discord_voice["deaf"]),
+                            "reminders": desk.state(t),
                         })
                     else:
                         time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
@@ -386,12 +396,16 @@ def question_actions(acts, listener, asker):
     return rest
 
 
-def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None):
+def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None):
     """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
     for a in acts:
         if a[0] == "open_start":
             listener.start_capture()
+        elif a[0] == "rappel_stop":
+            audio = listener.stop_capture()
+            if desk is not None:
+                desk.submit(audio)
         elif a[0] in ("message_stop", "salon_stop"):
             audio = listener.stop_capture()
             threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),
@@ -444,6 +458,10 @@ def bot_events(bot, core, speaker, discord_voice, t):
             if msg.get("channel") is not None and msg.get("self_mute") is not None:
                 discord_voice["mute"] = bool(msg["self_mute"])
                 discord_voice["deaf"] = bool(msg.get("self_deaf"))
+        elif kind == "result" and bot.kinds.get(msg.get("req")) == "notify":
+            bot.kinds.pop(msg.get("req"), None)          # rappel envoyé en privé : rien à afficher
+            if not msg.get("ok"):
+                logging.getLogger("motionzero").warning("rappel non envoye sur Discord : %s", msg.get("error"))
         elif kind == "result":
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"), "send")), t)
         elif kind == "link" and not msg.get("connected") and bot.was_connected:

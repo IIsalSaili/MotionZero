@@ -43,12 +43,12 @@ def find_claude():
     return found[-1] if found else None
 
 
-def ask_claude(question, exe=None):
+def ask_claude(question, exe=None, system=SYSTEM):
     """Réponse de Claude Haiku à une question, ou lève RuntimeError."""
     exe = exe or find_claude()
     if not exe:
         raise RuntimeError("Claude Code introuvable")
-    cmd = [exe, "-p", question, "--model", MODEL, "--output-format", "json", "--system-prompt", SYSTEM,
+    cmd = [exe, "-p", question, "--model", MODEL, "--output-format", "json", "--system-prompt", system,
            "--tools", "", "--no-session-persistence", "--safe-mode"]
     # --safe-mode : ni hooks (pas de son de notification), ni CLAUDE.md, ni plugins : rapide et léger
     out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=CLAUDE_TIMEOUT_S,

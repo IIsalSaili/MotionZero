@@ -23,8 +23,9 @@ class Speaker:
         self._hush = threading.Event()
         threading.Thread(target=self._run, name="lecture", daemon=True).start()
 
-    def say(self, text):
-        if not self.enabled or not self.ok or not text:
+    def say(self, text, force=False):
+        """force : lu même après « iris silence » (qui ne coupe que les messages Discord)."""
+        if (not self.enabled and not force) or not self.ok or not text:
             return False
         if len(text) > MAX_CHARS:
             text = text[:MAX_CHARS].rsplit(" ", 1)[0] + ", la suite à l'écran"

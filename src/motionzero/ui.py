@@ -5,6 +5,7 @@ Les signaux Qt émis depuis ce fil arrivent dans le fil de l'interface par la fi
 """
 import ctypes
 import os as _os
+import math
 import random as _random
 import time as _time
 
@@ -555,6 +556,35 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
 
 
+REMINDER_W = 560
+ALARM_RED = (190, 30, 40)
+
+
+def reminder_view(st):
+    """Ce que l'île montre pour les rappels : ("current", dict) | ("list", lignes) | None. Pur : testable.
+    Le rappel déclenché passe avant tout (il reste jusqu'à « iris merci »), puis la liste demandée."""
+    rem = st.get("reminders") or {}
+    if rem.get("current"):
+        return "current", rem["current"]
+    if rem.get("list"):
+        return "list", rem["list"]
+    return None
+
+
+def reminder_texts(kind, data):
+    """(titre, texte, ligne du bas) de la carte des rappels. Pur : testable."""
+    if kind == "list":
+        return ("RAPPELS À VENIR", "\n".join(data), "« Iris rappel » pour en ajouter ou en supprimer")
+    title = ("ALARME" if data.get("alarm") else "RAPPEL") + (" MANQUÉ" if data.get("missed") else "")
+    title += f" · {data.get('when', '')}"
+    meta = "« Iris merci » : noté · « Iris plus tard » : +10 min"
+    if data.get("ringing"):
+        meta = "« stop » : silence · " + meta
+    if data.get("more"):
+        title += f" · +{data['more']} en attente"
+    return title, data.get("text", ""), meta
+
+
 def islet_logo(st, blinking):
     """Nom du logo à afficher. Pur : testable. Vert pendant la validation (sans clignement)."""
     if st.get("ok_flash"):
@@ -623,12 +653,15 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name in ("mic-off", "headphone-off"):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
-                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", DISCORD_RED).encode()))
+                self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
             except OSError:
                 pass
+        self.rem = None          # ("current", dict) | ("list", lignes) | None
+        self.next_rem = None     # « 18:30 » : pastille du prochain rappel
+        self.font_rem = QFont("Atkinson Hyperlegible", 22, QFont.Weight.Bold)
         self.discord = []
         self.blink_until = 0.0
         self.next_blink = 0.0
@@ -641,7 +674,13 @@ class _IslandPainter:
         mode, msg, active = island_text(st)
         qa = st.get("qa") or {}
         self.qa = qa if qa.get("phase") in ("answer", "error") else None
-        content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None)
+        self.rem = reminder_view(st)
+        self.next_rem = (st.get("reminders") or {}).get("next")
+        if self.rem:
+            active = True
+        rem_key = (self.rem[0], str(self.rem[1])) if self.rem else None
+        content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
+                   rem_key, self.next_rem)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -656,7 +695,8 @@ class _IslandPainter:
             self.discord, self.last_change = discord, now
         idle = now - self.last_change
         target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
-        changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo
+        ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
+        changed = abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo or ringing
         self.opacity, self.logo = target, logo
         return changed
 
@@ -664,6 +704,9 @@ class _IslandPainter:
         if not self.content:
             return
         mode, msg = self.content[0], self.content[1]
+        if self.rem:
+            self._paint_reminder(p, *self.rem)
+            return
         if getattr(self, "qa", None):
             self._paint_answer(p, mode, msg)
             return
@@ -743,9 +786,79 @@ class _IslandPainter:
         p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
         p.restore()
 
+    def _paint_reminder(self, p, kind, data):
+        """Carte du rappel déclenché (rouge qui pulse si l'alarme sonne) ou liste des rappels."""
+        import time as _t
+        pad, top = 22, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        gx = (self.width - (ISLET + ISLET_GAP + REMINDER_W)) / 2
+        x = gx + ISLET + ISLET_GAP
+        inner = REMINDER_W - 2 * pad
+        flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+        title, body, meta = reminder_texts(kind, data)
+        font_body = self.font_rem if kind == "current" else self.font_answer
+        alarm = kind == "current" and data.get("alarm")
+        ringing = kind == "current" and data.get("ringing")
+        fm_b, fm_s = QFontMetrics(font_body), QFontMetrics(self.font_small)
+        b_rect = fm_b.boundingRect(QRect(0, 0, inner, 1000), flags, body)
+        h = min(ANSWER_MAX_H, 46 + b_rect.height() + 44)
+        if ringing:      # pulsation : 1 s, entre rouge sombre et rouge vif
+            k = 0.5 + 0.5 * math.sin(_t.monotonic() * 2 * math.pi)
+            bg = QColor(int(ALARM_RED[0] * (0.6 + 0.4 * k)), ALARM_RED[1], ALARM_RED[2], 245)
+        elif alarm:
+            bg = QColor(120, 20, 28, 240)
+        elif kind == "current":
+            bg = QColor(28, 38, 70, 245)       # bleu nuit : se distingue du noir habituel
+        else:
+            bg = QColor(0, 0, 0, 240)
+        p.save()
+        self._paint_islet(p, gx, ISLAND_TOP)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(bg)
+        p.drawRoundedRect(QRectF(x, top, REMINDER_W, h), 22, 22)
+        bell = self.icons.get("bell")
+        if bell is not None:
+            bell.render(p, QRectF(x + pad, top + 11, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_mode)
+        p.drawText(QRectF(x + pad + ICON + 10, top, inner, 46), Qt.AlignmentFlag.AlignVCenter, title)
+        p.setFont(font_body)
+        p.save()
+        p.setClipRect(QRectF(x + pad, top + 46, inner, max(0, h - 46 - 36)))
+        p.drawText(QRectF(x + pad, top + 46, inner, b_rect.height()), flags, body)
+        p.restore()
+        p.setPen(QColor(255, 255, 255, 170))
+        p.setFont(self.font_small)
+        p.drawText(QRectF(x + pad, top + h - 30, inner, 22), Qt.AlignmentFlag.AlignVCenter,
+                   fm_s.elidedText(meta, Qt.TextElideMode.ElideRight, inner))
+        p.restore()
+
+    def _paint_next(self, p, right_x, y):
+        """Pastille « cloche + heure » du prochain rappel, à gauche de la pastille Discord / de l'îlot."""
+        if not self.next_rem:
+            return
+        fm = QFontMetrics(self.font_small)
+        pad, gap = 12, 6
+        w = 2 * pad + ICON + gap + fm.horizontalAdvance(self.next_rem)
+        x = right_x - ISLET_GAP - w
+        top = y + (ISLET - ISLAND_H) / 2
+        p.save()
+        p.setOpacity(1.0)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, top, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        bell = self.icons.get("bell")
+        if bell is not None:
+            bell.render(p, QRectF(x + pad, top + (ISLAND_H - ICON) / 2, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_small)
+        p.drawText(QRectF(x + pad + ICON + gap, top, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, self.next_rem)
+        p.restore()
+
     def _paint_discord(self, p, islet_x, y):
-        """Pastille noire à gauche de l'îlot, icônes rouges ; ne s'estompe jamais, comme le logo."""
+        """Pastille noire à gauche de l'îlot, icônes rouges ; ne s'estompe jamais, comme le logo.
+        La pastille du prochain rappel se place encore à sa gauche."""
         if not self.discord:
+            self._paint_next(p, islet_x, y)
             return
         pad, gap = 12, 6
         w = 2 * pad + len(self.discord) * ICON + (len(self.discord) - 1) * gap
@@ -763,6 +876,7 @@ class _IslandPainter:
                 r.render(p, QRectF(ix, top + (ISLAND_H - ICON) / 2, ICON, ICON))
             ix += ICON + gap
         p.restore()
+        self._paint_next(p, x, y)
 
     def _paint_islet(self, p, x, y):
         """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
