@@ -358,6 +358,20 @@ def _poses(core, monkeypatch, seq):
     monkeypatch.setattr(mc, "flexion", lambda w: None)
     monkeypatch.setattr(mc, "classify", lambda f, c: (next(it), None))
     core.pose_cents = {"x": 1}
+    core.cfg.hand_click_enabled = True   # clic par la main : désactivé par défaut, testé quand même
+
+
+def test_clic_par_la_main_desactive_par_defaut(monkeypatch):
+    """Réglage par défaut : rouvrir la main ne clique plus (clic à la voix, pédale plus tard)."""
+    core, clk = Core(Config()), Clock()
+    _enter_mouse(core, clk)
+    _poses(core, monkeypatch, ["closed"] * 10 + ["open"] * 60 + ["closed"] * 10)
+    core.cfg.hand_click_enabled = False
+    acts = []
+    for _ in range(80):
+        clk.t += 0.05
+        acts += core.step(hand_pts(), clk.t, world="x")
+    assert not [a for a in acts if a[0] in ("press", "release", "click")]
 
 
 def test_ouvrir_la_main_clique(monkeypatch):
