@@ -76,11 +76,11 @@ def test_apres_la_dictee_aucune_commande_n_est_bloquee():
 
 
 def test_iris_envoie_et_iris_annule_a_tout_moment():
-    """Sans « iris claude » avant (message tapé ou dicté plus tôt) : envoie / annule marchent."""
+    """Sans « iris claude » avant : « iris envoie » = touche Entrée dans la fenêtre active, pas VS Code."""
     from motionzero.config import Config
     from motionzero.core import Core
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("envoie", 1.5) == [("vscode_keys", [["enter"]])]
+    assert core.voice("envoie", 1.5) == [("hotkey", ["enter"])]
     core.voice("iris", 2.0)
     assert core.voice("annule", 2.5) == [("annule",)]

@@ -111,16 +111,20 @@ def main(argv=None):
     from .typer import Typer
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     launcher = None
+    app_messages = queue.Queue()
+
+    def app_message(msg):
+        # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
+        # (Modifier core.last_gesture ici changeait l'historique pendant son affichage : plantage.)
+        app_messages.put(msg)
     if listener is not None:                   # « iris ouvre » + nom de l'appli (Whisper)
         from .apps import Launcher
-
-        app_messages = queue.Queue()
-
-        def app_message(msg):
-            # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
-            # (Modifier core.last_gesture ici changeait l'historique pendant son affichage : plantage.)
-            app_messages.put(msg)
         launcher = Launcher(asker, app_message)
+    # bot Discord (processus à part, issue #19) : lecture des messages, « iris message », « iris salon »
+    from .discord_link import BotLink
+    from .speech import Speaker
+    bot = BotLink(launch=not args.simulation and not args.duration).start()
+    speaker = Speaker() if bot.enabled else None
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -169,6 +173,7 @@ def main(argv=None):
             log.info("STOP (%s)", source)
         stop.set()
         ctl.release_all()
+        bot.bye()                              # arrêt voulu : le bot ne relance pas Iris
         qt.quit()
 
     glass.closed.connect(lambda: emergency("verre ferme"))
@@ -244,8 +249,10 @@ def main(argv=None):
                         acts = acts + core.ask_tick(t, listener.last_speech_t)
                         acts = acts + core.type_tick(t, listener.last_speech_t)
                         acts = acts + core.open_tick(t, listener.last_speech_t)
-                        while launcher is not None and not app_messages.empty():
-                            core.last_gesture = (app_messages.get_nowait(), t)
+                    while not app_messages.empty():
+                        core.last_gesture = (app_messages.get_nowait(), t)
+                    bot_events(bot, core, speaker, discord_voice, t)
+                    if listener is not None:
                         if t - listener.iris_heard_t < 0.5:
                             core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                         for ev in listener.poll():
@@ -263,7 +270,8 @@ def main(argv=None):
                     if listener is not None:
                         acts = question_actions(acts, listener, asker)
                         acts = type_actions(acts, listener, typer, sounds)
-                        acts = open_actions(acts, listener, launcher)
+                        acts = open_actions(acts, listener, launcher, asker, bot, app_message)
+                    acts = discord_actions(acts, speaker)
                     acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                     ctl.execute(acts, t)
                     for a in acts:
@@ -348,6 +356,7 @@ def main(argv=None):
     vscode.SINK_HWND = int(sink.winId())
     qt.exec()
     stop.set()
+    bot.bye()
     worker.join(timeout=3)
     if worker.is_alive():      # moteur bloqué : tout est déjà relâché, on quitte quand même
         ctl.release_all()
@@ -377,18 +386,79 @@ def question_actions(acts, listener, asker):
     return rest
 
 
-def open_actions(acts, listener, launcher):
-    """« iris ouvre » : le nom de l'appli est enregistré, transcrit, puis rapproché de la liste."""
+def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None):
+    """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
     for a in acts:
         if a[0] == "open_start":
             listener.start_capture()
+        elif a[0] in ("message_stop", "salon_stop"):
+            audio = listener.stop_capture()
+            threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),
+                             name="discord", daemon=True).start()
         elif a[0] == "open_stop":
             launcher.open_spoken(listener.stop_capture())
         elif a[0] == "close_stop":
             launcher.close_spoken(listener.stop_capture())
         elif a[0] == "open_cancel":
             listener.stop_capture()
+        else:
+            rest.append(a)
+    return rest
+
+
+def discord_spoken(kind, audio, asker, bot, on_message):
+    """Fil « discord » : transcrit ce qui a été dit puis le confie au bot (jamais Core ici)."""
+    try:
+        text = asker._transcribe(audio, 16000).strip(" .")
+    except Exception:
+        logging.getLogger("motionzero").exception("transcription discord")
+        text = ""
+    if not text:
+        on_message("RIEN ENTENDU")
+        return
+    if bot is None or not bot.connected:
+        on_message("BOT DISCORD ABSENT")
+        return
+    msg = {"t": "send", "text": text} if kind == "message_stop" else {"t": "move", "channel": text}
+    if bot.send(msg) is None:
+        on_message("BOT DISCORD OCCUPE")
+
+
+def bot_events(bot, core, speaker, discord_voice, t):
+    """Ce que le bot a envoyé (fil « pont-bot ») : traité ici, dans la boucle principale."""
+    from .discord_link import result_label, speech_for
+    while True:
+        try:
+            msg = bot.inbox.get_nowait()
+        except queue.Empty:
+            return
+        kind = msg.get("t")
+        if kind == "message":
+            core.last_gesture = (f"{msg.get('author', '?')} : {msg.get('content', '')}"[:60], t)
+            if speaker is not None:
+                speaker.say(speech_for(msg))
+        elif kind == "voice_state":
+            # état réel vu par Discord : remplace la simple mémoire des raccourcis
+            discord_voice["mute"] = bool(msg.get("self_mute"))
+            discord_voice["deaf"] = bool(msg.get("self_deaf"))
+        elif kind == "result":
+            core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"), "send")), t)
+        elif kind == "link" and not msg.get("connected") and bot.was_connected:
+            core.last_gesture = ("BOT DISCORD DECONNECTE", t)
+
+
+def discord_actions(acts, speaker):
+    """« iris silence » / « iris lis » : lecture à voix haute des messages Discord."""
+    rest = []
+    for a in acts:
+        if a[0] == "discord_hush":
+            if speaker is not None:
+                speaker.enabled = False
+                speaker.hush()
+        elif a[0] == "discord_read":
+            if speaker is not None:
+                speaker.enabled = True
         else:
             rest.append(a)
     return rest

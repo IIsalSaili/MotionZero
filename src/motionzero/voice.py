@@ -54,6 +54,10 @@ WORDS = {
     "mute": "mute",       # « iris mute » : coupe Discord
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
+    "message": "message", # « iris message » puis « dans général, … » (Whisper) : envoyé par le bot Discord
+    "salon": "salon",     # « iris salon » puis le nom d'un salon vocal : le bot t'y déplace
+    "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
+    "lis": "lis",         # « iris lis » : la remet
     "stop": "stop",
 }
 WAKE_WORD = "iris"
