@@ -34,6 +34,9 @@ MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC"
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
+from .calendar_view import WORDS as CAL_WORDS
+
+CAL_IDLE_S = 60.0          # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
@@ -113,6 +116,7 @@ class Core:
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
+        self.calendar_until = -1e9            # « iris calendrier » : ouvert jusqu'à cet instant
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
@@ -418,6 +422,25 @@ class Core:
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
             return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
+        if t < self.calendar_until:
+            # calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / stop le ferment
+            if word in CAL_WORDS:
+                self.calendar_until = t + CAL_IDLE_S
+                self.last_word = (word, t, True)
+                self.listen_until = -1e9
+                return [("cal", word)]
+            if word in ("ferme", "merci"):
+                self.calendar_until = -1e9
+                self.last_word = (word, t, True)
+                self.listen_until = -1e9
+                self.last_gesture = ("CALENDRIER FERME", t)
+                return [("cal_close",)]
+            if word == "stop":
+                self.calendar_until = -1e9
+                acts.append(("cal_close",))
+        elif word in CAL_WORDS:
+            self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
+            return acts
         if word == "stop":  # toujours écouté, prioritaire
             acts.append(("release_all",))
             acts.append(("alarm_stop",))      # une alarme qui sonne se tait aussi
@@ -530,6 +553,9 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
+        elif word == "calendrier":
+            self.calendar_until = t + CAL_IDLE_S
+            acts.append(("cal_open",))
         elif word in ("heure", "date"):
             self.clock_until = t + c.clock_s
         elif word == "merci":

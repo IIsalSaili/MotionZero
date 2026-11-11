@@ -63,6 +63,7 @@ WORDS = {
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
     "merci": "merci",     # « iris merci » : le rappel affiché disparaît
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
+    "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",
     "stop": "stop",
@@ -79,6 +80,14 @@ def grammar():
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
 
+def _calendar_words():
+    """Jours, nombres, suivant / précédent : ne servent que calendrier ouvert (voir core.voice)."""
+    from .calendar_view import WORDS as CAL
+    for w in CAL:
+        WORDS.setdefault(w, w)
+
+
+_calendar_words()
 GRAMMAR = grammar()
 
 
