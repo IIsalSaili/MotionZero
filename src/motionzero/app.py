@@ -31,7 +31,6 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 WIN = "motionzero"
 DETECT_MAX_FPS = 20          # plafond de détection (moins de charge)
 STALE_S = 0.5                # sans image depuis 0,5 s : caméra considérée perdue
-STOP_DWELL_S = 0.6           # main tenue sur STOP : arrêt (avant le menu de clic, qui s'ouvre à 0,8 s)
 
 
 def main(argv=None):
@@ -92,8 +91,6 @@ def main(argv=None):
     bridge.state.connect(glass.set_state)
     bridge.state.connect(cursor_glass.set_state)
     stop_btn = StopButton()                    # arrêt d'urgence, en bas à droite
-    stop_rect = stop_btn.physical_rect()
-    bridge.stop_hover.connect(stop_btn.set_hover)
     eye_btn = EyeButton(stop_btn)              # œil : montrer / masquer l'overlay dans les partages
 
     def show_in_captures(visible):
@@ -135,7 +132,6 @@ def main(argv=None):
         last_detect, last_frame_t = 0.0, t0
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
-        stop_since = None           # début du survol du bouton STOP par la main
         last_level_log = 0.0
         try:
             while not stop.is_set():
@@ -179,22 +175,8 @@ def main(argv=None):
                         log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
                         if ev.word == "iris" and accepted:
                             sounds.play("ECOUTE")
-                # main tenue sur le bouton STOP : arrêt direct, aucun clic simulé sur notre propre fenêtre
-                x, y = core.cursor
-                on_stop = (core.mode == Mode.MOUSE and pts is not None
-                           and stop_rect[0] <= x < stop_rect[2] and stop_rect[1] <= y < stop_rect[3])
-                if on_stop:
-                    stop_since = t if stop_since is None else stop_since
-                    hover = (t - stop_since) / STOP_DWELL_S
-                    bridge.stop_hover.emit(min(hover, 1.0))
-                    if hover >= 1.0:
-                        log.info("STOP (main sur le bouton)")
-                        ctl.release_all()
-                        break
-                    acts = [a for a in acts if a[0] not in ("click", "key", "hotkey")]
-                elif stop_since is not None:
-                    stop_since = None
-                    bridge.stop_hover.emit(0.0)
+                # le bouton STOP ne s'active QUE par un vrai clic (souris, ou clic de motionzero en mode souris) :
+                # le survol par la main l'arrêtait sans le vouloir (demande de l'utilisateur, 11/11)
                 if listener is not None and core.dictating and t - last_level_log >= 1.0:
                     last_level_log = t
                     log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
