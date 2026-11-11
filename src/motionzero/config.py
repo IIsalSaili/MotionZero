@@ -97,6 +97,9 @@ class Config:
     start_mode: str = "NEUTRE"         # au démarrage : neutre (la main ne fait rien). « iris lecture » / « iris souris »
     mouse_bubble: bool = False         # bulle « SOURIS ? » sur main immobile ; remplacée par « iris souris »
     click_menu_on_still: bool = False  # main immobile -> menu de clic. Désactivé : réfléchir ne doit rien ouvrir
+    arm_center: tuple = (0.5, 0.5)     # souris : le curseur ne bouge qu'une fois la paume amenée ici (image)
+    arm_radius: float = 0.08           # tolérance autour de ce centre (largeur d'image)
+    arm_hold_s: float = 0.15           # temps passé dans la zone avant d'armer (évite un passage)
     recenter_absent_s: float = 0.5     # souris : main absente au moins 0,5 s puis revenue -> curseur au centre
     index_click_recovery_s: float = 0.8 # deux clics par l'index : au moins 0,8 s d'écart
     hand_click_enabled: bool = False   # clic en rouvrant la main : désactivé (fatigant, peu fiable) ; clic à la voix, pédale plus tard

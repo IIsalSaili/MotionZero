@@ -298,6 +298,7 @@ def main(argv=None):
                             "cursor": core.cursor,
                             "progress": prog[1] if prog else 0.0,
                             "lost": pts is None,
+                            "arming": core.mode == Mode.MOUSE and not core.armed,
                             "mode": core.mode,
                             "dictating": core.dictating,
                             "typing": core.typing or core.opening,
