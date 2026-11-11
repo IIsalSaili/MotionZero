@@ -84,10 +84,12 @@ class Camera:
         if not cap.isOpened():
             cap.release()
             return None
-        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))  # AVANT la taille
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, self.width)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self.height)
         cap.set(cv2.CAP_PROP_FPS, self.fps)
+        # format compressé APRÈS la taille et la cadence : mesuré sur la webcam UGREEN, demandé avant il
+        # n'est pas appliqué (YUY2 brut, 4 images/s en 1080p) ; demandé en dernier : MJPG à 29 images/s
+        cap.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter_fourcc(*"MJPG"))
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         fourcc = int(cap.get(cv2.CAP_PROP_FOURCC))
         self.info = {"fourcc": "".join(chr((fourcc >> 8 * i) & 0xFF) for i in range(4)),
