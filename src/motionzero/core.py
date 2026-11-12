@@ -487,6 +487,13 @@ class Core:
                 self.last_gesture = (VOICE_LABELS[word], t)
                 return [("hotkey", VOICE_HOTKEYS[word])]
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
+        if self.mode == Mode.CHROME and word in ("skip", "back", "espace", "space"):
+            # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            self.freeze_until = -1e9
+            self.last_gesture = (VOICE_LABELS[word], t)
+            return [("hotkey", VOICE_HOTKEYS[word])]
         if self.mode == Mode.CHROME and word in ("clic", "double"):
             # mode Chrome : clic et double clic aussi sans « iris » (demande de l'utilisateur, 12/11)
             self.last_word = (word, t, True)
@@ -632,6 +639,8 @@ class Core:
             self.menu.close()
             self.bubble = None
             acts.append(("open_start",))
+            if word == "volume":
+                acts.append(("volume_show",))   # barre de volume à droite, avec le niveau actuel
         elif word == "silence":
             acts.append(("discord_hush",))
         elif word == "lis":

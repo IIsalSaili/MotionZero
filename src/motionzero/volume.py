@@ -7,7 +7,30 @@ import re
 
 from .timers import _norm, _number
 
+import time
+
 log = logging.getLogger(__name__)
+SHOW_S = 4.0                  # la barre reste affichée 4 s après le dernier réglage
+
+
+class VolumeView:
+    """Ce que la barre de volume affiche. Écrit par les fils « volume », lu par la boucle (jamais Core)."""
+
+    def __init__(self):
+        self.level, self.muted, self.until = None, False, -1e9
+
+    def show(self, level, muted, now=None):
+        self.level, self.muted = level, muted
+        self.until = (now if now is not None else time.perf_counter()) + SHOW_S
+
+    def state(self, t, listening=False):
+        """{"level", "muted"} à afficher, ou None. Pendant l'écoute de « iris volume », toujours visible."""
+        if self.level is None or not (listening or t < self.until):
+            return None
+        return {"level": self.level, "muted": self.muted}
+
+
+VIEW = VolumeView()
 STEP = 10                     # « plus fort » / « moins fort » : ±10 points
 
 _UP = ("plus fort", "monte", "augmente", "plus")
@@ -64,6 +87,16 @@ class WindowsVolume:
         from pycaw.pycaw import AudioUtilities
         return AudioUtilities.GetSpeakers().EndpointVolume
 
+    def read(self):
+        """(volume 0..100, coupé ?) des haut-parleurs par défaut."""
+        import comtypes
+        comtypes.CoInitialize()
+        try:
+            ev = self._endpoint()
+            return round(ev.GetMasterVolumeLevelScalar() * 100), bool(ev.GetMute())
+        finally:
+            comtypes.CoUninitialize()
+
     def apply(self, cmd):
         """Applique la commande ; renvoie le texte à afficher."""
         import comtypes
@@ -72,19 +105,34 @@ class WindowsVolume:
             ev = self._endpoint()
             if cmd[0] == "mute":
                 ev.SetMute(1, None)
+                VIEW.show(round(ev.GetMasterVolumeLevelScalar() * 100), True)
                 return "SON COUPE"
             if cmd[0] == "unmute":
                 ev.SetMute(0, None)
-                return f"SON REMIS ({round(ev.GetMasterVolumeLevelScalar() * 100)} %)"
+                level = round(ev.GetMasterVolumeLevelScalar() * 100)
+                VIEW.show(level, False)
+                return f"SON REMIS ({level} %)"
             now = round(ev.GetMasterVolumeLevelScalar() * 100)
             target = cmd[1] if cmd[0] == "set" else now + cmd[1]
             target = max(0, min(100, target))
             ev.SetMasterVolumeLevelScalar(target / 100, None)
             if target > 0:
                 ev.SetMute(0, None)          # régler un volume rallume le son s'il était coupé
+            VIEW.show(target, target == 0 and bool(ev.GetMute()))
             return f"VOLUME {target} %"
         finally:
             comtypes.CoUninitialize()
+
+
+def volume_peek(device=None, view=None):
+    """Fil « volume » : lit le volume actuel pour l'afficher dès « iris volume »."""
+    view = view or VIEW
+    try:
+        level, muted = (device or WindowsVolume()).read()
+    except Exception:
+        log.exception("lecture du volume")
+        return
+    view.show(level, muted)
 
 
 def volume_spoken(audio, transcribe, on_message, device=None):

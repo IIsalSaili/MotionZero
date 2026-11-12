@@ -28,6 +28,7 @@ from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
 from .vscode import chrome_in_front
+from .volume import VIEW as VOLUME_VIEW
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -349,6 +350,7 @@ def main(argv=None):
                             "arming": core.mode == Mode.MOUSE and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
+                            "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
                             "mode": core.mode,
                             "dictating": core.dictating,
                             "typing": core.typing or core.opening,
@@ -441,6 +443,9 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
             audio = listener.stop_capture()
             if desk is not None:
                 desk.submit_timer(audio)
+        elif a[0] == "volume_show":
+            from .volume import volume_peek
+            threading.Thread(target=volume_peek, name="volume", daemon=True).start()
         elif a[0] == "volume_stop":
             from .volume import volume_spoken
             audio = listener.stop_capture()

@@ -67,7 +67,7 @@ def test_carte_son_en_panne():
 def test_iris_volume_ecoute_puis_s_arrete_au_silence():
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("volume", 1.5) == [("open_start",)] and core.opening
+    assert core.voice("volume", 1.5)[0] == ("open_start",) and core.opening
     acts = core.open_tick(4.0, last_speech_t=2.5)
     assert acts == [("volume_stop",)] and not core.opening
 
@@ -83,3 +83,46 @@ def test_iris_volume_sans_parole_annule():
 def test_volume_sans_iris_ne_fait_rien():
     core = Core(Config())
     assert core.voice("volume", 1.0) == [] and not core.opening
+
+
+def test_barre_visible_pendant_l_ecoute_puis_4_s():
+    from motionzero.volume import VolumeView
+    v = VolumeView()
+    assert v.state(0.0, listening=True) is None          # volume pas encore lu : rien
+    v.show(74, False, now=10.0)
+    assert v.state(11.0) == {"level": 74, "muted": False}
+    assert v.state(15.0) is None                          # 4 s après le réglage : disparue
+    assert v.state(15.0, listening=True) == {"level": 74, "muted": False}
+
+
+def test_lecture_du_volume_a_l_ouverture():
+    from motionzero.volume import VolumeView, volume_peek
+
+    class Dev:
+        def read(self):
+            return 42, True
+    v = VolumeView()
+    volume_peek(Dev(), v)
+    assert v.state(v.until - 1) == {"level": 42, "muted": True}
+
+
+def test_lecture_en_panne_ne_plante_pas():
+    from motionzero.volume import VolumeView, volume_peek
+
+    class Dev:
+        def read(self):
+            raise OSError("pas de carte son")
+    v = VolumeView()
+    volume_peek(Dev(), v)
+    assert v.level is None
+
+
+def test_iris_volume_demande_la_barre():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert ("volume_show",) in core.voice("volume", 1.5)
+
+
+def test_jauge():
+    from motionzero.ui import volume_fill
+    assert volume_fill(0, 200) == 0 and volume_fill(50, 200) == 100 and volume_fill(120, 200) == 200
