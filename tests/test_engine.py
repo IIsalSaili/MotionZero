@@ -95,7 +95,7 @@ def _enter_mouse_bubble(core, clk):
     clk.run(core, 1.7, cx=0.5, cy=0.6, jitter=0.004)       # immobile (avec tremblement) -> bulle
     assert core.bubble is not None
     acts = clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)  # petit mouvement vers le haut
-    assert core.mode == Mode.MOUSE
+    assert core.mouse
     return acts
 
 
@@ -104,14 +104,14 @@ def _enter_mouse(core, clk):
     clk.run(core, 0.5, cx=0.5, cy=0.6)
     core.voice("iris", clk.t)
     acts = core.voice("souris", clk.t + 0.2)
-    assert core.mode == Mode.MOUSE
+    assert core.mouse
     return acts + clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)
 
 
 def test_immobile_puis_haut_entre_en_souris():
     core, clk = Core(BUBBLE), Clock()
     acts = _enter_mouse_bubble(core, clk)
-    assert ("mode", Mode.MOUSE) in acts
+    assert ("mouse", True) in acts
 
 
 def test_bulle_ignoree_ne_revient_pas_sans_bouger():
@@ -177,8 +177,9 @@ def test_menu_droite_clic_droit_et_haut_double_clic():
 def test_menu_bas_retour_lecture():
     core, clk = Core(MENU), Clock()
     _open_menu(core, clk)
+    mode = core.mode
     clk.run(core, 0.2, cx=0.6, cy=0.52, to_cy=0.60)
-    assert core.mode == Mode.NEUTRAL
+    assert not core.mouse and core.mode == mode      # menu bas : souris éteinte, le mode reste
 
 
 def test_menu_ignore_aucun_clic():
@@ -202,7 +203,7 @@ def test_main_absente_relache_mais_reste_en_souris():
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
     acts = clk.run(core, 5.0, absent=True)
-    assert core.mode == Mode.MOUSE and ("release_all",) in acts
+    assert core.mouse and ("release_all",) in acts
 
 
 def test_iris_souris_main_baissee_reste_en_souris():
@@ -213,7 +214,7 @@ def test_iris_souris_main_baissee_reste_en_souris():
     core.voice("iris", clk.t)
     core.voice("souris", clk.t + 0.2)
     clk.run(core, 1.0, absent=True)
-    assert core.mode == Mode.MOUSE
+    assert core.mouse
 
 
 # --- deux mains ---------------------------------------------------------------------

@@ -274,6 +274,7 @@ class GlassOverlay(QWidget):
             except OSError:
                 self.hand_icon = None     # sans l'icône : un simple disque gris
         self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
+        self.vol = None           # barre de volume (« iris volume ») : {"level", "muted"} ou None
         self._last_st = {}
         self._anim = QTimer(self)                 # tourne seulement pendant une animation (logo, alarme)
         self._anim.setInterval(16)
@@ -304,6 +305,10 @@ class GlassOverlay(QWidget):
         old_ghost = self.ghost
         self.ghost = ghost_geometry(st, self.dpr) if self.island is None else None
         if self.island is not None:
+            vol = st.get("volume")
+            if vol != self.vol:
+                self.vol = vol
+                self.update(volume_rect(self.width(), self.height()).toAlignedRect().adjusted(-4, -4, 4, 4))
             self._last_st = st
             now = _time.perf_counter()
             if self.island.update(st, now):
@@ -403,6 +408,8 @@ class GlassOverlay(QWidget):
             self._paint_loupe(p)
         if self.island is not None and event.rect().intersects(self.island.rect()):
             self.island.paint(p)
+        if self.vol is not None:
+            paint_volume(p, volume_rect(self.width(), self.height()), self.vol["level"], self.vol["muted"])
         if self.ghost is not None:
             self._paint_ghost(p)
         if self.cursor is None:
@@ -721,6 +728,40 @@ def reminder_texts(kind, data):
 
 
 GHOST_S = 56     # taille de la main fantôme (px logiques)
+VOL_W, VOL_H, VOL_MARGIN = 64, 300, 24      # barre de volume, à droite, centrée en hauteur
+
+
+def volume_rect(w, h):
+    return QRectF(w - VOL_MARGIN - VOL_W, (h - VOL_H) / 2, VOL_W, VOL_H)
+
+
+def volume_fill(level, track_h):
+    """Hauteur remplie de la jauge pour un volume 0..100. Pur : testable."""
+    return track_h * max(0, min(100, level)) / 100
+
+
+def paint_volume(p, box, level, muted):
+    """Même style que l'île : noir opaque, blanc, police Atkinson. Gris seulement pour le vide et l'état muet."""
+    p.save()
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(0, 0, 0))
+    p.drawRoundedRect(box, box.width() / 2, box.width() / 2)
+    track = QRectF(box.center().x() - 5, box.top() + 30, 10, box.height() - 100)
+    p.setBrush(QColor(255, 255, 255, 45))
+    p.drawRoundedRect(track, 5, 5)
+    fill = volume_fill(level, track.height())
+    if fill > 0:
+        p.setBrush(QColor(255, 255, 255, 110) if muted else QColor(255, 255, 255))
+        p.drawRoundedRect(QRectF(track.left(), track.bottom() - fill, track.width(), fill), 5, 5)
+    p.setPen(QColor(255, 255, 255))
+    p.setFont(QFont("Atkinson Hyperlegible", 20, QFont.Weight.Bold))
+    num = QRectF(box.left(), track.bottom() + 10, box.width(), 32)
+    p.drawText(num, Qt.AlignmentFlag.AlignCenter, f"{level}")
+    p.setPen(QColor(255, 255, 255, 150))
+    p.setFont(QFont("Atkinson Hyperlegible", 10))
+    p.drawText(QRectF(box.left(), num.bottom() - 2, box.width(), 20), Qt.AlignmentFlag.AlignCenter,
+               "muet" if muted else "%")
+    p.restore()
 
 
 def ghost_geometry(st, dpr):
@@ -755,10 +796,11 @@ RING_BLINK_S = 0.125     # commande comprise : 2 éclats verts pendant les 0,5 s
 
 def islet_ring(st, age):
     """Couleur et épaisseur du cercle autour de la main. Pur : testable.
-    Orange en souris, bleu en Chrome ; une commande comprise le fait clignoter en vert."""
+    Orange quand la souris est allumée (quel que soit le mode), bleu en Chrome ; une commande comprise le fait
+    clignoter en vert."""
     if st.get("ok_flash") and int(age / RING_BLINK_S) % 2 == 0:
         return GREEN, 3.5
-    col = RING_BY_MODE.get(st.get("mode"))
+    col = ORANGE if st.get("mouse") else RING_BY_MODE.get(st.get("mode"))
     return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
 
 
@@ -771,6 +813,8 @@ def load_fonts():
 def island_text(st):
     """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
     mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    if st.get("mouse"):
+        mode = "SOURIS" if mode in ("NEUTRE", "") else f"{mode} · SOURIS"   # la souris s'ajoute au mode
     qa = st.get("qa") or {}
     if qa.get("phase") == "listening":
         return mode, "Pose ta question…", True
@@ -788,7 +832,7 @@ def island_text(st):
         return mode, "Dis ENVOIE ou ANNULE", True
     if st.get("listening"):
         return mode, "Iris écoute…", True
-    if st.get("lost") and st.get("mode") == "SOURIS":
+    if st.get("lost") and st.get("mouse"):
         return mode, "Main non détectée", True
     if st.get("arming"):
         return mode, "Main au centre pour démarrer", True

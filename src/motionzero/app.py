@@ -28,6 +28,7 @@ from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
 from .vscode import chrome_in_front
+from .volume import VIEW as VOLUME_VIEW
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -318,6 +319,9 @@ def main(argv=None):
                         if a[0] == "mode":
                             sounds.play(a[1])
                             log.info("mode %s", a[1])
+                        elif a[0] == "mouse":
+                            sounds.play("SOURIS" if a[1] else "REPOS")
+                            log.info("souris %s", "allumee" if a[1] else "eteinte")
                         elif a[0] == "scroll":
                             log.info("scroll %s", a[1])
                         elif a[0] == "hotkey":
@@ -342,13 +346,15 @@ def main(argv=None):
                         if rej and (not toast or rej[1] > toast[1]):
                             toast = rej
                         bridge.state.emit({
-                            "show_cursor": core.mode == Mode.MOUSE,
+                            "show_cursor": core.mouse,
+                            "mouse": core.mouse,
                             "cursor": core.cursor,
                             "progress": prog[1] if prog else 0.0,
                             "lost": pts is None,
-                            "arming": core.mode == Mode.MOUSE and not core.armed,
+                            "arming": core.mouse and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
+                            "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
                             "mode": core.mode,
                             "dictating": core.dictating,
                             "typing": core.typing or core.opening,
@@ -441,6 +447,14 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
             audio = listener.stop_capture()
             if desk is not None:
                 desk.submit_timer(audio)
+        elif a[0] == "volume_show":
+            from .volume import volume_peek
+            threading.Thread(target=volume_peek, name="volume", daemon=True).start()
+        elif a[0] == "volume_stop":
+            from .volume import volume_spoken
+            audio = listener.stop_capture()
+            threading.Thread(target=volume_spoken, args=(audio, lambda au: asker._transcribe(au, 16000), on_message),
+                             name="volume", daemon=True).start()
         elif a[0] == "rappel_stop":
             audio = listener.stop_capture()
             if desk is not None:

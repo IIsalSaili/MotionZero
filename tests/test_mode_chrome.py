@@ -32,9 +32,9 @@ def test_mots_chrome_sans_iris():
 
 def test_autres_commandes_gardent_iris_en_mode_chrome():
     core = _chrome()
-    assert core.voice("clic", 2.5) == []
+    assert core.voice("copie", 2.5) == []
     core.voice("iris", 3.0)
-    assert core.voice("clic", 3.5) == [("click", "left")]
+    assert core.voice("copie", 3.5) == [("hotkey", ["ctrl", "c"])]
 
 
 def test_hors_mode_chrome_les_mots_ne_font_rien():
@@ -154,3 +154,28 @@ def test_changement_de_liste_dans_le_fil_voix():
     v.audio.put(b"\x00\x00" * 480)
     v._step()
     assert v.rec.grammars == [GRAMMARS["chrome"]]
+
+
+def test_clic_et_double_sans_iris_en_mode_chrome():
+    core = _chrome()
+    assert core.voice("clic", 2.5) == [("click", "left")]
+    assert core.voice("double", 3.0) == [("click", "left"), ("click", "left")]
+
+
+def test_clic_garde_iris_hors_chrome():
+    core = Core(Config())
+    assert core.voice("clic", 1.0) == []
+
+
+def test_video_sans_iris_en_mode_chrome():
+    core = _chrome()
+    assert core.voice("skip", 2.5) == [("hotkey", ["right"])]
+    assert core.voice("back", 3.0) == [("hotkey", ["left"])]
+    assert core.voice("espace", 3.5) == [("hotkey", ["space"])]
+    assert core.voice("space", 4.0) == [("hotkey", ["space"])]
+
+
+def test_video_garde_iris_hors_chrome():
+    core = Core(Config())
+    for w in ("skip", "back", "espace", "space"):
+        assert core.voice(w, 1.0) == [], w
