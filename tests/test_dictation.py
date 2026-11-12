@@ -128,3 +128,21 @@ def test_skip_seul_sans_iris_avant():
     from motionzero.config import Config
     from motionzero.core import Core
     assert Core(Config()).voice("skip", 1.0) == []
+
+
+def test_envoye_synonyme_de_envoie():
+    """« envoyé » fait partout la même chose qu'« envoie »."""
+    from motionzero.config import Config
+    from motionzero.core import Core
+    from motionzero.voice import GRAMMAR
+    assert "envoyé" in GRAMMAR
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("envoyé", 1.5) == [("hotkey", ["enter"])]          # touche Entrée
+    core.dictating = True
+    core.dictation_tick(10.0, last_speech_t=4.0)                         # après « iris claude »
+    core.dictating = False
+    core.ask_confirm("claude", 20.0, 30.0)
+    assert core.voice("envoyé", 21.0) == [("vscode_keys", [["enter"]])]   # message de Claude, sans « iris »
+    core.ask_confirm("rappel", 30.0, 20.0)
+    assert core.voice("envoyé", 31.0) == [("rappel_ok",)]                # validation d'un rappel
