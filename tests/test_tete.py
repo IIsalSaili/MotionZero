@@ -191,3 +191,47 @@ def test_choix_garde_au_redemarrage(tmp_path):
 def test_texte_du_bouton():
     from motionzero.ui import pointer_button_text
     assert "tête" in pointer_button_text("main") and "main" in pointer_button_text("tete")
+
+
+# --- « défile » à la tête --------------------------------------------------------
+def _tete_defile(pitches, core=None, t=1.0):
+    core = core or _tete_souris()
+    acts = []
+    for p in pitches:
+        lms, m = turned(pitch=p)
+        acts += core.step_head(lms, t, m)
+        t += 1 / 30
+    return core, acts, t
+
+
+def test_defile_tete_petit_mouvement_suffit():
+    core, _, t = _tete_defile([0.0] * 10)                  # souris armée tête de face
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, acts, t = _tete_defile([0.0] * 10 + [-0.04] * 30, core, t)   # tête baissée d'environ 2°
+    scrolls = [a for a in acts if a[0] == "scroll"]
+    assert len(scrolls) >= 3 and all(s[1] < 0 for s in scrolls)
+    assert not [a for a in acts if a[0] == "move"]          # le curseur ne bouge pas pendant le défilement
+    core, acts, t = _tete_defile([0.04] * 30, core, t)       # tête levée : ça remonte
+    ups = [a[1] for a in acts if a[0] == "scroll"]
+    assert ups and ups[-1] > 0 and sum(u > 0 for u in ups) >= 3   # un cran de transition (filtre) toléré
+
+
+def test_defile_tete_tremblement_ne_defile_pas():
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, acts, t = _tete_defile([0.01 * (-1) ** i for i in range(60)], core, t)
+    assert not [a for a in acts if a[0] == "scroll"]
+
+
+def test_defile_tete_stop_rend_la_souris():
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, _, t = _tete_defile([0.0] * 10, core, t)
+    assert core.scrolling(t) and core.scroll_gauge(t)[2] < Config().voice_scroll_arm   # bande plus étroite
+    core.voice("stop", t)
+    assert not core.scrolling(t) and core.mouse
+    core, acts, t = _tete_defile([0.0] * 10 + [0.03 * i for i in range(20)], core, t)
+    assert [a for a in acts if a[0] == "move"]               # se réarme au centre puis suit la tête

@@ -782,8 +782,8 @@ class Core:
         if t >= self.voice_scroll_until:
             return None
         y = self.palm[1] if self.palm is not None else None
-        c = self.cfg
-        return (y, self.voice_scroll_armed, c.voice_scroll_arm, c.voice_scroll_dead)
+        arm, dead, _ = self._scroll_params()
+        return (y, self.voice_scroll_armed, arm, dead)
 
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
@@ -951,14 +951,25 @@ class Core:
         self.arm_since = None
         self.last_gesture = ("DEFILEMENT FINI", t)
 
+    def scrolling(self, t):
+        return t < self.voice_scroll_until
+
+    def _scroll_params(self):
+        """(demi-bande d'armement, demi-zone neutre, gain) : plus serrés à la tête, qui bouge peu."""
+        c = self.cfg
+        if self.pointer == "tete":
+            return c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_gain_head
+        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_gain
+
     def _voice_scroll(self, palm, t, acts):
         """« défile » : comme la souris, rien ne bouge tant que la main n'est pas passée au centre de l'image
         (une bande horizontale : seule la hauteur compte). Ensuite, plus la main est au-dessus / en dessous
         du centre, plus ça défile vite. Fin : « stop », main sortie de l'image, ou voice_scroll_s au neutre."""
         c = self.cfg
+        arm, dead, gain = self._scroll_params()
         dy = palm[1] - 0.5
         if not self.voice_scroll_armed:
-            if abs(dy) > c.voice_scroll_arm:
+            if abs(dy) > arm:
                 self.voice_scroll_since = None
                 return
             if self.voice_scroll_since is None:
@@ -968,11 +979,11 @@ class Core:
                 self.voice_scroll_until = t + c.voice_scroll_s
                 self.last_gesture = ("DEFILE : monte / descends la main", t)
             return
-        if abs(dy) <= c.voice_scroll_dead:
+        if abs(dy) <= dead:
             self._scroll_acc = 0.0
             return
         self.voice_scroll_until = t + c.voice_scroll_s   # hors du neutre : ça reste actif
-        rate = min((abs(dy) - c.voice_scroll_dead) * 60.0, c.voice_scroll_max_rate)  # crans / s
+        rate = min((abs(dy) - dead) * gain, c.voice_scroll_max_rate)  # crans / s
         dt = (t - self.prev_t) if self.prev_t is not None else 0.0
         self._scroll_acc += rate * min(dt, 0.2)
         notches = int(self._scroll_acc)

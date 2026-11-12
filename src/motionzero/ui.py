@@ -382,17 +382,15 @@ class GlassOverlay(QWidget):
                 p.drawRoundedRect(band, 6, 6)
         if g["hand"] is None:
             return
-        box = g["hand"]
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 90))
-        p.drawEllipse(box.adjusted(-8, -8, 8, 8))
-        p.setOpacity(0.85)
-        if self.hand_icon is not None:
-            self.hand_icon.render(p, box)
-        else:
-            p.setBrush(QColor(200, 200, 200))
-            p.drawEllipse(box)
-        p.setOpacity(1.0)
+        c, r = g["hand"].center(), RING_R                     # le curseur lui-même, déplacé dans la jauge
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        p.setPen(QPen(QColor(0, 0, 0, 150), HALO_W))
+        p.drawEllipse(c, r, r)
+        p.setPen(QPen(QColor(255, 255, 255, 90), RING_W))
+        p.drawEllipse(c, r, r)
+        p.setPen(QPen(QColor(0, 0, 0), 2))
+        p.setBrush(QColor(255, 255, 255))
+        p.drawEllipse(c, 5, 5)
 
     def _paint_ghost(self, p):
         hand, ctr, r = self.ghost
