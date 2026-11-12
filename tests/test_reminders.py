@@ -141,6 +141,9 @@ class FakeSounds:
     def play(self, name):
         self.played.append(name)
 
+    def stop_alarm(self):
+        self.played.append("STOP_ALARME")
+
 
 class FakeBot:
     connected = True
@@ -227,6 +230,7 @@ def test_echeance_son_voix_discord(tmp_path):
     d.actions([("alarm_stop",)], core, 12.5)
     d.events(core, 15.0)
     assert d.sounds.played.count("ALARME") == 2 and d.state(15.0)["current"]   # tait, mais reste affiché
+    assert "STOP_ALARME" in d.sounds.played                                  # la boucle audio est arrêtée
     d.actions([("rappel_merci",)], core, 16.0)
     assert d.state(16.0)["current"] is None
 
