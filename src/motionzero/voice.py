@@ -53,6 +53,9 @@ WORDS = {
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
+    "muet": "muet",       # « iris muet » : pareil, en français
+    "sourdine": "sourdine",  # « iris sourdine » : comme « défun » (casque + micro)
+    "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
     "message": "message", # « iris message » puis « dans général, … » (Whisper) : envoyé par le bot Discord
@@ -69,6 +72,8 @@ WORDS = {
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",
+    "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
+    "pars": "pars",       # « iris pars » : il quitte le vocal
     "volume": "volume",   # « iris volume » puis « 40 », « plus fort », « coupe »… (Whisper)
     "stop": "stop",
 }

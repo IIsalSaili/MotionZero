@@ -297,3 +297,40 @@ def test_etat_micro_reel_et_hors_vocal():
     link.inbox.put({"t": "voice_state", "channel": None, "self_mute": None, "self_deaf": None})
     app.bot_events(link, core, None, dv, 2.0)
     assert dv == {"mute": True, "deaf": True}                       # sorti du vocal : rien d'inventé
+
+
+def test_iris_viens_et_pars():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    from motionzero.discord_link import result_label
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("viens", 1.2) == [("bot_join",)]
+    core.voice("iris", 2.0)
+    assert core.voice("pars", 2.2) == [("bot_leave",)]
+    assert core.voice("viens", 3.0) == []                 # sans « iris » : rien
+    assert result_label({"ok": True, "channel": "Général"}, "join") == "IRIS EN VOCAL : GÉNÉRAL"
+    assert result_label({"ok": True}, "leave") == "IRIS A QUITTE LE VOCAL"
+    assert result_label({"ok": False, "error": "pas_en_vocal"}, "join") == "TU N'ES PAS EN VOCAL"
+    assert result_label({"ok": False, "error": "vocal_impossible"}, "join") == "VOCAL IMPOSSIBLE"
+
+
+def test_francais_et_anglais_font_pareil():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    for fr, en in (("muet", "mute"), ("sourdine", "défun")):
+        a, b = Core(Config()), Core(Config())
+        a.voice("iris", 1.0)
+        b.voice("iris", 1.0)
+        assert a.voice(fr, 1.2) == b.voice(en, 1.2) != [], fr
+
+
+def test_iris_activation():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    from motionzero.discord_link import result_label
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("activation", 1.2) == [("bot_activate",)]
+    assert core.voice("activation", 2.0) == []            # sans « iris » : rien
+    assert "PRET" in result_label({"ok": True}, "activate")

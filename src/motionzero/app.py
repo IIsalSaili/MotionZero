@@ -463,6 +463,10 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
         elif a[0] == "volume_show":
             from .volume import volume_peek
             threading.Thread(target=volume_peek, name="volume", daemon=True).start()
+        elif a[0] in ("bot_join", "bot_leave", "bot_activate"):
+            order = {"bot_join": "join", "bot_leave": "leave", "bot_activate": "activate"}[a[0]]
+            if bot is None or bot.send({"t": order}) is None:
+                on_message("BOT DISCORD ABSENT")
         elif a[0] == "volume_stop":
             from .volume import volume_spoken
             audio = listener.stop_capture()
@@ -524,6 +528,8 @@ def bot_events(bot, core, speaker, discord_voice, t):
             if msg.get("channel") is not None and msg.get("self_mute") is not None:
                 discord_voice["mute"] = bool(msg["self_mute"])
                 discord_voice["deaf"] = bool(msg.get("self_deaf"))
+        elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave", "activate"):
+            core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"))), t)
         elif kind == "result" and bot.kinds.get(msg.get("req")) == "notify":
             bot.kinds.pop(msg.get("req"), None)          # rappel envoyé en privé : rien à afficher
             if not msg.get("ok"):
