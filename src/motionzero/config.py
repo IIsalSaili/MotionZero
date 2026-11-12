@@ -123,8 +123,9 @@ class Config:
 
     # voix : « iris » (ou bulle / menu affichés) ouvre l'écoute
     listen_s: float = 3.5                # écoute après « iris » dit seul ; une seule commande, puis fermée
-    voice_scroll_s: float = 8.0          # « défile » : la hauteur de la main règle le défilement
-    voice_scroll_dead: float = 0.04      # zone neutre autour de la hauteur de départ
+    voice_scroll_s: float = 8.0          # « défile » : temps pour amener la main au centre, puis au neutre avant arrêt
+    voice_scroll_arm: float = 0.06       # bande horizontale du centre (toute la largeur) qui arme le défilement
+    voice_scroll_dead: float = 0.08      # zone neutre autour du centre de l'image (plus large que la bande)
     voice_scroll_max_rate: float = 15.0  # crans par seconde au maximum
 
     # « iris, claude » : micro du panneau Claude dans VS Code, coupé quand tu as fini de parler

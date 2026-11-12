@@ -123,24 +123,85 @@ def test_glisse_lache_et_securite():
 
 
 # --- mot + geste : « défile » ------------------------------------------------------
-def test_defile_main_qui_descend_defile_vers_le_bas():
-    core, clk = Core(Config()), Clock()
-    clk.run(core, 0.3, cx=0.5, cy=0.6)
+def _defile(core, clk):
     core.voice("iris", clk.t)
     core.voice("défile", clk.t)
-    acts = clk.run(core, 0.3, cx=0.5, cy=0.6, to_cy=0.75) + clk.run(core, 1.0, cx=0.5, cy=0.75)
-    scrolls = [a for a in acts if a[0] == "scroll"]
+
+
+def _scrolls(acts):
+    return [a for a in acts if a[0] == "scroll"]
+
+
+def test_defile_main_qui_descend_defile_vers_le_bas():
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.3, cx=0.5, cy=0.61)
+    _defile(core, clk)
+    acts = clk.run(core, 0.3, cx=0.5, cy=0.61) + clk.run(core, 0.3, cx=0.5, cy=0.61, to_cy=0.86)         + clk.run(core, 1.0, cx=0.5, cy=0.86)
+    scrolls = _scrolls(acts)
     assert len(scrolls) >= 3 and all(s[1] < 0 for s in scrolls)
     assert not [a for a in acts if a[0] == "key"]  # pas de page pendant le défilement vocal
 
 
-def test_defile_main_immobile_ne_defile_pas():
+def test_defile_main_qui_monte_defile_vers_le_haut():
     core, clk = Core(Config()), Clock()
-    clk.run(core, 0.3, cx=0.5, cy=0.6)
+    _defile(core, clk)
+    acts = clk.run(core, 0.3, cx=0.5, cy=0.61) + clk.run(core, 1.0, cx=0.5, cy=0.36)
+    scrolls = _scrolls(acts)
+    assert len(scrolls) >= 3 and all(s[1] > 0 for s in scrolls)
+
+
+def test_defile_main_levee_depuis_la_jambe_ne_defile_pas_avant_le_centre():
+    """Main sur la jambe (bas de l'image) : la lever jusqu'au centre ne fait pas monter la page."""
+    core, clk = Core(Config()), Clock()
+    clk.run(core, 0.3, cx=0.5, cy=0.95)
+    _defile(core, clk)
+    acts = clk.run(core, 0.5, cx=0.5, cy=0.95, to_cy=0.61)
+    assert _scrolls(acts) == []
+
+
+def test_defile_position_horizontale_sans_importance():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    acts = clk.run(core, 0.3, cx=0.1, cy=0.61) + clk.run(core, 1.0, cx=0.9, cy=0.86)
+    assert len(_scrolls(acts)) >= 3 and all(s[1] < 0 for s in _scrolls(acts))
+
+
+def test_defile_main_immobile_au_centre_ne_defile_pas():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    acts = clk.run(core, 1.5, cx=0.3, cy=0.64)
+    assert _scrolls(acts) == []
+
+
+def test_defile_jamais_arme_expire():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    clk.run(core, 9.0, cx=0.5, cy=0.9)                # main jamais amenée au centre
+    acts = clk.run(core, 1.0, cx=0.5, cy=0.61) + clk.run(core, 1.0, cx=0.5, cy=0.8)
+    assert _scrolls(acts) == []
+
+
+def test_defile_main_sortie_de_l_image_arrete():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    clk.run(core, 0.3, cx=0.5, cy=0.61)
+    for _ in range(30):                               # main absente 1 s
+        clk.t += 1 / 30
+        core.step(None, clk.t)
+    acts = clk.run(core, 1.0, cx=0.5, cy=0.8)
+    assert _scrolls(acts) == []
+
+
+def test_defile_stop_arrete_le_defilement_sans_eteindre_la_souris():
+    core, clk = Core(Config()), Clock()
     core.voice("iris", clk.t)
-    core.voice("défile", clk.t)
-    acts = clk.run(core, 1.0, cx=0.5, cy=0.6)
-    assert not [a for a in acts if a[0] == "scroll"]
+    core.voice("souris", clk.t)
+    _defile(core, clk)
+    clk.run(core, 0.3, cx=0.5, cy=0.61)
+    core.voice("stop", clk.t)
+    acts = clk.run(core, 1.0, cx=0.5, cy=0.8)
+    assert _scrolls(acts) == [] and core.mouse
+
 
 
 def test_iris_et_commande_d_une_traite():
