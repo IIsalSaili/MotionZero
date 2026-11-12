@@ -60,35 +60,6 @@ class ConsoPanel(QWidget):
         for a, b in zip(pts, pts[1:]):
             p.drawLine(a, b)
 
-    def _paint_gauge(self, p):
-        g = self.gauge
-        track = g["track"]
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 110))
-        p.drawRoundedRect(track, track.width() / 2, track.width() / 2)
-        band = g["band"]
-        if g["armed"]:                                        # zone neutre : la page ne bouge pas
-            p.setBrush(QColor(52, 199, 89, 150))
-            p.drawRoundedRect(band, 6, 6)
-        else:                                                 # centre à atteindre, comme la souris
-            p.setBrush(Qt.BrushStyle.NoBrush)
-            for col, w in ((QColor(0, 0, 0, 110), 4), (QColor(220, 220, 220, 170), 2)):
-                p.setPen(QPen(col, w, Qt.PenStyle.DashLine))
-                p.drawRoundedRect(band, 6, 6)
-        if g["hand"] is None:
-            return
-        box = g["hand"]
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 90))
-        p.drawEllipse(box.adjusted(-8, -8, 8, 8))
-        p.setOpacity(0.85)
-        if self.hand_icon is not None:
-            self.hand_icon.render(p, box)
-        else:
-            p.setBrush(QColor(200, 200, 200))
-            p.drawEllipse(box)
-        p.setOpacity(1.0)
-
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -393,6 +364,35 @@ class GlassOverlay(QWidget):
             self.update(self._box(old))
         if self.cursor is not None:
             self.update(self._box(self.cursor))
+
+    def _paint_gauge(self, p):
+        g = self.gauge
+        track = g["track"]
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 110))
+        p.drawRoundedRect(track, track.width() / 2, track.width() / 2)
+        band = g["band"]
+        if g["armed"]:                                        # zone neutre : la page ne bouge pas
+            p.setBrush(QColor(52, 199, 89, 150))
+            p.drawRoundedRect(band, 6, 6)
+        else:                                                 # centre à atteindre, comme la souris
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for col, w in ((QColor(0, 0, 0, 110), 4), (QColor(220, 220, 220, 170), 2)):
+                p.setPen(QPen(col, w, Qt.PenStyle.DashLine))
+                p.drawRoundedRect(band, 6, 6)
+        if g["hand"] is None:
+            return
+        box = g["hand"]
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 90))
+        p.drawEllipse(box.adjusted(-8, -8, 8, 8))
+        p.setOpacity(0.85)
+        if self.hand_icon is not None:
+            self.hand_icon.render(p, box)
+        else:
+            p.setBrush(QColor(200, 200, 200))
+            p.drawEllipse(box)
+        p.setOpacity(1.0)
 
     def _paint_ghost(self, p):
         hand, ctr, r = self.ghost
