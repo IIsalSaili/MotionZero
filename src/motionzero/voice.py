@@ -80,9 +80,11 @@ LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
          ("des", "fun"): "défun", ("dis", "fun"): "défun",
-         ("plus", "tard"): "plus tard"}
+         ("plus", "tard"): "plus tard",
+         ("double", "clic"): "double"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
+SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement à « démute », absent du modèle)
 def grammar(extra=()):
-    phrases = [w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT]
+    phrases = [w for w in WORDS if w not in SPLIT.values() or w in SOLO_TOO] + [f"{a} {b}" for a, b in SPLIT]
     phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 

@@ -132,7 +132,7 @@ def main(argv=None):
     from .ask import ask_claude
     from .reminders import PARSE_SYSTEM, Desk, Reminders
     desk = Desk(Reminders(os.path.join(ROOT, "reminders.json")).load(datetime.datetime.now()),
-                speaker, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),
+                None, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),   # rappels sans voix (12/11)
                 transcribe=lambda audio: asker._transcribe(audio, 16000))
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
