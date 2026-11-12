@@ -29,7 +29,6 @@ from .output import Controller, FakeBackend, SendInputBackend, primary_screen, s
 from .sounds import Sounds, is_failure
 from .vscode import chrome_in_front
 from .volume import VIEW as VOLUME_VIEW
-from .vocal_chat import STATE as VOCAL_STATE
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -291,7 +290,7 @@ def main(argv=None):
                     if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
                         chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
                         acts = acts + core.chrome_front(chrome_in_front(), t)
-                    bot_events(bot, core, speaker, discord_voice, t, app_message)
+                    bot_events(bot, core, speaker, discord_voice, t)
                     desk.events(core, t)
                     if listener is not None:
                         listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
@@ -464,12 +463,6 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
         elif a[0] == "volume_show":
             from .volume import volume_peek
             threading.Thread(target=volume_peek, name="volume", daemon=True).start()
-        elif a[0] == "parle_stop":
-            from .vocal_chat import CHAT, chat_spoken
-            audio = listener.stop_capture()
-            threading.Thread(target=chat_spoken, name="vocal",
-                             args=(audio, lambda au: asker._transcribe(au, 16000), CHAT, bot, on_message),
-                             daemon=True).start()
         elif a[0] in ("bot_join", "bot_leave"):
             if bot is None or bot.send({"t": "join" if a[0] == "bot_join" else "leave"}) is None:
                 on_message("BOT DISCORD ABSENT")
@@ -515,7 +508,7 @@ def discord_spoken(kind, audio, asker, bot, on_message):
         on_message("BOT DISCORD OCCUPE")
 
 
-def bot_events(bot, core, speaker, discord_voice, t, on_message=None):
+def bot_events(bot, core, speaker, discord_voice, t):
     """Ce que le bot a envoyé (fil « pont-bot ») : traité ici, dans la boucle principale."""
     from .discord_link import result_label, speech_for
     while True:
@@ -526,12 +519,7 @@ def bot_events(bot, core, speaker, discord_voice, t, on_message=None):
         kind = msg.get("t")
         if kind == "message":
             core.last_gesture = (f"{msg.get('author', '?')} : {msg.get('content', '')}"[:60], t)
-            if VOCAL_STATE["in_voice"] and msg.get("mention") and on_message is not None:
-                # bot en vocal : « @Iris … » écrit par un ami -> Haiku répond à voix haute dans le salon
-                from .vocal_chat import CHAT, chat_turn
-                threading.Thread(target=chat_turn, name="vocal", daemon=True,
-                                 args=(CHAT, bot, on_message, msg.get("author", "quelqu'un"), msg.get("content", ""))).start()
-            elif speaker is not None:
+            if speaker is not None:
                 speaker.say(speech_for(msg))
         elif kind == "voice_state":
             # état réel vu par Discord (#6) : remplace la simple mémoire des raccourcis.
@@ -539,27 +527,16 @@ def bot_events(bot, core, speaker, discord_voice, t, on_message=None):
             if msg.get("channel") is not None and msg.get("self_mute") is not None:
                 discord_voice["mute"] = bool(msg["self_mute"])
                 discord_voice["deaf"] = bool(msg.get("self_deaf"))
-        elif kind == "result" and bot.kinds.get(msg.get("req")) == "say":
-            bot.kinds.pop(msg.get("req"), None)          # phrase dite : rien à afficher, sauf échec
-            if not msg.get("ok"):
-                if msg.get("error") == "pas_en_vocal":
-                    VOCAL_STATE["in_voice"] = False
-                core.last_gesture = (result_label(msg, "say"), t)
         elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave"):
-            k = bot.kinds.pop(msg.get("req"))
-            if msg.get("ok"):
-                VOCAL_STATE["in_voice"] = k == "join"
-            core.last_gesture = (result_label(msg, k), t)
+            core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"))), t)
         elif kind == "result" and bot.kinds.get(msg.get("req")) == "notify":
             bot.kinds.pop(msg.get("req"), None)          # rappel envoyé en privé : rien à afficher
             if not msg.get("ok"):
                 logging.getLogger("motionzero").warning("rappel non envoye sur Discord : %s", msg.get("error"))
         elif kind == "result":
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"), "send")), t)
-        elif kind == "link" and not msg.get("connected"):
-            VOCAL_STATE["in_voice"] = False             # bot parti : plus de vocal
-            if bot.was_connected:
-                core.last_gesture = ("BOT DISCORD DECONNECTE", t)
+        elif kind == "link" and not msg.get("connected") and bot.was_connected:
+            core.last_gesture = ("BOT DISCORD DECONNECTE", t)
 
 
 def discord_actions(acts, speaker):

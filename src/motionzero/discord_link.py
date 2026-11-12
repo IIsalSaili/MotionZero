@@ -205,7 +205,7 @@ def _line(msg):
 ERRORS = {"salon_inconnu": "SALON INCONNU", "pas_en_vocal": "TU N'ES PAS EN VOCAL",
           "permission_manquante": "PERMISSION MANQUANTE", "message_vide": "MESSAGE VIDE",
           "commande_inconnue": "BOT A METTRE A JOUR", "pas_compris": "PAS COMPRIS",
-          "vocal_impossible": "VOCAL IMPOSSIBLE", "texte_vide": "RIEN A DIRE"}
+          "vocal_impossible": "VOCAL IMPOSSIBLE"}
 
 
 def result_label(msg, kind="send"):
