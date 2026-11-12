@@ -8,13 +8,12 @@ from motionzero.sounds import RATE, Mixer, Sounds, is_failure, ramp_gain
 ROOT = os.path.join(os.path.dirname(__file__), "..", "assets", "sounds")
 
 
-def test_deux_sons_se_superposent():
+def test_son_fini_retire():
     m = Mixer()
     m.add(np.full(100, 0.2, np.float32))
-    m.add(np.full(50, 0.3, np.float32))
-    out = m.fill(100)
-    assert abs(out[0] - 0.5) < 1e-6 and abs(out[80] - 0.2) < 1e-6
-    assert m.fill(10).max() == 0 and m.voices == []        # sons finis : retirés
+    out = m.fill(150)
+    assert abs(out[0] - 0.2) < 1e-6 and out[120] == 0
+    assert m.fill(10).max() == 0 and m.voices == []
 
 
 def test_alarme_part_tout_bas_puis_monte():
@@ -87,3 +86,30 @@ def test_echecs_reconnus():
         assert is_failure(label), label
     for label in ("ONGLET SUIVANT", "VOLUME 40 %", '"clic" ignore : dis IRIS avant', None, ""):
         assert not is_failure(label), label
+
+
+def test_un_seul_son_a_la_fois():
+    """« iris stop » dit d'un trait : le son d'« iris » et celui du mode ne s'additionnent plus."""
+    m = Mixer()
+    m.add(np.full(RATE, 0.6, np.float32))
+    m.add(np.full(RATE, 0.6, np.float32))
+    out = m.fill(4000)
+    assert abs(out[2000] - 0.6) < 1e-6              # après 20 ms : un seul son (pas 1,2)
+    assert len(m.voices) == 1
+
+
+def test_l_alarme_continue_quand_un_son_arrive():
+    m = Mixer()
+    m.start_alarm(np.ones(RATE, np.float32))
+    m.add(np.full(100, 0.1, np.float32))
+    m.fill(RATE)
+    assert m.ringing
+
+
+def test_volume_general():
+    m = Mixer()
+    m.volume = 0.5
+    m.add(np.full(10, 0.8, np.float32))
+    assert abs(m.fill(10)[0] - 0.4) < 1e-6
+    from motionzero.config import Config
+    assert Config().sound_volume == 0.5

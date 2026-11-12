@@ -19,6 +19,8 @@ ALIASES = {"LECTURE": "MODE", "CHROME": "MODE", "NEUTRE": "MODE", "REPOS": "MODE
 RAMP_S = 60.0                 # alarme : de presque rien au volume normal en 60 s
 RAMP_FROM_DB, RAMP_TO_DB = -40.0, -4.0
 STOP_FADE_S = 0.03            # « stop » : fondu très court, pas de clic
+CUT_FADE_S = 0.02             # un nouveau son coupe le précédent (« iris stop » dit d'un trait : 2 sons au même
+                              # instant qui s'additionnaient, mesuré le 12/11)
 
 
 def ramp_gain(t):
@@ -41,15 +43,20 @@ class Mixer:
 
     def __init__(self):
         self.lock = threading.Lock()
-        self.voices = []          # [tableau, position]
+        self.voices = []          # [tableau, position, fondu restant ou None]
+        self.volume = 1.0         # volume général (sons et alarme)
         self.alarm = None         # tableau de l'alarme en cours, ou None
         self.alarm_pos = 0
         self.alarm_t = 0          # échantillons joués depuis le début de l'alarme
         self.alarm_fade = None    # échantillons restants du fondu d'arrêt
 
     def add(self, data):
+        """Un seul son d'interface à la fois : ceux en cours s'effacent en 20 ms (l'alarme n'est pas touchée)."""
         with self.lock:
-            self.voices.append([data, 0])
+            for v in self.voices:
+                if v[2] is None:
+                    v[2] = int(CUT_FADE_S * RATE)
+            self.voices.append([data, 0, None])
 
     def start_alarm(self, data):
         with self.lock:
@@ -71,11 +78,16 @@ class Mixer:
         with self.lock:
             keep = []
             for v in self.voices:
-                data, pos = v
+                data, pos, fade = v
                 chunk = data[pos:pos + n]
+                if fade is not None:
+                    total = int(CUT_FADE_S * RATE)
+                    ramp = np.clip((fade - np.arange(len(chunk))) / total, 0, 1).astype(np.float32)
+                    chunk = chunk * ramp
+                    v[2] = fade - n
                 out[:len(chunk)] += chunk
                 v[1] = pos + n
-                if v[1] < len(data):
+                if v[1] < len(data) and (v[2] is None or v[2] > 0):
                     keep.append(v)
             self.voices = keep
             if self.alarm is not None:
@@ -94,6 +106,7 @@ class Mixer:
                 out += block
                 self.alarm_pos = (self.alarm_pos + n) % len(data)
                 self.alarm_t += n
+            out *= self.volume
         np.clip(out, -1.0, 1.0, out=out)
         return out
 
@@ -101,10 +114,11 @@ class Mixer:
 class Sounds:
     """play(nom) ne bloque jamais et ne lève jamais d'exception."""
 
-    def __init__(self, folder, enabled=True, stream_factory=None):
+    def __init__(self, folder, enabled=True, stream_factory=None, volume=0.5):
         self.enabled = enabled
         self.data = {}
         self.mixer = Mixer()
+        self.mixer.volume = max(0.0, min(1.0, volume))
         self.stream = None
         self._factory = stream_factory
         self._failed = False

@@ -96,7 +96,7 @@ def main(argv=None):
     tracker = HandTracker()
     backend = FakeBackend() if args.simulation else SendInputBackend()
     ctl = Controller(backend, cfg)
-    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds)
+    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds, volume=cfg.sound_volume)
     # les DEUX mains sont détectées (demande de l'utilisateur) ; CPU mesuré ~7 % : marge suffisante
     landmarker = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "hand_landmarker.task")),
