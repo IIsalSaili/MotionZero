@@ -19,10 +19,19 @@ def test_message_disparait_apres_2_5_s():
     assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 3.0})[1] is None
 
 
-def test_logo_de_l_ilot():
+def test_logo_de_l_ilot_toujours_le_classique():
     from motionzero.ui import islet_logo
-    assert islet_logo({"mode": "NEUTRE"}, False) == "neutre"
-    assert islet_logo({"mode": "LECTURE"}, True) == "lecture_ferme"
-    assert islet_logo({"mode": "SOURIS"}, False) == "souris"
-    assert islet_logo({"mode": "SOURIS", "ok_flash": True}, True) == "ok"     # vert, sans clignement
-    assert islet_logo({"mode": "DESACTIVE"}, False) == "neutre"
+    for mode in ("NEUTRE", "LECTURE", "SOURIS", "CHROME", "DESACTIVE"):
+        assert islet_logo({"mode": mode}, False) == "neutre"
+        assert islet_logo({"mode": mode, "ok_flash": True}, True) == "neutre_ferme"
+
+
+def test_cercle_du_logo_selon_le_mode():
+    from motionzero.ui import BLUE, GREEN, ORANGE, RING_DEFAULT, islet_ring
+    assert islet_ring({"mode": "NEUTRE"}, 0)[0] == RING_DEFAULT
+    assert islet_ring({"mode": "SOURIS"}, 0)[0] == ORANGE
+    assert islet_ring({"mode": "CHROME"}, 0)[0] == BLUE
+    # commande comprise : vert, puis la couleur du mode, puis vert (clignote)
+    assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.0)[0] == GREEN
+    assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.2)[0] == BLUE
+    assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.3)[0] == GREEN

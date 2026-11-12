@@ -27,6 +27,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
+from .vscode import chrome_in_front
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -232,6 +233,7 @@ def main(argv=None):
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
         last_level_log = 0.0
+        chrome_check_t = 0.0
         last_hand_t = t0
         errors = deque(maxlen=20)
         try:
@@ -283,9 +285,13 @@ def main(argv=None):
                         acts = acts + core.open_tick(t, listener.last_speech_t)
                     while not app_messages.empty():
                         core.last_gesture = (app_messages.get_nowait(), t)
+                    if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
+                        chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
+                        acts = acts + core.chrome_front(chrome_in_front(), t)
                     bot_events(bot, core, speaker, discord_voice, t)
                     desk.events(core, t)
                     if listener is not None:
+                        listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
                         if t - listener.iris_heard_t < 0.5:
                             core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                         for ev in listener.poll():
@@ -545,6 +551,12 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
 
     rest = []
     for a in acts:
+        if a[0] == "chrome_keys":
+            if chrome_in_front():
+                rest.append(("hotkey", a[1]))
+            else:
+                core.last_gesture = ("CHROME PAS DEVANT : rien envoye", t)
+            continue
         if a[0] == "annule":
             code = find_window()
             if code and ctypes.windll.user32.GetForegroundWindow() == code:

@@ -71,6 +71,8 @@ WORDS = {
     "date": "date",
     "stop": "stop",
 }
+
+
 WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
@@ -78,8 +80,9 @@ LONE_MIN_CONF = 0.8
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
          ("des", "fun"): "défun", ("dis", "fun"): "défun",
          ("plus", "tard"): "plus tard"}
-def grammar():
+def grammar(extra=()):
     phrases = [w for w in WORDS if w not in SPLIT.values()] + [f"{a} {b}" for a, b in SPLIT]
+    phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
 
@@ -92,6 +95,16 @@ def _calendar_words():
 
 _calendar_words()
 GRAMMAR = grammar()
+
+
+def _grammars():
+    """Une liste de mots par mode : les mots de Chrome (« haut », « bas »…) ne sont même pas cherchés ailleurs,
+    pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
+    from .core import CHROME_KEYS
+    return {"base": GRAMMAR, "chrome": grammar(CHROME_KEYS)}
+
+
+GRAMMARS = _grammars()
 
 
 def _join_demute(words):
@@ -204,6 +217,9 @@ class VoiceListener:
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
+        # liste de mots voulue (« base » / « chrome ») : écrite par la boucle, appliquée par le fil voix
+        self.grammar = "base"
+        self._grammar = "base"
 
     def start(self):
         import sounddevice as sd
@@ -275,6 +291,12 @@ class VoiceListener:
                 self._was_muted = True
             return
         self._was_muted = False
+        want = self.grammar
+        if want != self._grammar and want in GRAMMARS:
+            self.rec.Reset()                      # Vosk refuse de changer la liste en pleine phrase
+            self.rec.SetGrammar(GRAMMARS[want])   # entre deux morceaux de son, dans ce fil uniquement
+            self._grammar = want
+            log.info("liste de mots : %s", want)
         now = time.perf_counter()
         # Reconnaissance libre (la plus chère) : seulement quand quelqu'un parle. Le reste du temps, le
         # son est gardé ~1 s et lui est redonné au réveil, pour ne pas perdre le début de la phrase.

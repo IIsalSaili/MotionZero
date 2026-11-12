@@ -71,7 +71,7 @@ def test_apres_la_dictee_aucune_commande_n_est_bloquee():
     core = _start()
     core.dictation_tick(8.0, last_speech_t=4.0)            # micro coupé : envoie / annule possibles
     core.voice("iris", 9.0)
-    assert core.voice("chrome", 9.2) == [("open_app", "chrome")]
+    assert ("open_app", "chrome") in core.voice("chrome", 9.2)
     assert core.voice("envoie", 9.5) == [("vscode_keys", [["enter"]])]   # sans « iris » : marche encore
 
 

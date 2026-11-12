@@ -13,6 +13,7 @@ RATE = 44100
 TONES = {  # nom: (fréquence Hz, durée s)
     "LECTURE": (196.0, 0.35),
     "SOURIS": (246.9, 0.35),
+    "CHROME": (277.2, 0.35),
     "REPOS": (146.8, 0.35),
     "DESACTIVE": (110.0, 0.5),
     "CLIC": (220.0, 0.12),
