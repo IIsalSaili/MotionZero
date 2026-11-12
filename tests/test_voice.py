@@ -360,3 +360,33 @@ def test_iris_accueil_ouvre_la_page_d_accueil_et_home_n_existe_plus():
     core = Core(Config())
     core.voice("iris", 1.0)
     assert core.voice("accueil", 1.5) == [("open_app", "accueil")]
+
+
+def test_defile_jauge_suit_la_main_et_s_arme_au_centre():
+    core, clk = Core(Config()), Clock()
+    assert core.scroll_gauge(clk.t) is None               # hors défilement : pas de jauge
+    clk.run(core, 0.3, cx=0.5, cy=0.95)
+    _defile(core, clk)
+    y, armed, _, _ = core.scroll_gauge(clk.t)
+    assert y > 0.7 and not armed                           # main sur la jambe : en bas, pas armée
+    clk.run(core, 0.5, cx=0.5, cy=0.61)
+    y, armed, _, _ = core.scroll_gauge(clk.t)
+    assert abs(y - 0.5) < 0.05 and armed
+    core.voice("stop", clk.t)
+    assert core.scroll_gauge(clk.t) is None
+
+
+def test_defile_jauge_sans_main():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    assert core.scroll_gauge(clk.t)[0] is None             # main pas encore vue : jauge vide, pas d'erreur
+
+
+def test_defile_pas_de_main_fantome_souris_pendant_le_defilement():
+    core, clk = Core(Config()), Clock()
+    core.voice("iris", clk.t)
+    core.voice("souris", clk.t)
+    clk.run(core, 0.2, cx=0.5, cy=0.95)
+    _defile(core, clk)
+    clk.run(core, 0.2, cx=0.5, cy=0.95)
+    assert core.ghost() is None

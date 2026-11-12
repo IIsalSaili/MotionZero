@@ -60,6 +60,35 @@ class ConsoPanel(QWidget):
         for a, b in zip(pts, pts[1:]):
             p.drawLine(a, b)
 
+    def _paint_gauge(self, p):
+        g = self.gauge
+        track = g["track"]
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 110))
+        p.drawRoundedRect(track, track.width() / 2, track.width() / 2)
+        band = g["band"]
+        if g["armed"]:                                        # zone neutre : la page ne bouge pas
+            p.setBrush(QColor(52, 199, 89, 150))
+            p.drawRoundedRect(band, 6, 6)
+        else:                                                 # centre à atteindre, comme la souris
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            for col, w in ((QColor(0, 0, 0, 110), 4), (QColor(220, 220, 220, 170), 2)):
+                p.setPen(QPen(col, w, Qt.PenStyle.DashLine))
+                p.drawRoundedRect(band, 6, 6)
+        if g["hand"] is None:
+            return
+        box = g["hand"]
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 90))
+        p.drawEllipse(box.adjusted(-8, -8, 8, 8))
+        p.setOpacity(0.85)
+        if self.hand_icon is not None:
+            self.hand_icon.render(p, box)
+        else:
+            p.setBrush(QColor(200, 200, 200))
+            p.drawEllipse(box)
+        p.setOpacity(1.0)
+
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -291,6 +320,7 @@ class GlassOverlay(QWidget):
         self.progress = 0.0
         self.lost = False
         self.ghost = None         # (main, centre, rayon) en coordonnées Qt, ou None
+        self.gauge = None         # jauge du défilement vocal (voir gauge_geometry), ou None
         self.hand_icon = None
         if role != "ui":
             from PySide6.QtCore import QByteArray
@@ -331,6 +361,12 @@ class GlassOverlay(QWidget):
         self.lost = st.get("lost", False)
         old_ghost = self.ghost
         self.ghost = ghost_geometry(st, self.dpr) if self.island is None else None
+        old_gauge = self.gauge
+        self.gauge = gauge_geometry(st, self.width(), self.height()) if self.island is None else None
+        if old_gauge != self.gauge:
+            for g in (old_gauge, self.gauge):
+                if g is not None:
+                    self.update(g["box"])
         if self.island is not None:
             vol = st.get("volume")
             if vol != self.vol:
@@ -439,6 +475,8 @@ class GlassOverlay(QWidget):
             paint_volume(p, volume_rect(self.width(), self.height()), self.vol["level"], self.vol["muted"])
         if self.ghost is not None:
             self._paint_ghost(p)
+        if self.gauge is not None:
+            self._paint_gauge(p)
         if self.cursor is None:
             return
         c, r = self.cursor, RING_R
@@ -800,6 +838,31 @@ def ghost_geometry(st, dpr):
     x, y, r = g
     ctr = QPointF(cur[0] / dpr, cur[1] / dpr) if cur is not None else QPointF(x / dpr, y / dpr)
     return (QPointF(x / dpr, y / dpr), ctr, r / dpr)
+
+
+GAUGE_W = 14            # largeur de la jauge de défilement (px Qt)
+GAUGE_MARGIN = 40       # distance au bord droit de l'écran
+
+
+def gauge_geometry(st, w, h):
+    """Jauge du défilement vocal au bord droit : piste verticale (60 % de la hauteur d'écran), bande du centre,
+    icône de main à la hauteur de la main. Pur : testable. None hors défilement."""
+    g = st.get("scroll_gauge")
+    if not g:
+        return None
+    y, armed, arm, dead = g
+    top, height = h * 0.2, h * 0.6
+    x = w - GAUGE_MARGIN - GAUGE_W
+    track = QRectF(x, top, GAUGE_W, height)
+    half = (dead if armed else arm) * height
+    band = QRectF(x - 10, top + height / 2 - half, GAUGE_W + 20, 2 * half)
+    hand = None
+    if y is not None:
+        hy = top + min(max(y, 0.0), 1.0) * height
+        hand = QRectF(x + GAUGE_W / 2 - GHOST_S / 2, hy - GHOST_S / 2, GHOST_S, GHOST_S)
+    m = GHOST_S / 2 + 12
+    box = QRectF(x + GAUGE_W / 2 - m, top - m, 2 * m, height + 2 * m).toAlignedRect()
+    return {"track": track, "band": band, "hand": hand, "armed": armed, "box": box}
 
 
 def _ghost_box(g):

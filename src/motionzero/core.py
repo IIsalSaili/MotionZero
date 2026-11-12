@@ -776,10 +776,19 @@ class Core:
         self.last_gesture = (label, t)
         return acts
 
+    def scroll_gauge(self, t):
+        """Jauge du défilement vocal : (hauteur de la main 0..1, armé ?, demi-bande d'armement, demi-zone neutre),
+        ou None hors défilement. Comme la main fantôme de la souris, montre où l'on est par rapport au centre."""
+        if t >= self.voice_scroll_until:
+            return None
+        y = self.palm[1] if self.palm is not None else None
+        c = self.cfg
+        return (y, self.voice_scroll_armed, c.voice_scroll_arm, c.voice_scroll_dead)
+
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
         Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
-        if not self.mouse or self.armed or self.palm is None:
+        if not self.mouse or self.armed or self.palm is None or self.voice_scroll_until > (self.prev_t or 0.0):
             return None
         sx, sy, sw, sh = self.screen
         ax, ay = self.cfg.arm_center

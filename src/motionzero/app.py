@@ -430,6 +430,8 @@ def main(argv=None):
                             "arming": core.mouse and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
+                            # « défile » : jauge au bord droit, la main monte / descend dedans
+                            "scroll_gauge": core.scroll_gauge(t),
                             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
                             "mode": core.mode,
                             "dictating": core.dictating,
