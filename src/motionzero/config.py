@@ -90,8 +90,8 @@ class Config:
     gain_max: float = 7.0                # mouvements rapides ; avant 3,5
     # souris à la tête (12/11) : « main » ou « tete » ; ampleur du point virtuel par rapport au visage
     pointer: str = "main"
-    head_scale: float = 1.5
-    head_scale_y: float = 3.0          # vertical x2 : lever / baisser la tête bouge moins le nez (demande, 12/11)
+    head_scale: float = 7.5            # nez dans l'image : même ressenti qu'avant (1,5 x taille du visage)
+    head_scale_y: float = 10.0         # vertical plus sensible : lever / baisser la tête bouge moins le nez
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
