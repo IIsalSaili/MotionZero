@@ -422,7 +422,7 @@ def main(argv=None):
                         if rej and (not toast or rej[1] > toast[1]):
                             toast = rej
                         bridge.state.emit({
-                            "show_cursor": core.mouse,
+                            "show_cursor": core.mouse and not core.scrolling(t),  # défile : curseur dans la jauge
                             "mouse": core.mouse,
                             "cursor": core.cursor,
                             "progress": prog[1] if prog else 0.0,
@@ -430,6 +430,8 @@ def main(argv=None):
                             "arming": core.mouse and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
+                            # « défile » : jauge au bord droit, la main monte / descend dedans
+                            "scroll_gauge": core.scroll_gauge(t),
                             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
                             "mode": core.mode,
                             "dictating": core.dictating,

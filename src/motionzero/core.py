@@ -155,7 +155,10 @@ class Core:
         # voix
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
-        self.voice_scroll_y0 = 0.5
+        self.voice_scroll_armed = False       # la main est passée dans la bande du centre
+        self.voice_scroll_y0 = 0.5            # centre du défilement ; à la tête, il suit au-delà de la butée
+        self.voice_scroll_dy = 0.0            # écart au centre, borné (affiché dans la jauge)
+        self.voice_scroll_since = None        # entrée dans cette bande
         self._scroll_acc = 0.0
         self.last_word = None       # (mot, t, accepté ?)
         # dictée Claude dans VS Code : micro allumé, puis texte dicté en attente de « envoie » / « annule »
@@ -243,12 +246,16 @@ class Core:
             point = self.head.point(lms, matrix, t)
         self.last_seen = t
         self.released = False
+        if self.scrolling(t):                 # défilement : hauteur non bornée (tête baissée à fond)
+            point = (point[0], getattr(self.head, "raw_y", point[1]))
         palm = (self.fx(point[0], t), self.fy(point[1], t))
         self.palm = palm
         self.still_for = self.still.update(palm, t)
         if self.still_for == 0.0:
             self.need_move = False
-        if self.mouse:
+        if t < self.voice_scroll_until:
+            self._voice_scroll(palm, t, acts)
+        elif self.mouse:
             self._mouse(palm, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
@@ -368,6 +375,9 @@ class Core:
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen
+        if (self.pointer != "tete" and self.voice_scroll_armed and self.scrolling(t)
+                and gone >= self.cfg.recenter_absent_s):
+            self._end_scroll(t)               # main baissée hors de l'image : fin du défilement
         if not self.released and gone >= self.cfg.release_absent_s:
             acts.append(("release_all",))
             self.released = True
@@ -540,8 +550,11 @@ class Core:
             acts.append(("alarm_stop",))      # une alarme qui sonne se tait aussi
             self.menu.close()
             self.bubble = None
+            scrolling = t < self.voice_scroll_until
             self.voice_scroll_until = self.listen_until = -1e9
-            if self.mouse:
+            if scrolling:                     # « stop » pendant le défilement : fin du défilement seulement
+                self._end_scroll(t)
+            elif self.mouse:
                 self.set_mouse(False, t, acts)  # souris allumée : « stop » l'éteint seulement, le mode reste
             elif self.mode in (Mode.READING, Mode.CHROME):
                 self.set_mode(Mode.NEUTRAL, t, acts)
@@ -618,6 +631,8 @@ class Core:
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
+        if word != "défile" and self.scrolling(t):
+            self._end_scroll(t)               # toute autre commande sort du défilement d'abord
         if word in ("clic", "double", "menu", "glisse"):
             self._aim(self.wake_t, acts)      # là où l'on visait en disant « iris »
         if word in ("clic", "double", "menu"):
@@ -633,13 +648,17 @@ class Core:
             self.dragging = True
         elif word == "lâche":
             acts.append(("release", "mouse", "left"))
+        elif word == "défile" and self.scrolling(t):  # « iris défile » une 2e fois : on en sort
+            self._end_scroll(t)
+            label = "DEFILEMENT FINI"
         elif word == "défile":
-            self.voice_scroll_until = t + c.voice_scroll_s
-            self.voice_scroll_y0 = self.palm[1] if self.palm is not None else 0.5
+            self.voice_scroll_until = math.inf    # actif jusqu'à « iris défile », « stop » ou une autre commande
+            self.voice_scroll_armed = False
+            self.voice_scroll_since = None
             self._scroll_acc = 0.0
             self.menu.close()
             self.bubble = None
-            label = "DEFILE : monte / descends la main"
+            label = "DEFILE : amene la main au centre"
         elif word in VOICE_HOTKEYS:
             acts.append(("hotkey", VOICE_HOTKEYS[word]))
             if word in REPEATABLE:
@@ -767,10 +786,27 @@ class Core:
         self.last_gesture = (label, t)
         return acts
 
+    def scroll_gauge(self, t):
+        """Jauge du défilement vocal : (hauteur de la main 0..1, armé ?, demi-bande d'armement, demi-zone neutre),
+        ou None hors défilement. Comme la main fantôme de la souris, montre où l'on est par rapport au centre."""
+        if t >= self.voice_scroll_until:
+            return None
+        arm, dead, _, span = self._scroll_params()
+        if self.palm is None:
+            return (None, self.voice_scroll_armed, arm, dead)
+        if not self.voice_scroll_armed:
+            dy = self.palm[1] - 0.5
+        else:
+            dy = self.voice_scroll_dy
+        if span < 0.5:                        # tête : la jauge entière = la course bornée (±span)
+            k = 0.4 / span
+            return (min(max(0.5 + dy * k, 0.0), 1.0), self.voice_scroll_armed, arm * k, dead * k)
+        return (0.5 + dy, self.voice_scroll_armed, arm, dead)
+
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
         Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
-        if not self.mouse or self.armed or self.palm is None:
+        if not self.mouse or self.armed or self.palm is None or self.voice_scroll_until > (self.prev_t or 0.0):
             return None
         sx, sy, sw, sh = self.screen
         ax, ay = self.cfg.arm_center
@@ -924,21 +960,59 @@ class Core:
         self.last_gesture = (VOICE_LABELS["claude"], t)
         return [("vscode_dictation",)]
 
-    def _voice_scroll(self, palm, t, acts):
-        """« défile » : plus la main est loin de sa hauteur de départ, plus ça défile vite."""
+    def _end_scroll(self, t):
+        self.voice_scroll_until = -1e9
+        self.voice_scroll_armed = False
+        self.voice_scroll_since = None
+        self._scroll_acc = 0.0
+        self.armed = False                    # souris : elle se réarme au centre, comme au départ
+        self.arm_since = None
+        self.last_gesture = ("DEFILEMENT FINI", t)
+
+    def scrolling(self, t):
+        return t < self.voice_scroll_until
+
+    def _scroll_params(self):
+        """(demi-bande d'armement, demi-zone neutre, gain) : plus serrés à la tête, qui bouge peu."""
         c = self.cfg
+        if self.pointer == "tete":
+            return (c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_gain_head,
+                    c.voice_scroll_span_head)
+        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_gain, c.voice_scroll_span
+
+    def _voice_scroll(self, palm, t, acts):
+        """« défile » : comme la souris, rien ne bouge tant que la main n'est pas passée au centre de l'image
+        (une bande horizontale : seule la hauteur compte). Ensuite, plus la main est au-dessus / en dessous
+        du centre, plus ça défile vite. Fin : « iris défile » redit, « stop », une autre commande, ou (main) main sortie de l'image."""
+        c = self.cfg
+        arm, dead, gain, span = self._scroll_params()
+        if not self.voice_scroll_armed:
+            dy = palm[1] - 0.5
+            if abs(dy) > arm:
+                self.voice_scroll_since = None
+                return
+            if self.voice_scroll_since is None:
+                self.voice_scroll_since = t
+            if t - self.voice_scroll_since >= c.arm_hold_s:
+                self.voice_scroll_armed = True
+                self.voice_scroll_y0, self.voice_scroll_dy = 0.5, dy
+                self.last_gesture = ("DEFILE : monte / descends la main", t)
+            return
         dy = palm[1] - self.voice_scroll_y0
-        if abs(dy) <= c.voice_scroll_dead:
+        if abs(dy) > span:                    # butée : le centre suit, un petit retour suffit pour le neutre
+            self.voice_scroll_y0 = palm[1] - math.copysign(span, dy)
+            dy = math.copysign(span, dy)
+        self.voice_scroll_dy = dy
+        if abs(dy) <= dead:
             self._scroll_acc = 0.0
             return
-        rate = min((abs(dy) - c.voice_scroll_dead) * 60.0, c.voice_scroll_max_rate)  # crans / s
+        rate = min((abs(dy) - dead) * gain, c.voice_scroll_max_rate)  # crans / s
         dt = (t - self.prev_t) if self.prev_t is not None else 0.0
-        self._scroll_acc += rate * dt
+        self._scroll_acc += rate * min(dt, 0.2)
         notches = int(self._scroll_acc)
         if notches:
             self._scroll_acc -= notches
             acts.append(("scroll", (notches if dy < 0 else -notches) * c.scroll_notch))
-            self.voice_scroll_until = max(self.voice_scroll_until, t + 2.0)  # tant qu'on défile, ça reste actif
 
     # --- pour l'affichage ----------------------------------------------------
     def progress(self):

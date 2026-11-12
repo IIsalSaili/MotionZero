@@ -47,3 +47,29 @@ def test_geometrie_ecran():
     assert (hand.x(), hand.y(), ctr.x(), ctr.y(), r) == (150, 100, 250, 200, 40)
     assert ghost_geometry({**st, "arming": False}, 1.0) is None
     assert ghost_geometry({**st, "ghost": None}, 1.0) is None
+
+
+def test_jauge_defilement_geometrie():
+    from motionzero.ui import gauge_geometry
+    assert gauge_geometry({}, 1920, 1080) is None
+    g = gauge_geometry({"scroll_gauge": (0.5, False, 0.06, 0.08)}, 1920, 1080)
+    assert g["track"].right() < 1920 and g["hand"].center().y() == 540   # main au centre de la piste
+    assert g["band"].contains(g["hand"].center())
+    haut = gauge_geometry({"scroll_gauge": (-0.3, True, 0.06, 0.08)}, 1920, 1080)
+    assert haut["hand"].center().y() == haut["track"].top()               # hors image : collée au bout
+    assert gauge_geometry({"scroll_gauge": (None, False, 0.06, 0.08)}, 1920, 1080)["hand"] is None
+
+
+def test_jauge_dessinee_sans_erreur():
+    """La jauge plantait au dessin (méthode posée dans une autre classe) : on la peint pour de vrai."""
+    from PySide6.QtGui import QImage, QPainter
+    from PySide6.QtWidgets import QApplication
+    from motionzero.ui import GlassOverlay, gauge_geometry
+    QApplication.instance() or QApplication([])
+    w = GlassOverlay("cursor")
+    for y, armed in ((0.5, False), (0.9, True), (None, False)):
+        w.gauge = gauge_geometry({"scroll_gauge": (y, armed, 0.06, 0.08)}, 1920, 1080)
+        img = QImage(1920, 1080, QImage.Format.Format_ARGB32)
+        p = QPainter(img)
+        w._paint_gauge(p)
+        p.end()

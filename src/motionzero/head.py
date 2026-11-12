@@ -104,6 +104,7 @@ class HeadPointer:
                 self._check_sign(axis, d[axis], rel[axis] - self.base_rel[axis])
         x = 0.5 + self.scale * self.sign[0] * d[0]
         y = 0.5 + self.scale_y * self.sign[1] * d[1]
+        self.raw_y = y                             # non bornée : le défilement sent un petit retour même à fond
         return (min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0))
 
     def _from_rel(self, rel):
@@ -111,4 +112,5 @@ class HeadPointer:
             self.base_rel = rel
         x = 0.5 + self.rel_scale * (rel[0] - self.base_rel[0])
         y = 0.5 + self.rel_scale_y * (rel[1] - self.base_rel[1])
+        self.raw_y = y
         return (min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0))
