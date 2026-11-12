@@ -26,12 +26,12 @@ class Mode:
     DISABLED = "DESACTIVE"
     NEUTRAL = "NEUTRE"    # par défaut : la main ne déclenche rien, seule la voix agit
     READING = "LECTURE"
-    MOUSE = "SOURIS"
+    MOUSE = "SOURIS"      # n'est plus un mode : un outil qui s'ajoute au mode en cours (voir Core.mouse)
     CHROME = "CHROME"     # « iris chrome » : commandes de navigation à la voix ; quitté dès que Chrome n'est plus devant
     IDLE = READING  # compatibilité : l'ancien « repos » est désormais la lecture
 
 
-MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "LECTURE"}
+MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "SOURIS ETEINTE"}
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
@@ -99,6 +99,10 @@ class Core:
         self.cfg = cfg
         self.screen = screen
         self.mode = cfg.start_mode
+        # souris : un outil, pas un mode. « iris souris » dans Chrome garde le mode Chrome (demande, 12/11)
+        self.mouse = False
+        if self.mode == Mode.MOUSE:
+            self.mode, self.mouse = Mode.NEUTRAL, True
         self.mode_since = -1e9
         self.chrome_seen = False
         self.last_seen = None
@@ -182,20 +186,34 @@ class Core:
         self.zone_progress = 0.0
         self.zone_side = None
 
-    def set_mode(self, mode, t, acts):
-        if mode == self.mode:
+    def set_mouse(self, on, t, acts):
+        """Allume / éteint la souris à la main, sans toucher au mode en cours."""
+        if on == self.mouse:
             return
-        if self.mode == Mode.MOUSE:
+        if not on:
             acts.append(("release_all",))
             self.pressing = False
             self.open_since = None
+        self.mouse = on
+        self._reset()
+        acts.append(("mouse", on))
+        if on:
+            self._center(acts)                # la souris commence toujours au centre
+        self.feed.append(("SOURIS " + ("ON" if on else "OFF"), t))
+
+    def set_mode(self, mode, t, acts):
+        if mode == Mode.MOUSE:                # ancien appel (enregistrements, tests) : allume la souris
+            self.set_mouse(True, t, acts)
+            return
+        if mode == Mode.DISABLED:
+            self.set_mouse(False, t, acts)    # pause : plus rien ne bouge
+        if mode == self.mode:
+            return
         self.mode = mode
         self.mode_since = t
         self.chrome_seen = False
         self._reset()
         acts.append(("mode", mode))
-        if mode == Mode.MOUSE:
-            self._center(acts)                # le mode souris commence toujours au centre
         self.feed.append((f"MODE {mode}", t))
 
     def _center(self, acts):
@@ -228,7 +246,7 @@ class Core:
             return acts
         if pts is None:
             return self._no_hand(t, acts)
-        if (self.mode == Mode.MOUSE and self.last_seen is not None
+        if (self.mouse and self.last_seen is not None
                 and t - self.last_seen >= self.cfg.recenter_absent_s):
             self._center(acts)                # la main revient : le curseur repart du centre
         self.last_seen = t
@@ -243,12 +261,12 @@ class Core:
             self._voice_scroll(palm, t, acts)
             self.prev_palm, self.prev_t = palm, t
             return acts
-        if self.mode == Mode.READING:
-            self._reading(palm, t, acts)
-        elif self.mode == Mode.MOUSE:
+        if self.mouse:                        # la souris passe avant les gestes du mode
             self._mouse(palm, t, acts)
             if self.cfg.hand_click_enabled:
                 self._index_click(world, t, acts)
+        elif self.mode == Mode.READING:
+            self._reading(palm, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
 
@@ -303,8 +321,8 @@ class Core:
             self.released = True
         # Mesuré le 10/11 : entré à la voix main baissée, on ressortait du mode souris 30 ms après.
         # La main absente relâche tout (ci-dessus) mais ne change plus de mode, sauf réglage explicite.
-        if self.mode == Mode.MOUSE and self.cfg.absent_mouse_s > 0 and gone >= self.cfg.absent_mouse_s:
-            self.set_mode(Mode.NEUTRAL, t, acts)
+        if self.mouse and self.cfg.absent_mouse_s > 0 and gone >= self.cfg.absent_mouse_s:
+            self.set_mouse(False, t, acts)
         # main retirée = « embrayage » : on la repose ailleurs, le curseur ne saute pas
         self.still.reset()
         self.zone.reset()
@@ -349,7 +367,7 @@ class Core:
         dist = math.hypot(palm[0] - x0, dy)
         if dy <= -c.bubble_confirm_dist and abs(palm[0] - x0) < abs(dy):
             self.last_gesture = ("SOURIS", t)
-            self.set_mode(Mode.MOUSE, t, acts)
+            self.set_mouse(True, t, acts)
         elif dist >= c.bubble_cancel_dist or t - t0 >= c.bubble_timeout_s:
             self.bubble = None
             self.need_move = True
@@ -370,7 +388,7 @@ class Core:
                 acts += [("click", "left"), ("click", "left")]
             elif choice == "down":
                 self.last_gesture = (MENU_LABELS["down"], t)
-                self.set_mode(Mode.NEUTRAL, t, acts)
+                self.set_mouse(False, t, acts)    # le mode en cours (Chrome, lecture…) reste
                 return
             if choice and choice != "cancel":
                 self.last_gesture = (MENU_LABELS[choice], t)
@@ -470,7 +488,9 @@ class Core:
             self.menu.close()
             self.bubble = None
             self.voice_scroll_until = self.listen_until = -1e9
-            if self.mode in (Mode.MOUSE, Mode.READING, Mode.CHROME):
+            if self.mouse:
+                self.set_mouse(False, t, acts)  # souris allumée : « stop » l'éteint seulement, le mode reste
+            elif self.mode in (Mode.READING, Mode.CHROME):
                 self.set_mode(Mode.NEUTRAL, t, acts)
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
@@ -582,9 +602,9 @@ class Core:
         elif word == "tab":
             acts.append(("alt_tab",))
         elif word == "souris":
-            if self.mode != Mode.MOUSE:
-                self.set_mode(Mode.MOUSE, t, acts)
-            label = "SOURIS"
+            # « iris souris » allume ou éteint la souris ; le mode en cours (Chrome…) ne change pas
+            self.set_mouse(not self.mouse, t, acts)
+            label = "SOURIS" if self.mouse else "SOURIS ETEINTE"
         elif word == "question":
             self.asking = True
             self.ask_t0 = t
@@ -646,6 +666,7 @@ class Core:
         elif word == "lis":
             acts.append(("discord_read",))
         elif word == "lecture":
+            self.set_mouse(False, t, acts)    # la main sert aux pages, plus au curseur
             if self.mode != Mode.READING:
                 self.set_mode(Mode.READING, t, acts)
             label = "LECTURE"
@@ -672,7 +693,7 @@ class Core:
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
         Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
-        if self.mode != Mode.MOUSE or self.armed or self.palm is None:
+        if not self.mouse or self.armed or self.palm is None:
             return None
         sx, sy, sw, sh = self.screen
         ax, ay = self.cfg.arm_center
@@ -725,7 +746,7 @@ class Core:
     def freeze_for_voice(self, t):
         """« iris » vient d'être repéré (texte provisoire) : en mode souris, le curseur ne bouge plus
         jusqu'à la commande (ou 3,5 s), pour que « iris clic » clique exactement là où l'on visait."""
-        if self.mode == Mode.MOUSE:
+        if self.mouse:
             self.freeze_until = max(self.freeze_until, t + self.cfg.listen_s)
 
     def ask_tick(self, t, last_speech_t):
@@ -831,14 +852,14 @@ class Core:
     def progress(self):
         """(texte, 0..1) de l'action en cours de préparation, ou None."""
         c = self.cfg
-        if self.mode == Mode.READING:
+        if self.mode == Mode.READING and not self.mouse:
             if self.zone_progress > 0:
                 return ("page suivante" if self.zone_side == "next" else "page precedente", self.zone_progress)
             if self.scroll_side is not None:
                 return ("defile " + ("haut" if self.scroll_side == "up" else "bas"), self.scroll_progress)
             if c.mouse_bubble and self.bubble is None and not self.need_move and self.still_for > 0.2:
                 return ("bulle SOURIS", min(self.still_for / c.mouse_enter_still_s, 1.0))
-        elif self.mode == Mode.MOUSE and c.click_menu_on_still and not self.menu.is_open \
+        elif self.mouse and c.click_menu_on_still and not self.menu.is_open \
                 and self.travel >= c.rearm_px \
                 and self.still_for > 0.1:
             return ("menu de clic", min(self.still_for / c.dwell_menu_s, 1.0))

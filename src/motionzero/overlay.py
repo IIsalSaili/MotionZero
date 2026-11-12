@@ -85,7 +85,7 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
             _text(cam, label, ((xl + xr) // 2 - 40, (y0 + y1) // 2 + 6), 0.55, WHITE, 2)
 
     # souris pas encore armée : zone où amener la paume
-    if core.mode == Mode.MOUSE and not core.armed:
+    if core.mouse and not core.armed:
         ac = _px(cam, cfg.arm_center)
         cv2.circle(cam, ac, int(cfg.arm_radius * w), (0, 165, 255), 3)
         _text(cam, "MAIN AU CENTRE", (ac[0] - 75, ac[1] - int(cfg.arm_radius * w) - 10), 0.6, (0, 165, 255), 2)
@@ -131,7 +131,7 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
 
     # bandeau de mode
     cv2.rectangle(cam, (0, 0), (w, 48), MODE_COLORS.get(core.mode, (60, 60, 60)), -1)
-    _text(cam, f"MODE : {core.mode}" + ("  (SIMULATION)" if simulation else ""), (12, 33), 0.85, WHITE, 2)
+    _text(cam, f"MODE : {core.mode}" + ("  + SOURIS" if core.mouse else "") + ("  (SIMULATION)" if simulation else ""), (12, 33), 0.85, WHITE, 2)
     _text(cam, ("main detectee" if core.palm is not None else "AUCUNE MAIN") + f"   {fps:.0f} img/s"
           "   fermer = STOP", (12, h - 14), 0.5, WHITE if core.palm is not None else (0, 0, 255), 1)
 
@@ -167,7 +167,7 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
 
     # panneau d'aide
     panel = np.full((h, PANEL_W, 3), 30, np.uint8)
-    lines = HELP.get(core.mode, [])
+    lines = HELP.get(Mode.MOUSE if core.mouse else core.mode, [])
     for i, line in enumerate(lines):
         if i == 0:
             cv2.rectangle(panel, (0, 0), (PANEL_W, 48), MODE_COLORS.get(core.mode, (60, 60, 60)), -1)

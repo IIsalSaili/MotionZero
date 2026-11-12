@@ -796,10 +796,11 @@ RING_BLINK_S = 0.125     # commande comprise : 2 éclats verts pendant les 0,5 s
 
 def islet_ring(st, age):
     """Couleur et épaisseur du cercle autour de la main. Pur : testable.
-    Orange en souris, bleu en Chrome ; une commande comprise le fait clignoter en vert."""
+    Orange quand la souris est allumée (quel que soit le mode), bleu en Chrome ; une commande comprise le fait
+    clignoter en vert."""
     if st.get("ok_flash") and int(age / RING_BLINK_S) % 2 == 0:
         return GREEN, 3.5
-    col = RING_BY_MODE.get(st.get("mode"))
+    col = ORANGE if st.get("mouse") else RING_BY_MODE.get(st.get("mode"))
     return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
 
 
@@ -812,6 +813,8 @@ def load_fonts():
 def island_text(st):
     """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
     mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    if st.get("mouse"):
+        mode = "SOURIS" if mode in ("NEUTRE", "") else f"{mode} · SOURIS"   # la souris s'ajoute au mode
     qa = st.get("qa") or {}
     if qa.get("phase") == "listening":
         return mode, "Pose ta question…", True
@@ -829,7 +832,7 @@ def island_text(st):
         return mode, "Dis ENVOIE ou ANNULE", True
     if st.get("listening"):
         return mode, "Iris écoute…", True
-    if st.get("lost") and st.get("mode") == "SOURIS":
+    if st.get("lost") and st.get("mouse"):
         return mode, "Main non détectée", True
     if st.get("arming"):
         return mode, "Main au centre pour démarrer", True

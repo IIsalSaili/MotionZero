@@ -24,7 +24,7 @@ def entre_en_souris(core, clk, px, py):
     clk.run(core, 0.5, **at(px, py))
     core.voice("iris", clk.t)
     core.voice("souris", clk.t + 0.2)
-    assert core.mode == Mode.MOUSE and not core.armed
+    assert core.mouse and not core.armed
 
 
 def test_main_deja_au_centre_arme_apres_le_maintien():
@@ -100,4 +100,4 @@ def test_arreter_puis_reprendre_la_souris_rearme():
     core.voice("lecture", clk.t + 0.2)
     core.voice("iris", clk.t + 0.5)
     core.voice("souris", clk.t + 0.7)
-    assert core.mode == Mode.MOUSE and not core.armed
+    assert core.mouse and not core.armed

@@ -319,6 +319,9 @@ def main(argv=None):
                         if a[0] == "mode":
                             sounds.play(a[1])
                             log.info("mode %s", a[1])
+                        elif a[0] == "mouse":
+                            sounds.play("SOURIS" if a[1] else "REPOS")
+                            log.info("souris %s", "allumee" if a[1] else "eteinte")
                         elif a[0] == "scroll":
                             log.info("scroll %s", a[1])
                         elif a[0] == "hotkey":
@@ -343,11 +346,12 @@ def main(argv=None):
                         if rej and (not toast or rej[1] > toast[1]):
                             toast = rej
                         bridge.state.emit({
-                            "show_cursor": core.mode == Mode.MOUSE,
+                            "show_cursor": core.mouse,
+                            "mouse": core.mouse,
                             "cursor": core.cursor,
                             "progress": prog[1] if prog else 0.0,
                             "lost": pts is None,
-                            "arming": core.mode == Mode.MOUSE and not core.armed,
+                            "arming": core.mouse and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
                             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),

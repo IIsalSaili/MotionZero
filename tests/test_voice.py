@@ -87,9 +87,9 @@ def test_main_immobile_ouvre_l_ecoute_sans_iris():
 
 def test_stop_toujours_ecoute_et_prioritaire():
     core = Core(Config())
-    core.mode = Mode.MOUSE
+    core.mouse = True
     acts = core.voice("stop", 1.0)
-    assert ("release_all",) in acts and core.mode == Mode.NEUTRAL
+    assert ("release_all",) in acts and not core.mouse and core.mode == Mode.NEUTRAL
 
 
 def test_pause_puis_iris_reprend():

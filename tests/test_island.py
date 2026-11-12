@@ -8,7 +8,7 @@ def test_mode_seul_au_repos():
 
 
 def test_priorites():
-    st = {"mode": "SOURIS", "toast": "CLIC GAUCHE", "toast_age": 0.5, "lost": True}
+    st = {"mode": "NEUTRE", "mouse": True, "toast": "CLIC GAUCHE", "toast_age": 0.5, "lost": True}
     assert island_text(st)[1] == "Main non détectée"
     assert island_text({**st, "listening": True})[1] == "Iris écoute…"
     assert island_text({**st, "dictating": True})[1] == "Claude t'écoute"
