@@ -7,10 +7,10 @@ Statut : décisions validées le 2026-11-12.
 - Entrée : « iris chrome ». Ça ouvre ou amène Chrome devant, comme aujourd'hui, puis active le mode.
 - Sortie automatique dès que Chrome n'est plus au premier plan. On sort aussi par un autre mode ou par « stop ».
 - **Voix uniquement.** Lever la main longtemps est douloureux : aucun geste propre à ce mode. Une pédale USB pourra venir plus tard (issue).
-- **« iris » reste obligatoire** avant chaque commande, pour ne rien déclencher en parlant avec quelqu'un.
+- En mode Chrome, ses mots marchent **sans « iris »** ; ils ne sont écoutés qu'en mode Chrome (liste de mots par mode). Les autres commandes gardent « iris ».
 - Avant chaque raccourci, on vérifie que Chrome est au premier plan, sinon rien n'est envoyé. Les touches simulées sont acceptées pour Chrome (l'interdit vaut pour Claude Code).
 
-## Commandes (toutes précédées de « iris », mode Chrome seulement)
+## Commandes (mode Chrome seulement, sans « iris »)
 | Mot | Action |
 |---|---|
 | retour / avance | page précédente / suivante (Alt+← / Alt+→) |

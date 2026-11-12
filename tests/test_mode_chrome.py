@@ -23,17 +23,18 @@ def test_commande_avec_iris():
     assert core.voice("suivant", 3.5) == [("chrome_keys", ["ctrl", "tab"])]   # mot du calendrier, ici l'onglet
 
 
-def test_sans_iris_rien():
+def test_mots_chrome_sans_iris():
     core = _chrome()
-    assert core.voice("retour", 2.5) == []
-    assert core.voice("ferme", 3.0) == []
+    assert core.voice("retour", 2.5) == [("chrome_keys", ["alt", "left"])]
+    assert core.voice("descends", 3.0) == [("chrome_keys", ["pagedown"])]
+    assert core.voice("ferme", 3.5) == [("chrome_keys", ["ctrl", "w"])]
 
 
-def test_une_seule_commande_par_iris():
+def test_autres_commandes_gardent_iris_en_mode_chrome():
     core = _chrome()
-    core.voice("iris", 2.0)
-    core.voice("descends", 2.5)
-    assert core.voice("descends", 3.0) == []
+    assert core.voice("clic", 2.5) == []
+    core.voice("iris", 3.0)
+    assert core.voice("clic", 3.5) == [("click", "left")]
 
 
 def test_hors_mode_chrome_les_mots_ne_font_rien():

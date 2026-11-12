@@ -485,6 +485,19 @@ class Core:
                 self.last_gesture = (VOICE_LABELS[word], t)
                 return [("hotkey", VOICE_HOTKEYS[word])]
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
+        if self.mode == Mode.CHROME and word in CHROME_KEYS:
+            # mode Chrome : ses mots marchent sans « iris » (demande de l'utilisateur, 12/11). Ils ne sont
+            # écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs.
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            self.freeze_until = -1e9
+            acts.append(("chrome_keys", CHROME_KEYS[word]))
+            if word == "recherche":
+                self.typing = True
+                self.type_t0 = t
+                acts.append(("type_start",))
+            self.last_gesture = (CHROME_LABELS[word], t)
+            return acts
         if word == WAKE_WORD:
             self.wake_t = t_start if t_start is not None else t
             if self.mode == Mode.DISABLED:
@@ -504,17 +517,9 @@ class Core:
         # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
         self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
-        if word in CHROME_KEYS and (self.mode == Mode.CHROME or word != "ferme"):   # « ferme » ailleurs : inchangé
-            if self.mode != Mode.CHROME:
-                self.last_word = (word, t, False)
-                self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
-                return acts
-            acts.append(("chrome_keys", CHROME_KEYS[word]))
-            if word == "recherche":
-                self.typing = True
-                self.type_t0 = t
-                acts.append(("type_start",))
-            self.last_gesture = (CHROME_LABELS[word], t)
+        if word in CHROME_KEYS and word != "ferme":   # hors mode Chrome (« ferme » garde son sens habituel)
+            self.last_word = (word, t, False)
+            self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
         if word in ("clic", "double", "menu"):
             if word == "menu":
