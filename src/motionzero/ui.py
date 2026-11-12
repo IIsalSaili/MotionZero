@@ -741,23 +741,23 @@ def volume_fill(level, track_h):
 
 
 def paint_volume(p, box, level, muted):
-    """Plaque sombre (comme l'île), jauge verticale, chiffre exact en bas."""
+    """Même style que l'île : noir opaque, blanc, police Atkinson. Gris seulement pour le vide et l'état muet."""
     p.save()
     p.setPen(Qt.PenStyle.NoPen)
-    p.setBrush(QColor(0, 0, 0, 225))
-    p.drawRoundedRect(box, 18, 18)
-    track = QRectF(box.center().x() - 7, box.top() + 22, 14, box.height() - 92)
-    p.setBrush(QColor(255, 255, 255, 40))
-    p.drawRoundedRect(track, 7, 7)
+    p.setBrush(QColor(0, 0, 0))
+    p.drawRoundedRect(box, box.width() / 2, box.width() / 2)
+    track = QRectF(box.center().x() - 5, box.top() + 30, 10, box.height() - 100)
+    p.setBrush(QColor(255, 255, 255, 45))
+    p.drawRoundedRect(track, 5, 5)
     fill = volume_fill(level, track.height())
     if fill > 0:
-        p.setBrush(QColor(120, 128, 140) if muted else BLUE)
-        p.drawRoundedRect(QRectF(track.left(), track.bottom() - fill, track.width(), fill), 7, 7)
-    p.setPen(QColor(245, 245, 240))
+        p.setBrush(QColor(255, 255, 255, 110) if muted else QColor(255, 255, 255))
+        p.drawRoundedRect(QRectF(track.left(), track.bottom() - fill, track.width(), fill), 5, 5)
+    p.setPen(QColor(255, 255, 255))
     p.setFont(QFont("Atkinson Hyperlegible", 20, QFont.Weight.Bold))
     num = QRectF(box.left(), track.bottom() + 10, box.width(), 32)
     p.drawText(num, Qt.AlignmentFlag.AlignCenter, f"{level}")
-    p.setPen(QColor(160, 168, 180))
+    p.setPen(QColor(255, 255, 255, 150))
     p.setFont(QFont("Atkinson Hyperlegible", 10))
     p.drawText(QRectF(box.left(), num.bottom() - 2, box.width(), 20), Qt.AlignmentFlag.AlignCenter,
                "muet" if muted else "%")
