@@ -214,6 +214,8 @@ def result_label(msg, kind="send"):
         return f"IRIS EN VOCAL : {msg.get('channel', '?')}".upper()[:60]
     if msg.get("ok") and kind == "leave":
         return "IRIS A QUITTE LE VOCAL"
+    if msg.get("ok") and kind == "activate":
+        return "BOT VOCAL PRET : DIS IRIS VIENS"
     if msg.get("ok"):
         done = "ENVOYE DANS #" if kind == "send" else "SALON "
         return f"DISCORD : {done}{msg.get('channel', '?')}".upper()[:60]

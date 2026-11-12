@@ -52,7 +52,9 @@ CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivan
                  "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 
-ALIASES = {"envoyé": "envoie"}   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
+ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
+           # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
+           "muet": "mute", "sourdine": "défun"}
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
@@ -661,6 +663,9 @@ class Core:
             acts.append(("open_start",))
             if word == "volume":
                 acts.append(("volume_show",))   # barre de volume à droite, avec le niveau actuel
+        elif word == "activation":
+            acts.append(("bot_activate",))    # lance le bot vocal et charge Whisper : « viens » sera immédiat
+            label = "BOT VOCAL : ACTIVATION"
         elif word == "viens":
             acts.append(("bot_join",))        # le bot vocal rejoint ton salon : on lui parle en disant « Iris »
             label = "IRIS : J'ARRIVE EN VOCAL"
