@@ -10,25 +10,19 @@ Statut : décisions validées le 2026-11-12.
 - **« iris » reste obligatoire** avant chaque commande, pour ne rien déclencher en parlant avec quelqu'un.
 - Avant chaque raccourci, on vérifie que Chrome est au premier plan, sinon rien n'est envoyé. Les touches simulées sont acceptées pour Chrome (l'interdit vaut pour Claude Code).
 
-## Commandes (toutes précédées de « iris »)
-| Phrase | Action |
+## Commandes (toutes précédées de « iris », mode Chrome seulement)
+| Mot | Action |
 |---|---|
-| retour / avance | Alt+← / Alt+→ |
-| suivant / précédent (onglet) | Ctrl+Tab / Ctrl+Shift+Tab |
-| nouvel onglet / ferme l'onglet / rouvre | Ctrl+T / Ctrl+W / Ctrl+Shift+T |
-| onglet 1…8 | Ctrl+1…8 |
-| recherche + texte | Ctrl+L, saisie, Entrée |
-| cherche + texte | Ctrl+F, saisie |
-| recharge | F5 |
-| zoom plus / moins / normal | Ctrl+= / Ctrl+- / Ctrl+0 |
-| plein écran | F11 |
-| favori | Ctrl+D |
-| en haut / en bas | Home / End |
-| descends / monte | page suivante / précédente |
-| pause, skip, back, sous-titres | k, l / j, c (YouTube) |
-| montre, puis un nombre | hints numérotés sur les liens (étape 2) |
+| retour / avance | page précédente / suivante (Alt+← / Alt+→) |
+| suivant / précédent | onglet suivant / précédent |
+| onglet / ferme / rouvre | nouvel onglet / fermer l'onglet / rouvrir le dernier fermé |
+| recherche | barre d'adresse, puis dictée (comme « type ») |
+| recharge, favori | F5, Ctrl+D |
+| haut / bas, monte / descends | début / fin de page, page par page |
+| agrandis / réduis | zoom |
+| skip / back | déjà existants (±10 s sur YouTube) |
 
-Les mots exacts dépendent de ce que Vosk reconnaît bien : ils vont dans `WORDS` (`voice.py`). Le texte libre passe par Whisper, comme pour « type ».
+Hors du mode Chrome, ces mots ne font rien, sauf « ferme » qui garde son sens habituel. Les autres commandes d'Iris restent utilisables. Reporté : #24 (numéros sur les liens), #25 (pédale), #26 (onglet par numéro, favoris par nom).
 
 ## Cliquer un lien : hints numérotés (étape 2)
 - Extension Chrome (MV3) chargée en mode développeur. Un content script numérote les liens visibles et clique avec `element.click()`.
