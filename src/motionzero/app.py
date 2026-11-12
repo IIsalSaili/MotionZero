@@ -441,6 +441,11 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
             audio = listener.stop_capture()
             if desk is not None:
                 desk.submit_timer(audio)
+        elif a[0] == "volume_stop":
+            from .volume import volume_spoken
+            audio = listener.stop_capture()
+            threading.Thread(target=volume_spoken, args=(audio, lambda au: asker._transcribe(au, 16000), on_message),
+                             name="volume", daemon=True).start()
         elif a[0] == "rappel_stop":
             audio = listener.stop_capture()
             if desk is not None:

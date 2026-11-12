@@ -69,13 +69,15 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
-                "plus tard": "RAPPEL DANS 10 MIN", "heure": "HEURE", "date": "DATE"}
+                "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
-             "rappel": "rappel_stop", "timer": "timer_stop"}
+             "rappel": "rappel_stop", "timer": "timer_stop",
+             "volume": "volume_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
-             "rappel": "RAPPEL : Haiku reflechit…", "timer": "TIMER : je lis la duree…"}
+             "rappel": "RAPPEL : Haiku reflechit…", "timer": "TIMER : je lis la duree…",
+             "volume": "VOLUME : je regle…"}
 
 
 class Core:
@@ -613,7 +615,7 @@ class Core:
             acts.append(("rappel_merci",))
         elif word == "plus tard":
             acts.append(("rappel_tard",))
-        elif word in ("message", "salon", "rappel"):
+        elif word in ("message", "salon", "rappel", "volume"):   # volume : « iris volume » puis « 40 », « plus fort »…
             self.opening = True
             self.open_t0 = t
             self.open_kind = word
@@ -762,7 +764,8 @@ class Core:
                 self.last_gesture = ({"open": "RIEN ENTENDU : ouvre annule", "message": "RIEN ENTENDU : message annule",
                                       "salon": "RIEN ENTENDU : salon annule",
                                       "rappel": "RIEN ENTENDU : rappel annule",
-                                      "timer": "RIEN ENTENDU : timer annule"}[kind], t)
+                                      "timer": "RIEN ENTENDU : timer annule",
+                                      "volume": "RIEN ENTENDU : volume inchange"}[kind], t)
             return [("open_cancel",)]
         return []
 
