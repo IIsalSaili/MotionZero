@@ -27,7 +27,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds
-from .ui import Bridge, clock_text, EyeButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
+from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WIN = "motionzero"
@@ -165,6 +165,31 @@ def main(argv=None):
     bridge.state.connect(cursor_glass.set_state)
     stop_btn = StopButton()                    # arrêt d'urgence, en bas à droite
     eye_btn = EyeButton(stop_btn)              # œil : montrer / masquer l'overlay dans les partages
+    repair_btn = RepairButton()                # tout en bas à gauche : réparer le son (micro figé)
+
+    def repair_sound():
+        """Fil « reparation » : le message passe par la queue de la boucle (jamais Core ici)."""
+        from . import audio_repair
+        if listener is None:
+            app_message("VOIX DESACTIVEE : rien a reparer")
+            return
+        app_message("REPARATION DU SON…")
+        try:
+            msg = audio_repair.repair(listener.reopen, listener.heard_since)
+        except Exception:
+            log.exception("reparation du son")
+            msg = "REPARATION DU SON : ERREUR"
+        app_message(msg)
+        bridge.repair_done.emit()
+
+    def on_repair():
+        if repair_btn.busy:
+            return
+        repair_btn.set_busy(True)
+        threading.Thread(target=repair_sound, name="reparation", daemon=True).start()
+
+    repair_btn.triggered.connect(on_repair)
+    bridge.repair_done.connect(lambda: repair_btn.set_busy(False))
 
     def show_in_captures(visible):
         for w in (glass, stop_btn):
@@ -361,6 +386,7 @@ def main(argv=None):
     cursor_glass.show()
     stop_btn.show()
     eye_btn.show()
+    repair_btn.show()
     sink = KeySink()
     sink.show()
     from . import vscode

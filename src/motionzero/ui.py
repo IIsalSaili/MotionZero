@@ -24,6 +24,7 @@ class Bridge(QObject):
     stop_hover = Signal(float)  # survol du bouton STOP par la main (0..1)
     done = Signal()          # le moteur s'est arrêté
     stats = Signal(object)   # mesures de consommation (panneau de la page d'accueil)
+    repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
 
 
 class ConsoPanel(QWidget):
@@ -395,7 +396,7 @@ class GlassOverlay(QWidget):
 
 # --- Étape 3 : bouton STOP, petit overlay cliquable en bas à droite -----------------------------
 STOP_SIZE = 36      # px logiques : volontairement minuscule (demande de l'utilisateur)
-STOP_MARGIN = 6     # écart avec le bord de l'écran et la barre des tâches
+STOP_MARGIN = 2     # collés au bas de l'écran (demande de l'utilisateur, 12/11 : plus de marge au-dessus)
 STOP_HAND_PAD = 20  # zone élargie pour la main seulement (invisible), sinon trop dur à viser
 STOP_RED = QColor(0xD7, 0x19, 0x21)
 
@@ -414,7 +415,7 @@ class StopButton(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         scr = QGuiApplication.primaryScreen()
-        area = scr.availableGeometry()          # sans la barre des tâches
+        area = scr.geometry()                   # tout en bas de l'écran, sur la barre des tâches
         self.dpr = scr.devicePixelRatio()
         self.setGeometry(area.right() - STOP_SIZE - STOP_MARGIN, area.bottom() - STOP_SIZE - STOP_MARGIN,
                          STOP_SIZE, STOP_SIZE)
@@ -512,6 +513,54 @@ class EyeButton(QWidget):
         if r is not None:
             m = 9
             r.render(p, QRectF(m, m, self.width() - 2 * m, self.height() - 2 * m))
+
+
+class RepairButton(QWidget):
+    """« Réparer le son », tout en bas à gauche. Seulement à la demande (clic ou geste) : jamais automatique,
+    le bouton mute du casque ou un long silence ne doivent rien déclencher."""
+    triggered = Signal()
+
+    def __init__(self):
+        flags = (Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+                 | Qt.WindowType.Tool | Qt.WindowType.WindowDoesNotAcceptFocus)
+        super().__init__(None, flags)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        area = QGuiApplication.primaryScreen().geometry()
+        self.setGeometry(area.left() + STOP_MARGIN, area.bottom() - STOP_SIZE - STOP_MARGIN, STOP_SIZE, STOP_SIZE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Réparer le son (micro figé) sans redémarrer le PC")
+        self.busy = False
+        from PySide6.QtCore import QByteArray
+        from PySide6.QtSvg import QSvgRenderer
+        try:
+            svg = open(_os.path.join(_ICON_DIR, "mic.svg"), encoding="utf-8").read()
+            self.icon = QSvgRenderer(QByteArray(svg.replace("currentColor", "#ffffff").encode()))
+        except OSError:
+            self.icon = None
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        apply_overlay_style(self, click_through=False)
+
+    def set_busy(self, busy):
+        self.busy = busy
+        self.update()
+
+    def mousePressEvent(self, event):
+        if not self.busy:
+            self.triggered.emit()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(4, 4, -4, -4)
+        p.setPen(QPen(QColor(255, 255, 255, 160), 2))
+        p.setBrush(QColor(28, 38, 70, 230) if self.busy else QColor(0, 0, 0, 220))
+        p.drawEllipse(rect)
+        if self.icon is not None:
+            m = 10
+            self.icon.render(p, QRectF(m, m, self.width() - 2 * m, self.height() - 2 * m))
 
 
 class KeySink(QWidget):

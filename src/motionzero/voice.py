@@ -203,6 +203,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
+        self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
 
     def start(self):
         import sounddevice as sd
@@ -230,6 +231,7 @@ class VoiceListener:
         return self
 
     def _callback(self, indata, frames, time_info, status):
+        self.last_block_t = time.perf_counter()
         try:
             self.audio.put_nowait(bytes(indata))
         except queue.Full:
@@ -324,6 +326,34 @@ class VoiceListener:
         for w in words:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             self.events.put(ev)   # noté au journal par la boucle (avec « acceptée / ignorée »)
+
+    def reopen(self):
+        """Rouvre le micro (après « réparer le son ») : l'ancien flux est abandonné sans l'attendre (il peut
+        être figé), PortAudio relit la liste des micros, puis un nouveau flux s'ouvre sur le micro par défaut."""
+        import sounddevice as sd
+        old, self.stream = self.stream, None
+        if old is not None:
+            def close():
+                try:
+                    old.abort()
+                    old.close()
+                except Exception:
+                    pass
+            t = threading.Thread(target=close, name="ferme-micro", daemon=True)
+            t.start()
+            t.join(3.0)
+        try:
+            sd._terminate()
+            sd._initialize()
+        except Exception:
+            log.exception("reinitialisation de l'audio")
+        self.stream = sd.RawInputStream(samplerate=self.sr, blocksize=int(self.sr * 0.03), dtype="int16",
+                                        channels=1, callback=self._callback)
+        self.stream.start()
+        log.info("micro rouvert : %s", sd.query_devices(kind="input")["name"])
+
+    def heard_since(self, t):
+        return self.last_block_t > t
 
     def start_capture(self):
         self.capture = []
