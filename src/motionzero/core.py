@@ -156,6 +156,8 @@ class Core:
         self.listen_until = -1e9
         self.voice_scroll_until = -1e9
         self.voice_scroll_armed = False       # la main est passée dans la bande du centre
+        self.voice_scroll_y0 = 0.5            # centre du défilement ; à la tête, il suit au-delà de la butée
+        self.voice_scroll_dy = 0.0            # écart au centre, borné (affiché dans la jauge)
         self.voice_scroll_since = None        # entrée dans cette bande
         self._scroll_acc = 0.0
         self.last_word = None       # (mot, t, accepté ?)
@@ -244,6 +246,8 @@ class Core:
             point = self.head.point(lms, matrix, t)
         self.last_seen = t
         self.released = False
+        if self.scrolling(t):                 # défilement : hauteur non bornée (tête baissée à fond)
+            point = (point[0], getattr(self.head, "raw_y", point[1]))
         palm = (self.fx(point[0], t), self.fy(point[1], t))
         self.palm = palm
         self.still_for = self.still.update(palm, t)
@@ -781,9 +785,17 @@ class Core:
         ou None hors défilement. Comme la main fantôme de la souris, montre où l'on est par rapport au centre."""
         if t >= self.voice_scroll_until:
             return None
-        y = self.palm[1] if self.palm is not None else None
-        arm, dead, _ = self._scroll_params()
-        return (y, self.voice_scroll_armed, arm, dead)
+        arm, dead, _, span = self._scroll_params()
+        if self.palm is None:
+            return (None, self.voice_scroll_armed, arm, dead)
+        if not self.voice_scroll_armed:
+            dy = self.palm[1] - 0.5
+        else:
+            dy = self.voice_scroll_dy
+        if span < 0.5:                        # tête : la jauge entière = la course bornée (±span)
+            k = 0.4 / span
+            return (min(max(0.5 + dy * k, 0.0), 1.0), self.voice_scroll_armed, arm * k, dead * k)
+        return (0.5 + dy, self.voice_scroll_armed, arm, dead)
 
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
@@ -958,17 +970,18 @@ class Core:
         """(demi-bande d'armement, demi-zone neutre, gain) : plus serrés à la tête, qui bouge peu."""
         c = self.cfg
         if self.pointer == "tete":
-            return c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_gain_head
-        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_gain
+            return (c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_gain_head,
+                    c.voice_scroll_span_head)
+        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_gain, c.voice_scroll_span
 
     def _voice_scroll(self, palm, t, acts):
         """« défile » : comme la souris, rien ne bouge tant que la main n'est pas passée au centre de l'image
         (une bande horizontale : seule la hauteur compte). Ensuite, plus la main est au-dessus / en dessous
         du centre, plus ça défile vite. Fin : « stop », main sortie de l'image, ou voice_scroll_s au neutre."""
         c = self.cfg
-        arm, dead, gain = self._scroll_params()
-        dy = palm[1] - 0.5
+        arm, dead, gain, span = self._scroll_params()
         if not self.voice_scroll_armed:
+            dy = palm[1] - 0.5
             if abs(dy) > arm:
                 self.voice_scroll_since = None
                 return
@@ -976,9 +989,15 @@ class Core:
                 self.voice_scroll_since = t
             if t - self.voice_scroll_since >= c.arm_hold_s:
                 self.voice_scroll_armed = True
+                self.voice_scroll_y0, self.voice_scroll_dy = 0.5, dy
                 self.voice_scroll_until = t + c.voice_scroll_s
                 self.last_gesture = ("DEFILE : monte / descends la main", t)
             return
+        dy = palm[1] - self.voice_scroll_y0
+        if abs(dy) > span:                    # butée : le centre suit, un petit retour suffit pour le neutre
+            self.voice_scroll_y0 = palm[1] - math.copysign(span, dy)
+            dy = math.copysign(span, dy)
+        self.voice_scroll_dy = dy
         if abs(dy) <= dead:
             self._scroll_acc = 0.0
             return

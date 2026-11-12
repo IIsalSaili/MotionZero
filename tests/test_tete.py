@@ -230,8 +230,27 @@ def test_defile_tete_stop_rend_la_souris():
     core.voice("iris", t)
     core.voice("défile", t)
     core, _, t = _tete_defile([0.0] * 10, core, t)
-    assert core.scrolling(t) and core.scroll_gauge(t)[2] < Config().voice_scroll_arm   # bande plus étroite
+    assert core.scrolling(t) and core._scroll_params()[0] < Config().voice_scroll_arm   # bande plus étroite
     core.voice("stop", t)
     assert not core.scrolling(t) and core.mouse
     core, acts, t = _tete_defile([0.0] * 10 + [0.03 * i for i in range(20)], core, t)
     assert [a for a in acts if a[0] == "move"]               # se réarme au centre puis suit la tête
+
+
+def test_defile_tete_butee_un_petit_retour_suffit():
+    """Tête baissée à fond : un léger relèvement ramène tout de suite au neutre (pas tout le chemin)."""
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, acts, t = _tete_defile([0.0] * 10 + [-0.3] * 30, core, t)   # yeux au sol
+    assert [a for a in acts if a[0] == "scroll"]
+    assert core.scroll_gauge(t)[0] <= 0.95                             # curseur juste sous le vert, pas en bas
+    core, acts, t = _tete_defile([-0.25] * 15, core, t)                # relevée de quelques degrés
+    core, acts, t = _tete_defile([-0.25] * 15, core, t)
+    assert not [a for a in acts if a[0] == "scroll"]                   # neutre en moins de 0,5 s
+    core, acts, t = _tete_defile([0.3] * 40, core, t)                  # yeux au plafond
+    ups = [a[1] for a in acts if a[0] == "scroll"]
+    assert ups and ups[-1] > 0
+    core, acts, t = _tete_defile([0.25] * 15, core, t)
+    core, acts, t = _tete_defile([0.25] * 15, core, t)
+    assert not [a for a in acts if a[0] == "scroll"]
