@@ -425,7 +425,11 @@ class Desk:
         core.timer_running = self.timers.timer_end is not None
         if self.r.ringing and t - self._last_ring >= ALARM_EVERY_S and self.sounds is not None:
             self._last_ring = t
-            self.sounds.play("ALARME")
+            self.sounds.play("ALARME")            # boucle déjà en cours : sans effet (rien ne repart de zéro)
+        elif not self.r.ringing and self.sounds is not None:
+            stop = getattr(self.sounds, "stop_alarm", None)
+            if stop is not None:
+                stop()                            # « stop », « merci », « plus tard » : la sonnerie se tait
 
     def _result(self, core, t, now, kind, obj):
         if kind == "timer":

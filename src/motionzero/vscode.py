@@ -13,6 +13,7 @@ from ctypes import wintypes
 log = logging.getLogger("motionzero.vscode")
 DICTATION_KEYS = ["ctrl", "alt", "shift", "f9"]
 SW_RESTORE = 9
+SW_SHOW = 5
 
 
 def find_window(title_part="Visual Studio Code"):
@@ -52,10 +53,20 @@ def bring_to_front(hwnd):
         u.SetForegroundWindow(hwnd)
     finally:
         u.AttachThreadInput(b, a, False)
-    for _ in range(20):
+    for _ in range(25):
         if u.GetForegroundWindow() == hwnd:
             return True
         time.sleep(0.02)
+    # 2e essai (mesuré le 12/11 : Chrome réduit dans la barre des tâches, refusé 3 fois de suite) :
+    # SwitchToThisWindow, comme Alt+Tab, et plus de temps pour l'animation de restauration
+    u.ShowWindow(hwnd, SW_RESTORE if u.IsIconic(hwnd) else SW_SHOW)
+    u.SwitchToThisWindow(hwnd, True)
+    for _ in range(50):
+        if u.GetForegroundWindow() == hwnd:
+            log.info("premier plan obtenu au 2e essai")
+            return True
+        time.sleep(0.02)
+    log.warning("premier plan refuse (fenetre %s)", hwnd)
     return False
 
 

@@ -179,3 +179,17 @@ def test_video_garde_iris_hors_chrome():
     core = Core(Config())
     for w in ("skip", "back", "espace", "space"):
         assert core.voice(w, 1.0) == [], w
+
+
+def test_double_clic_dit_en_entier():
+    """« double clic » (2 mots, sans « iris ») était rejeté : un mot seul doit être dit seul."""
+    import json
+    from motionzero.voice import GRAMMARS, accepted_words
+    res = {"result": [{"word": "double", "conf": 1.0, "start": 0, "end": 0.3},
+                      {"word": "clic", "conf": 1.0, "start": 0.3, "end": 0.6}]}
+    assert [w["word"] for w in accepted_words(res)] == ["double"]
+    res_iris = {"result": [{"word": "iris", "conf": 1.0, "start": 0, "end": 0.3}] + res["result"]}
+    assert [w["word"] for w in accepted_words(res_iris)] == ["iris", "double"]
+    for g in GRAMMARS.values():
+        phrases = json.loads(g)
+        assert "double" in phrases and "double clic" in phrases

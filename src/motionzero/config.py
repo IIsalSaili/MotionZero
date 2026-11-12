@@ -134,6 +134,7 @@ class Config:
     # sécurité et confort
     max_hold_s: float = 10.0           # sécurité : tout appui maintenu est relâché après 10 s (glisser compris)
     sounds: bool = True
+    sound_volume: float = 0.5          # volume des sons d'Iris (0 à 1) ; 1 jugé trop fort (12/11)
 
 
 def load_config(path=None) -> Config:

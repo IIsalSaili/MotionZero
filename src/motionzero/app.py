@@ -26,7 +26,7 @@ from .core import Core, Mode
 from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
-from .sounds import Sounds
+from .sounds import Sounds, is_failure
 from .vscode import chrome_in_front
 from .volume import VIEW as VOLUME_VIEW
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
@@ -96,7 +96,7 @@ def main(argv=None):
     tracker = HandTracker()
     backend = FakeBackend() if args.simulation else SendInputBackend()
     ctl = Controller(backend, cfg)
-    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds)
+    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds, volume=cfg.sound_volume)
     # les DEUX mains sont détectées (demande de l'utilisateur) ; CPU mesuré ~7 % : marge suffisante
     landmarker = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "hand_landmarker.task")),
@@ -132,7 +132,7 @@ def main(argv=None):
     from .ask import ask_claude
     from .reminders import PARSE_SYSTEM, Desk, Reminders
     desk = Desk(Reminders(os.path.join(ROOT, "reminders.json")).load(datetime.datetime.now()),
-                speaker, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),
+                None, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),   # rappels sans voix (12/11)
                 transcribe=lambda audio: asker._transcribe(audio, 16000))
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
@@ -234,6 +234,7 @@ def main(argv=None):
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
         last_level_log = 0.0
+        last_rej_seen = last_fail_seen = None
         chrome_check_t = 0.0
         last_hand_t = t0
         errors = deque(maxlen=20)
@@ -296,11 +297,24 @@ def main(argv=None):
                         if t - listener.iris_heard_t < 0.5:
                             core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                         for ev in listener.poll():
-                            acts = acts + core.voice(ev.word, ev.t_end, t_start=ev.t_start)
+                            new = core.voice(ev.word, ev.t_end, t_start=ev.t_start)
+                            acts = acts + new
                             accepted = core.last_word and core.last_word[2]
                             log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
                             if ev.word == "iris" and accepted:
                                 sounds.play("ECOUTE")
+                            elif accepted and not any(a[0] in ("mode", "mouse") for a in new):
+                                sounds.play("OK")          # commande comprise (un changement de mode a son propre son)
+                        rej = listener.last_rejected
+                        if rej is not None and rej is not last_rej_seen:
+                            last_rej_seen = rej
+                            if core.listening(t):          # après « iris » seulement : la conversation reste muette
+                                sounds.play("NON")
+                    lg = core.last_gesture
+                    if lg is not None and lg is not last_fail_seen:
+                        last_fail_seen = lg
+                        if is_failure(lg[0]):
+                            sounds.play("NON")             # rien entendu, pas compris, réglage impossible…
                     # le bouton STOP ne s'active QUE par un vrai clic (souris, ou clic de motionzero en mode souris) :
                     # le survol par la main l'arrêtait sans le vouloir (demande de l'utilisateur, 11/11)
                     if listener is not None and core.dictating and t - last_level_log >= 1.0:
@@ -327,7 +341,6 @@ def main(argv=None):
                         elif a[0] == "hotkey":
                             log.info("touches %s", "+".join(a[1]))
                         elif a[0] in ("key", "click"):
-                            sounds.play("CLIC")
                             log.info("%s %s (%s)", a[0], a[1], core.last_gesture[0] if core.last_gesture else "")
 
                     if view is not None:
