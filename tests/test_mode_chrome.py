@@ -108,3 +108,48 @@ def test_toutes_les_touches_existent():
     from motionzero.output import VK
     for keys in CHROME_KEYS.values():
         assert all(k in VK for k in keys), keys
+
+
+def test_mots_chrome_absents_de_la_liste_de_base():
+    import json
+    from motionzero.core import CHROME_KEYS
+    from motionzero.voice import GRAMMARS
+    base, chrome = json.loads(GRAMMARS["base"]), json.loads(GRAMMARS["chrome"])
+    for w in ("haut", "bas", "retour", "recharge", "agrandis", "descends"):
+        assert w not in base and w in chrome, w
+    assert all(w in chrome for w in CHROME_KEYS)
+    assert all(w in chrome for w in base)          # en mode Chrome, les commandes habituelles restent
+
+
+def test_changement_de_liste_dans_le_fil_voix():
+    from motionzero.voice import GRAMMARS, VoiceListener
+
+    class Rec:
+        def __init__(self):
+            self.grammars = []
+
+        def SetGrammar(self, g):
+            self.grammars.append(g)
+
+        def Reset(self):
+            pass
+
+        def AcceptWaveform(self, b):
+            return False
+
+        def PartialResult(self):
+            return '{"partial": ""}'
+
+    v = VoiceListener("x")
+    v.rec, v.free = Rec(), Rec()
+    v._free_final, v._free_until, v._was_muted, v.samples = (0.0, ""), 0.0, False, 0
+    from collections import deque
+    v._free_pre = deque(maxlen=10)
+    v.grammar = "chrome"
+    v.audio.put(b"\x00\x00" * 480)
+    v._step()
+    assert v.rec.grammars == [GRAMMARS["chrome"]] and v._grammar == "chrome"
+    v.grammar = "inconnue"                         # nom inconnu : on garde la liste en place
+    v.audio.put(b"\x00\x00" * 480)
+    v._step()
+    assert v.rec.grammars == [GRAMMARS["chrome"]]

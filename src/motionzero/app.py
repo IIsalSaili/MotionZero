@@ -291,6 +291,7 @@ def main(argv=None):
                     bot_events(bot, core, speaker, discord_voice, t)
                     desk.events(core, t)
                     if listener is not None:
+                        listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
                         if t - listener.iris_heard_t < 0.5:
                             core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
                         for ev in listener.poll():
