@@ -126,10 +126,10 @@ class Config:
     voice_scroll_arm: float = 0.05       # bande horizontale du centre (toute la largeur) qui arme le défilement
     voice_scroll_dead: float = 0.06      # zone neutre autour du centre de l'image (plus large que la bande)
     voice_scroll_gain: float = 20.0      # crans / s par unité d'écart au-delà du neutre (main)
-    voice_scroll_arm_head: float = 0.03  # tête : petits mouvements, bande et neutre plus étroits
-    voice_scroll_dead_head: float = 0.035
-    voice_scroll_gain_head: float = 50.0  # tête : un petit écart défile déjà vite
-    voice_scroll_span_head: float = 0.075  # tête : écart maximal au centre ; au-delà, le centre suit la tête
+    voice_scroll_arm_head: float = 0.06  # tête : petits mouvements, bande et neutre plus étroits
+    voice_scroll_dead_head: float = 0.09   # large : la tête peut bouger un peu sans défiler
+    voice_scroll_gain_head: float = 30.0  # tête : un petit écart défile déjà vite
+    voice_scroll_span_head: float = 0.16  # tête : écart maximal au centre ; au-delà, le centre suit la tête
     voice_scroll_span: float = 1.0         # main : pas de butée (le centre reste celui de l'image)
     voice_scroll_max_rate: float = 5.0  # crans par seconde au maximum
 
