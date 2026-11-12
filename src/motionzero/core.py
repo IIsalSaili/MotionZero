@@ -19,6 +19,7 @@ from collections import deque
 from .filters import OneEuro
 from .gestures import RadialMenu, ScrollDetector, StillnessDetector, ZoneDetector
 from .hand import compute_features
+from .head import HeadPointer
 from .poses import UNSURE, PoseVoter, classify, flexion
 
 
@@ -103,6 +104,9 @@ class Core:
         self.mode = cfg.start_mode
         # souris : un outil, pas un mode. « iris souris » dans Chrome garde le mode Chrome (demande, 12/11)
         self.mouse = False
+        # ce qui pilote la souris : la main ou la tête (choix retenu par l'appli, voir app.POINTER_FILE)
+        self.pointer = cfg.pointer if cfg.pointer in ("main", "tete") else "main"
+        self.head = HeadPointer(cfg.head_scale)
         if self.mode == Mode.MOUSE:
             self.mode, self.mouse = Mode.NEUTRAL, True
         self.mode_since = -1e9
@@ -197,11 +201,56 @@ class Core:
             self.pressing = False
             self.open_since = None
         self.mouse = on
+        self.head.reset()                     # la tête de face à l'allumage = centre
         self._reset()
         acts.append(("mouse", on))
         if on:
             self._center(acts)                # la souris commence toujours au centre
         self.feed.append(("SOURIS " + ("ON" if on else "OFF"), t))
+
+    def set_pointer(self, pointer, t, acts):
+        """Main ou tête pour la souris (voix « iris main / tête », bouton de l'accueil)."""
+        if pointer not in ("main", "tete") or pointer == self.pointer:
+            return
+        self.pointer = pointer
+        self.head.reset()
+        acts.append(("release_all",))
+        acts.append(("pointer", pointer))
+        if self.mouse:
+            self._center(acts)                # on repart du centre avec le nouveau pointeur
+        self.feed.append((f"POINTEUR {pointer.upper()}", t))
+
+    def set_pointer_toggle(self, t):
+        """Bouton de l'accueil : bascule main <-> tête ; renvoie les actions."""
+        acts = []
+        self.set_pointer("main" if self.pointer == "tete" else "tete", t, acts)
+        self.last_gesture = ("SOURIS A LA " + ("TETE" if self.pointer == "tete" else "MAIN"), t)
+        return acts
+
+    def step_head(self, lms, t):
+        """Pointeur « tête » : lms = points (x, y) du visage, ou None. Seule la souris suit la tête."""
+        acts = []
+        if self.mode == Mode.DISABLED:
+            return acts
+        point = self.head.point(lms) if lms is not None else None
+        if point is None:
+            return self._no_hand(t, acts)
+        if (self.mouse and self.last_seen is not None
+                and t - self.last_seen >= self.cfg.recenter_absent_s):
+            self.head.reset()
+            self._center(acts)                # visage revenu : on repart du centre
+            point = self.head.point(lms)
+        self.last_seen = t
+        self.released = False
+        palm = (self.fx(point[0], t), self.fy(point[1], t))
+        self.palm = palm
+        self.still_for = self.still.update(palm, t)
+        if self.still_for == 0.0:
+            self.need_move = False
+        if self.mouse:
+            self._mouse(palm, t, acts)
+        self.prev_palm, self.prev_t = palm, t
+        return acts
 
     def set_mode(self, mode, t, acts):
         if mode == Mode.MOUSE:                # ancien appel (enregistrements, tests) : allume la souris
@@ -663,6 +712,14 @@ class Core:
             acts.append(("open_start",))
             if word == "volume":
                 acts.append(("volume_show",))   # barre de volume à droite, avec le niveau actuel
+        elif word in ("tête", "main"):
+            self.set_pointer("tete" if word == "tête" else "main", t, acts)
+            label = "SOURIS A LA " + ("TETE" if word == "tête" else "MAIN")
+        elif word == "centre":
+            self.head.reset()                 # tête de face maintenant = centre
+            if self.mouse:
+                self._center(acts)
+            label = "CURSEUR AU CENTRE"
         elif word == "activation":
             acts.append(("bot_activate",))    # lance le bot vocal et charge Whisper : « viens » sera immédiat
             label = "BOT VOCAL : ACTIVATION"
