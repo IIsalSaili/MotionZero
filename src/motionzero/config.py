@@ -85,8 +85,9 @@ class Config:
     bubble_timeout_s: float = 2.0
 
     # curseur relatif (type pavé tactile), gain selon la vitesse de la main
-    gain_min: float = 1.0                # mouvements lents (viser) ; 1,5 jugé trop réactif
-    gain_max: float = 3.5                # mouvements rapides ; 5,0 jugé trop réactif
+    # x2 le 12/11 (demande de l'utilisateur : le moins de mouvements possible, pas la précision)
+    gain_min: float = 2.0                # mouvements lents (viser) ; avant 1,0 (1,5 jugé trop réactif à l'époque)
+    gain_max: float = 7.0                # mouvements rapides ; avant 3,5
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
