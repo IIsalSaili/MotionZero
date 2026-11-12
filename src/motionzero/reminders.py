@@ -329,13 +329,30 @@ class Desk:
         self._last_ring = -1e9
         self._announced_missed = False
         from .calendar_view import Calendar
+        from .timers import Timers
         self.cal = Calendar()
+        self.timers = Timers()
 
     # ---- fil « rappel » ----
     def submit(self, audio):
         import threading
         items = list(self.r.items)
         threading.Thread(target=self._work, args=(audio, items), name="rappel", daemon=True).start()
+
+    def submit_timer(self, audio):
+        import threading
+        threading.Thread(target=self._work_timer, args=(audio,), name="timer", daemon=True).start()
+
+    def _work_timer(self, audio):
+        from .timers import parse_duration
+        try:
+            phrase = (self._transcribe(audio) or "").strip(" .")
+        except Exception:
+            log.exception("transcription timer")
+            phrase = ""
+        seconds = parse_duration(phrase) if phrase else None
+        log.info("timer : %s -> %s", phrase, seconds)
+        self._q.put(("timer", seconds) if seconds else ("error", "duree incomprise" if phrase else "rien entendu"))
 
     def _work(self, audio, items):
         try:
@@ -394,11 +411,30 @@ class Desk:
                         self._last_ring = t           # la sonnerie en boucle reprend 1,5 s plus tard
                 self._say(("Alarme : " if x.alarm else "Rappel : ") + x.text)
                 self._notify(("Alarme : " if x.alarm else "Rappel : ") + x.text)
+        if self.timers.tick(t):
+            from .timers import spoken
+            what = f"Timer de {spoken(self.timers.timer_total)} terminé"
+            self.r.active.insert(0, Reminder(text=what, at=now.strftime(FMT), alarm=True))
+            self.r.ringing = True
+            self._last_ring = t
+            if self.sounds is not None:
+                self.sounds.play("ALARME")
+            self._say(what)
+            self._notify("Timer : " + what)
+            log.info("%s", what)
+        core.timer_running = self.timers.timer_end is not None
         if self.r.ringing and t - self._last_ring >= ALARM_EVERY_S and self.sounds is not None:
             self._last_ring = t
             self.sounds.play("ALARME")
 
     def _result(self, core, t, now, kind, obj):
+        if kind == "timer":
+            from .timers import fmt, spoken
+            self.timers.start_timer(t, obj)
+            core.timer_running = True
+            core.last_gesture = (f"TIMER {fmt(obj)}", t)
+            self._say(f"Timer de {spoken(obj)}.")
+            return
         if kind == "create":
             self.pending = ("create", obj)
             core.ask_confirm("rappel", t, CONFIRM_S)
@@ -458,6 +494,17 @@ class Desk:
                 core.last_gesture = (f"RAPPEL A {again.when:%H:%M}" if again else "AUCUN RAPPEL AFFICHE", t)
             elif k == "alarm_stop":
                 self.r.silence()
+            elif k == "chrono":
+                from .timers import spoken
+                elapsed = self.timers.toggle_chrono(t)
+                if elapsed is None:
+                    core.last_gesture = ("CHRONOMETRE LANCE", t)
+                else:
+                    core.last_gesture = ("CHRONOMETRE ARRETE", t)
+                    self._say(spoken(int(elapsed)) + ".")
+            elif k == "timer_cancel":
+                self.timers.cancel_timer()
+                core.timer_running = False
             elif k == "cal_open":
                 self.cal.show(now.date())
                 self.list_until = -1e9
@@ -484,5 +531,6 @@ class Desk:
                                                  "when": cur.when.strftime("%H:%M")},
             "list": self.list_lines if t < self.list_until else None,
             "calendar": self.cal.view(self.r.items, now) if self.cal.open else None,
+            "timers": self.timers.state(t),
             "next": None if nxt is None else short_when(nxt, now),   # pour la future vue calendrier
         }

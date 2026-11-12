@@ -403,6 +403,10 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
     for a in acts:
         if a[0] == "open_start":
             listener.start_capture()
+        elif a[0] == "timer_stop":
+            audio = listener.stop_capture()
+            if desk is not None:
+                desk.submit_timer(audio)
         elif a[0] == "rappel_stop":
             audio = listener.stop_capture()
             if desk is not None:
