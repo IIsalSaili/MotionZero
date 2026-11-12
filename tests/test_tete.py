@@ -121,3 +121,23 @@ def test_choix_garde_au_redemarrage(tmp_path):
 def test_texte_du_bouton():
     from motionzero.ui import pointer_button_text
     assert "tête" in pointer_button_text("main") and "main" in pointer_button_text("tete")
+
+
+def test_tete_immobile_le_curseur_ne_tremble_pas():
+    """Bruit du maillage du visage (tête immobile) : le point virtuel ne bouge pas (mesuré : ça tremblait)."""
+    import random
+    rnd = random.Random(1)
+    hp = HeadPointer(scale=1.5)
+    pts = []
+    for i in range(60):                                     # 2 s à 30 images/s, nez qui tremble de ±0,1 %
+        p = hp.point(face(nose_x=0.5 + rnd.uniform(-0.001, 0.001), nose_y=0.5 + rnd.uniform(-0.001, 0.001)), i / 30)
+        pts.append(p)
+    spread = max(abs(p[0] - 0.5) for p in pts[10:])
+    assert spread < 0.003
+
+
+def test_tete_qui_tourne_suit_quand_meme():
+    hp = HeadPointer(scale=1.5)
+    for i in range(30):
+        x, _ = hp.point(face(nose_x=0.5 + 0.0015 * i), i / 30)   # rotation franche
+    assert x > 0.6

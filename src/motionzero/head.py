@@ -22,20 +22,40 @@ def head_offsets(lms):
             (nose[1] - (top[1] + bottom[1]) / 2) / height)
 
 
+HEAD_MIN_CUTOFF = 0.4      # lissage fort tête immobile (le maillage du visage tremble d'une image à l'autre)
+HEAD_BETA = 4.0            # ... mais réactif quand la tête tourne vraiment
+HEAD_DEADZONE = 0.008      # variation plus petite (fraction du visage, ~1 % de rotation) : ignorée
+
+
 class HeadPointer:
-    """Point virtuel 0..1 piloté par la tête ; la référence est prise au premier visage vu après reset()."""
+    """Point virtuel 0..1 piloté par la tête ; la référence est prise au premier visage vu après reset().
+    Mesuré le 12/11 : sans lissage propre, le curseur tremblait tête immobile (bruit du maillage, amplifié
+    par la taille du visage, l'ampleur et la vitesse de la souris)."""
 
     def __init__(self, scale=1.5):
+        from .filters import OneEuro
         self.scale = scale
         self.base = None
+        self.fx = OneEuro(HEAD_MIN_CUTOFF, HEAD_BETA)
+        self.fy = OneEuro(HEAD_MIN_CUTOFF, HEAD_BETA)
+        self.held = None
 
     def reset(self):
         self.base = None
+        self.held = None
+        self.fx.reset()
+        self.fy.reset()
 
-    def point(self, lms):
-        off = head_offsets(lms)
-        if off is None:
+    def point(self, lms, t=None):
+        raw = head_offsets(lms)
+        if raw is None:
             return None
+        if t is not None:
+            raw = (self.fx(raw[0], t), self.fy(raw[1], t))
+        if self.held is not None and max(abs(raw[0] - self.held[0]), abs(raw[1] - self.held[1])) < HEAD_DEADZONE:
+            raw = self.held                  # micro-variation : on ne bouge pas
+        self.held = raw
+        off = raw
         if self.base is None:
             self.base = off                  # tête de face maintenant = centre de l'écran
         x = 0.5 + self.scale * (off[0] - self.base[0])

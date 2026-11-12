@@ -232,14 +232,14 @@ class Core:
         acts = []
         if self.mode == Mode.DISABLED:
             return acts
-        point = self.head.point(lms) if lms is not None else None
+        point = self.head.point(lms, t) if lms is not None else None
         if point is None:
             return self._no_hand(t, acts)
         if (self.mouse and self.last_seen is not None
                 and t - self.last_seen >= self.cfg.recenter_absent_s):
             self.head.reset()
             self._center(acts)                # visage revenu : on repart du centre
-            point = self.head.point(lms)
+            point = self.head.point(lms, t)
         self.last_seen = t
         self.released = False
         palm = (self.fx(point[0], t), self.fy(point[1], t))
@@ -574,7 +574,8 @@ class Core:
             self.last_click_t = t
             self.travel = 0.0
             self.last_gesture = (VOICE_LABELS[word], t)
-            return [("click", "left")] * (2 if word == "double" else 1)
+            self._aim(t_start if t_start is not None else t, acts)
+            return acts + [("click", "left")] * (2 if word == "double" else 1)
         if self.mode == Mode.CHROME and word in CHROME_KEYS:
             # mode Chrome : ses mots marchent sans « iris » (demande de l'utilisateur, 12/11). Ils ne sont
             # écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs.
@@ -593,7 +594,6 @@ class Core:
             if self.mode == Mode.DISABLED:
                 self.set_mode(Mode.NEUTRAL, t, acts)
             self.listen_until = t + c.listen_s
-            self.freeze_for_voice(t)          # « iris » seul : le curseur reste figé le temps de la commande
             self.last_word = (word, t, True)
             self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
             return acts
@@ -611,6 +611,8 @@ class Core:
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
+        if word in ("clic", "double", "menu", "glisse"):
+            self._aim(self.wake_t, acts)      # là où l'on visait en disant « iris »
         if word in ("clic", "double", "menu"):
             if word == "menu":
                 acts.append(("click", "right"))
@@ -812,10 +814,25 @@ class Core:
         return []
 
     def freeze_for_voice(self, t):
-        """« iris » vient d'être repéré (texte provisoire) : en mode souris, le curseur ne bouge plus
-        jusqu'à la commande (ou 3,5 s), pour que « iris clic » clique exactement là où l'on visait."""
-        if self.mouse:
-            self.freeze_until = max(self.freeze_until, t + self.cfg.listen_s)
+        """Plus de gel du curseur sur « iris » (gênant, demande de l'utilisateur, 12/11) : le clic vocal vise
+        désormais là où était le curseur quand la commande a commencé (voir _aim). Gardée pour la boucle."""
+        return
+
+    def _aim(self, ref_t, acts):
+        """Ramène le curseur là où il était à l'instant ref_t (début de « iris clic ») avant de cliquer :
+        pendant qu'on parle, la main ou la tête a pu bouger."""
+        if not self.mouse or ref_t is None:
+            return
+        pos = None
+        for tt, p in self.cursor_hist:
+            if tt <= ref_t:
+                pos = p
+            else:
+                break
+        if pos is not None and pos != self.cursor:
+            self.cursor = pos
+            self._cursor_f = [float(pos[0]), float(pos[1])]
+            acts.append(("move", *pos))
 
     def ask_tick(self, t, last_speech_t):
         """Fin de la question : comme la dictée, après un silence ; rien dit du tout : abandon."""
