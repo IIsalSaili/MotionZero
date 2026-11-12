@@ -128,7 +128,8 @@ def main(argv=None):
         if faces["lm"] is None:
             faces["lm"] = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
                 base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "face_landmarker.task")),
-                running_mode=vision.RunningMode.VIDEO, num_faces=1))
+                running_mode=vision.RunningMode.VIDEO, num_faces=1,
+                output_facial_transformation_matrixes=True))   # orientation de la tête (souris à la tête)
             log.info("detecteur de visage pret (souris a la tete)")
         return faces["lm"]
     cam = Camera(cfg.camera_index, cfg.width, cfg.height).start()
@@ -292,13 +293,15 @@ def main(argv=None):
                                 fres = face_landmarker().detect_for_video(
                                     mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
                                 lms = [(p.x, p.y) for p in fres.face_landmarks[0]] if fres.face_landmarks else None
+                                mats = fres.facial_transformation_matrixes
+                                matrix = mats[0] if lms is not None and mats else None
                             except Exception:
                                 log.exception("detection du visage")
-                                lms = None
+                                lms = matrix = None
                             if lms is not None:
                                 last_hand_t = t
                             pts = None
-                            acts = core.step_head(lms, t)
+                            acts = core.step_head(lms, t, matrix)
                             frames += 1
                             if t - fps_t >= 1.0:
                                 fps, frames, fps_t = frames / (t - fps_t), 0, t

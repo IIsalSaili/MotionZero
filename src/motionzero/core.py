@@ -227,19 +227,20 @@ class Core:
         self.last_gesture = ("SOURIS A LA " + ("TETE" if self.pointer == "tete" else "MAIN"), t)
         return acts
 
-    def step_head(self, lms, t):
-        """Pointeur « tête » : lms = points (x, y) du visage, ou None. Seule la souris suit la tête."""
+    def step_head(self, lms, t, matrix=None):
+        """Pointeur « tête » : lms = points (x, y) du visage (ou None), matrix = orientation donnée par
+        MediaPipe (4x4, ou None). Seule la souris suit la tête."""
         acts = []
         if self.mode == Mode.DISABLED:
             return acts
-        point = self.head.point(lms, t) if lms is not None else None
+        point = self.head.point(lms, matrix, t) if lms is not None else None
         if point is None:
             return self._no_hand(t, acts)
         if (self.mouse and self.last_seen is not None
                 and t - self.last_seen >= self.cfg.recenter_absent_s):
             self.head.reset()
             self._center(acts)                # visage revenu : on repart du centre
-            point = self.head.point(lms, t)
+            point = self.head.point(lms, matrix, t)
         self.last_seen = t
         self.released = False
         palm = (self.fx(point[0], t), self.fy(point[1], t))
@@ -427,7 +428,8 @@ class Core:
     def _gain(self, speed):
         c = self.cfg
         k = min(max((speed - c.gain_speed_lo) / (c.gain_speed_hi - c.gain_speed_lo), 0.0), 1.0)
-        return c.gain_min + (c.gain_max - c.gain_min) * k
+        lo, hi = (c.head_gain_min, c.head_gain_max) if self.pointer == "tete" else (c.gain_min, c.gain_max)
+        return lo + (hi - lo) * k
 
     def _mouse(self, palm, t, acts):
         c = self.cfg

@@ -1,46 +1,115 @@
-"""Souris à la tête : orientation du visage -> point virtuel -> même pavé tactile que la main. Sans caméra."""
+"""Souris à la tête : orientation de la tête (matrice MediaPipe) -> point virtuel -> même pavé tactile que la main.
+Sans caméra : visage et matrice simulés."""
+import math
+import random
+
 from motionzero.config import Config
 from motionzero.core import Core, Mode
-from motionzero.head import NOSE, HeadPointer, nose_position
+from motionzero.head import (BOTTOM_PTS, LEFT_PTS, NOSE_PTS, RIGHT_PTS, TOP_PTS, HeadPointer, head_offsets,
+                             pose_angles)
 
 
 def face(nose_x=0.5, nose_y=0.5, cx=0.5, cy=0.5, w=0.2, h=0.3):
-    """Visage simplifié : seuls les 5 points utiles sont placés (les autres au centre)."""
+    """Visage simplifié : seuls les groupes de points utiles sont placés."""
     lms = [(cx, cy)] * 478
-    lms[NOSE] = (nose_x, nose_y)
+    for i in NOSE_PTS:
+        lms[i] = (nose_x, nose_y)
+    for i in LEFT_PTS:
+        lms[i] = (cx - w / 2, cy)
+    for i in RIGHT_PTS:
+        lms[i] = (cx + w / 2, cy)
+    for i in TOP_PTS:
+        lms[i] = (cx, cy - h / 2)
+    for i in BOTTOM_PTS:
+        lms[i] = (cx, cy + h / 2)
     return lms
 
 
-def test_nez_dans_l_image():
-    assert nose_position(face(nose_x=0.6, nose_y=0.4)) == (0.6, 0.4)
-    assert nose_position(None) is None and nose_position([]) is None
+def mat(yaw=0.0, pitch=0.0, flip_x=False):
+    """Matrice 4x4 dont la direction du regard (3e colonne) correspond à ce lacet / tangage."""
+    fx = math.sin(yaw) * math.cos(pitch) * (-1 if flip_x else 1)
+    fy, fz = math.sin(pitch), math.cos(yaw) * math.cos(pitch)
+    return [[1, 0, fx, 0], [0, 1, fy, 0], [0, 0, fz, 0], [0, 0, 0, 1]]
 
 
-def test_bouger_le_buste_bouge_le_curseur():
-    """Choix de l'utilisateur : tout le visage qui glisse (nez compris) déplace le point."""
-    hp = HeadPointer(scale=7.5)
+def turned(yaw=0.0, pitch=0.0, **kw):
+    """Visage + matrice cohérents : tourner à droite pousse le nez à droite, lever la tête le monte."""
+    return face(nose_x=0.5 + 0.12 * yaw, nose_y=0.5 - 0.12 * pitch, **kw), mat(yaw, pitch)
+
+
+def test_angles_de_la_matrice():
+    y, p = pose_angles(mat(0.3, -0.2))
+    assert abs(y - 0.3) < 1e-9 and abs(p + 0.2) < 1e-9
+    assert pose_angles(None) is None and pose_angles([[0] * 4] * 4) is None
+
+
+def test_tourner_a_droite_et_lever_la_tete():
+    hp = HeadPointer(scale=1.4, scale_y=2.0)
+    assert hp.point(*turned()) == (0.5, 0.5)
+    x, _ = hp.point(*turned(yaw=0.2))
+    _, y = hp.point(*turned(pitch=0.2))
+    assert abs(x - (0.5 + 1.4 * 0.2)) < 1e-9 and abs(y - (0.5 - 2.0 * 0.2)) < 1e-9   # curseur à droite, en haut
+
+
+def test_bouger_le_buste_ne_bouge_rien():
+    """Tout le visage glisse dans l'image sans tourner : l'orientation ne change pas."""
+    hp = HeadPointer()
+    hp.point(face(), mat())
+    assert hp.point(face(nose_x=0.6, cx=0.6), mat()) == (0.5, 0.5)
+
+
+def test_sens_d_un_axe_corrige_tout_seul():
+    """Si la matrice a l'axe horizontal à l'envers, les mouvements nets du nez le révèlent et on corrige."""
+    hp = HeadPointer(scale=1.4)
+    hp.point(face(), mat(flip_x=True))
+    for _ in range(4):                                      # tête franchement tournée à droite
+        x, _ = hp.point(face(nose_x=0.53), mat(0.3, flip_x=True))
+    assert hp.sign[0] == -1 and x > 0.5
+
+
+def test_sens_correct_pas_de_correction():
+    hp = HeadPointer()
+    hp.point(*turned())
+    for _ in range(10):
+        hp.point(*turned(yaw=0.3, pitch=0.3))
+    assert hp.sign == [1, -1]
+
+
+def test_sans_matrice_on_se_rabat_sur_le_nez_dans_le_visage():
+    hp = HeadPointer(rel_scale=1.5)
     assert hp.point(face()) == (0.5, 0.5)
-    x, _ = hp.point(face(nose_x=0.52, cx=0.52))
-    assert abs(x - (0.5 + 7.5 * 0.02)) < 1e-9
+    x, _ = hp.point(face(nose_x=0.52))
+    assert abs(x - (0.5 + 1.5 * 0.1)) < 1e-9
 
 
-def test_reference_prise_au_premier_visage():
-    hp = HeadPointer(scale=2.0)
-    assert hp.point(face(nose_x=0.53)) == (0.5, 0.5)       # tête un peu décalée au départ = centre
-    x, _ = hp.point(face(nose_x=0.55))
-    assert abs(x - (0.5 + 2.0 * 0.02)) < 1e-9
-    hp.reset()
-    assert hp.point(face(nose_x=0.55)) == (0.5, 0.5)       # « iris centre »
-
-
-def test_visage_absent():
+def test_visage_absent_ou_trop_petit():
+    assert head_offsets(None) is None and head_offsets([]) is None
     assert HeadPointer().point(None) is None
+    assert HeadPointer().point(face(w=0.01)) is None
 
 
-def test_point_borne_a_l_image():
-    hp = HeadPointer(scale=10)
-    hp.point(face())
-    assert hp.point(face(nose_x=0.6)) == (1.0, 0.5)
+def test_tete_immobile_le_curseur_ne_tremble_pas():
+    """Orientation qui tremble de ±0,15° : le point ne bouge pas."""
+    rnd = random.Random(1)
+    hp = HeadPointer()
+    pts = [hp.point(face(), mat(rnd.uniform(-0.0026, 0.0026), rnd.uniform(-0.0026, 0.0026)), i / 30)
+           for i in range(60)]
+    assert max(abs(p[0] - 0.5) + abs(p[1] - 0.5) for p in pts[10:]) < 0.005
+
+
+def test_petit_geste_lent_passe_quand_meme():
+    """Rotation lente de 2° : elle doit bouger le curseur (la zone morte ne mange pas les petits gestes)."""
+    hp = HeadPointer()
+    for i in range(60):
+        x, _ = hp.point(face(), mat(0.035 * i / 59), i / 30)
+    assert x > 0.52
+
+
+def test_vitesse_propre_a_la_tete():
+    core = Core(Config())
+    lent_main = core._gain(0.0)
+    core.pointer = "tete"
+    assert core._gain(0.0) < lent_main and core._gain(10.0) == Config().head_gain_max
 
 
 def _tete_souris():
@@ -58,19 +127,22 @@ def test_iris_tete_puis_souris_suit_la_tete():
     assert core.pointer == "tete" and core.mouse
     t, acts = 1.0, []
     for _ in range(10):                                     # tête de face : armement au centre
-        acts += core.step_head(face(), t)
+        lms, m = turned()
+        acts += core.step_head(lms, t, m)
         t += 0.05
     assert core.armed
     moves = []
-    for i in range(10):                                     # on tourne la tête vers la droite
-        moves += [a for a in core.step_head(face(nose_x=0.5 + 0.005 * (i + 1)), t) if a[0] == "move"]
+    for i in range(15):                                     # on tourne la tête vers la droite
+        lms, m = turned(yaw=0.03 * (i + 1))
+        moves += [a for a in core.step_head(lms, t, m) if a[0] == "move"]
         t += 0.05
     assert moves and moves[-1][1] > 500
 
 
 def test_tete_absente_relache():
     core = _tete_souris()
-    core.step_head(face(), 1.0)
+    lms, m = turned()
+    core.step_head(lms, 1.0, m)
     acts = core.step_head(None, 5.0)
     assert ("release_all",) in acts
 
@@ -91,7 +163,8 @@ def test_bouton_de_l_accueil_bascule():
 
 def test_iris_centre():
     core = _tete_souris()
-    core.step_head(face(nose_x=0.53), 1.0)
+    lms, m = turned(yaw=0.1)
+    core.step_head(lms, 1.0, m)
     core.voice("iris", 2.0)
     acts = core.voice("centre", 2.1)
     assert core.head.base is None and any(a[0] == "move" for a in acts)
@@ -101,7 +174,8 @@ def test_pause_la_tete_ne_fait_rien():
     core = _tete_souris()
     core.voice("iris", 1.0)
     core.voice("pause", 1.1)
-    assert core.mode == Mode.DISABLED and core.step_head(face(), 2.0) == []
+    lms, m = turned()
+    assert core.mode == Mode.DISABLED and core.step_head(lms, 2.0, m) == []
 
 
 def test_choix_garde_au_redemarrage(tmp_path):
@@ -117,34 +191,3 @@ def test_choix_garde_au_redemarrage(tmp_path):
 def test_texte_du_bouton():
     from motionzero.ui import pointer_button_text
     assert "tête" in pointer_button_text("main") and "main" in pointer_button_text("tete")
-
-
-def test_tete_immobile_le_curseur_ne_tremble_pas():
-    """Bruit du maillage du visage (tête immobile) : le point virtuel ne bouge pas (mesuré : ça tremblait)."""
-    import random
-    rnd = random.Random(1)
-    hp = HeadPointer(scale=7.5, scale_y=10.0)
-    pts = []
-    for i in range(60):                                     # 2 s à 30 images/s, nez qui tremble de ±0,1 %
-        p = hp.point(face(nose_x=0.5 + rnd.uniform(-0.001, 0.001), nose_y=0.5 + rnd.uniform(-0.001, 0.001)), i / 30)
-        pts.append(p)
-    spread = max(abs(p[0] - 0.5) for p in pts[10:])
-    assert spread < 0.003
-
-
-def test_tete_qui_tourne_suit_quand_meme():
-    hp = HeadPointer(scale=7.5, scale_y=10.0)
-    for i in range(30):
-        x, _ = hp.point(face(nose_x=0.5 + 0.0015 * i), i / 30)   # rotation franche
-    assert x > 0.6
-
-
-def test_vertical_plus_sensible():
-    """Lever la tête déplace moins le nez que la tourner : la verticale est amplifiée davantage."""
-    hp = HeadPointer(scale=7.5, scale_y=10.0)
-    hp.point(face())
-    x, _ = hp.point(face(nose_x=0.52))
-    _, y = hp.point(face(nose_y=0.53))
-    assert abs((x - 0.5) - 7.5 * 0.02) < 1e-9 and abs((y - 0.5) - 10.0 * 0.03) < 1e-9
-    from motionzero.config import Config
-    assert Config().head_scale_y > Config().head_scale
