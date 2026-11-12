@@ -6,7 +6,7 @@ L'utilisateur n'a plus l'usage pratique de ses mains : il travaille AVEC l'appli
 ## Commandes
 - Tests : `.venv/Scripts/python -m pytest -q` (~11 s, tout passe sans caméra ; `test_real_recording` se saute si `recordings/essai1.jsonl` manque).
 - Lancer : `.venv/Scripts/python -m motionzero --voice` (en arrière-plan). Raccourci bureau « Iris » = même chose avec `pythonw`.
-- Arrêter avant relance : tuer le processus python/pythonw dont la ligne de commande contient `-m motionzero` (`taskkill /F /T`), sinon deux instances coexistent.
+- Arrêter avant relance : tuer le processus python/pythonw dont la ligne de commande contient `-m motionzero` (`taskkill /F /PID`, JAMAIS `/T` : il tue aussi les applis ouvertes par Iris, Chrome compris, et le bot Discord), sinon deux instances coexistent.
 - Rejouer un enregistrement : `tools/replay.py` ; enregistrer : `tools/record.py`.
 
 ## Règles

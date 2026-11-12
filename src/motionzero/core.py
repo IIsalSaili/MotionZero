@@ -36,7 +36,8 @@ VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], 
                  "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
 from .calendar_view import WORDS as CAL_WORDS
 
-CAL_IDLE_S = 60.0          # calendrier ouvert sans commande : fermé
+ALIASES = {"envoyé": "envoie"}   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
+CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
@@ -402,6 +403,7 @@ class Core:
 
     def voice(self, word, t, t_start=None):
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
+        word = ALIASES.get(word, word)
         c = self.cfg
         acts = []
         if self.dictating or self.asking or self.typing or self.opening:
