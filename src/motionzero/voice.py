@@ -69,6 +69,9 @@ WORDS = {
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",
+    "viens": "viens",     # « iris viens » : le bot Discord rejoint ton salon vocal (temporaire, bot #1)
+    "pars": "pars",       # « iris pars » : il quitte le vocal
+    "parle": "parle",     # « iris parle » puis ta phrase : Haiku répond à voix haute dans le vocal
     "volume": "volume",   # « iris volume » puis « 40 », « plus fort », « coupe »… (Whisper)
     "stop": "stop",
 }

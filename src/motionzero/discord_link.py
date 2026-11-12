@@ -204,11 +204,16 @@ def _line(msg):
 
 ERRORS = {"salon_inconnu": "SALON INCONNU", "pas_en_vocal": "TU N'ES PAS EN VOCAL",
           "permission_manquante": "PERMISSION MANQUANTE", "message_vide": "MESSAGE VIDE",
-          "commande_inconnue": "BOT A METTRE A JOUR", "pas_compris": "PAS COMPRIS"}
+          "commande_inconnue": "BOT A METTRE A JOUR", "pas_compris": "PAS COMPRIS",
+          "vocal_impossible": "VOCAL IMPOSSIBLE", "texte_vide": "RIEN A DIRE"}
 
 
 def result_label(msg, kind="send"):
     """Texte de l'île pour la réponse du bot à une commande (« send » ou « move »)."""
+    if msg.get("ok") and kind == "join":
+        return f"IRIS EN VOCAL : {msg.get('channel', '?')}".upper()[:60]
+    if msg.get("ok") and kind == "leave":
+        return "IRIS A QUITTE LE VOCAL"
     if msg.get("ok"):
         done = "ENVOYE DANS #" if kind == "send" else "SALON "
         return f"DISCORD : {done}{msg.get('channel', '?')}".upper()[:60]
