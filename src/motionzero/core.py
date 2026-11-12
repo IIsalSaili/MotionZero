@@ -55,10 +55,10 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "plus tard": "RAPPEL DANS 10 MIN", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
-             "rappel": "rappel_stop"}
+             "rappel": "rappel_stop", "timer": "timer_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
-             "rappel": "RAPPEL : Haiku reflechit…"}
+             "rappel": "RAPPEL : Haiku reflechit…", "timer": "TIMER : je lis la duree…"}
 
 
 class Core:
@@ -117,6 +117,7 @@ class Core:
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
         self.calendar_until = -1e9            # « iris calendrier » : ouvert jusqu'à cet instant
+        self.timer_running = False            # mis à jour par les rappels (même fil) : « iris timer » l'annule
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
@@ -553,6 +554,19 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
+        elif word == "chronomètre":
+            acts.append(("chrono",))
+            label = "CHRONOMETRE"
+        elif word == "timer":
+            if self.timer_running:
+                acts.append(("timer_cancel",))
+                label = "TIMER ANNULE"
+            else:
+                self.opening = True
+                self.open_t0 = t
+                self.open_kind = "timer"
+                acts.append(("open_start",))
+                label = "TIMER : combien de temps ?"
         elif word == "calendrier":
             self.calendar_until = t + CAL_IDLE_S
             acts.append(("cal_open",))
@@ -681,7 +695,8 @@ class Core:
             if not close:
                 self.last_gesture = ({"open": "RIEN ENTENDU : ouvre annule", "message": "RIEN ENTENDU : message annule",
                                       "salon": "RIEN ENTENDU : salon annule",
-                                      "rappel": "RIEN ENTENDU : rappel annule"}[kind], t)
+                                      "rappel": "RIEN ENTENDU : rappel annule",
+                                      "timer": "RIEN ENTENDU : timer annule"}[kind], t)
             return [("open_cancel",)]
         return []
 

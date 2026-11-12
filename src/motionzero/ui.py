@@ -705,7 +705,7 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF")):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
                 self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
@@ -730,6 +730,13 @@ class _IslandPainter:
         qa = st.get("qa") or {}
         self.qa = qa if qa.get("phase") in ("answer", "error") else None
         self.rem = reminder_view(st)
+        tm = (st.get("reminders") or {}).get("timers") or {}
+        self.timer_pills = [("Chrono " + tm["chrono"]["text"] + (" · arrêté" if tm["chrono"]["done"] else ""), False)] \
+            if tm.get("chrono") else []
+        if tm.get("timer"):
+            self.timer_pills.append(("Timer " + tm["timer"]["text"], True))
+        if self.timer_pills:
+            active = True
         clock = st.get("clock")                # « jeudi 12/11/2026 · 14:05 », seulement après « iris heure »
         if clock and (self.clk_start is None or self.clk_end is not None):
             self.clk_start, self.clk_end = now, None          # (re)commence l'aller
@@ -748,7 +755,7 @@ class _IslandPainter:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else None
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
-                   rem_key, self.next_rem)
+                   rem_key, self.next_rem, tuple(self.timer_pills))
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -817,6 +824,30 @@ class _IslandPainter:
             p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
         p.restore()
         self._paint_clock(p, x, y + ISLAND_H + CLOCK_GAP)
+        ty = y + ISLAND_H + CLOCK_GAP
+        if self.next_rem:
+            ty += ISLAND_H + CLOCK_GAP
+        tx = x
+        for text, countdown in getattr(self, "timer_pills", []):
+            tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
+
+    def _paint_timer_pill(self, p, x, y, text, countdown):
+        """Fiche « sablier + temps » ; renvoie sa largeur."""
+        fm = QFontMetrics(self.font_msg)
+        pad, gap = 18, 10
+        w = 2 * pad + ICON + gap + fm.horizontalAdvance(text)
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(28, 38, 70, 245) if countdown else QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        icon = self.icons.get("timer")
+        if icon is not None:
+            icon.render(p, QRectF(x + pad, y + (ISLAND_H - ICON) / 2, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_msg)
+        p.drawText(QRectF(x + pad + ICON + gap, y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, text)
+        p.restore()
+        return w
 
     def _paint_clock(self, p, x, y):
         """Fiche « horloge + jour, date, heure », sous l'île ; apparaît avec l'agrandissement du logo."""
