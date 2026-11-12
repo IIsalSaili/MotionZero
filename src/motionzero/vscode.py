@@ -141,6 +141,12 @@ APPS = {
 }
 
 
+def chrome_in_front():
+    """Chrome est-il la fenêtre au premier plan ? (mode CHROME : aucune touche envoyée ailleurs)"""
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    return bool(hwnd) and _exe_of(hwnd) == "chrome.exe"
+
+
 def _exe_of(hwnd):
     """Nom du programme d'une fenêtre (ex. « chrome.exe »), en minuscules."""
     u, k = ctypes.windll.user32, ctypes.windll.kernel32

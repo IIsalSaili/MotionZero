@@ -589,7 +589,7 @@ ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
 ISLAND_FADED = 0.25      # … à 25 % d'opacité
 TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
-MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "DESACTIVE": "PAUSE"}
+MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "CHROME": "CHROME", "DESACTIVE": "PAUSE"}
 
 # pastille Discord, à gauche de l'îlot : micro barré (micro coupé), casque barré + micro barré (sourdine)
 _ICON_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "icons")
@@ -617,7 +617,6 @@ BLINK_EVERY = (1.2, 1.8) # environ toutes les 1,5 s, un peu irrégulier pour ne 
 EYE_AT = (0.560, 0.690)  # centre de l'œil dans l'image du logo (mesuré sur assets/iris/neutre.png)
 EYE_W = 0.31             # largeur de l'œil / largeur de l'image
 EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, le haut des doigts sort du cadre
-LOGO_BY_MODE = {"NEUTRE": "neutre", "LECTURE": "lecture", "SOURIS": "souris", "DESACTIVE": "neutre"}
 
 
 REMINDER_W = 560
@@ -687,11 +686,23 @@ def reminder_texts(kind, data):
 
 
 def islet_logo(st, blinking):
-    """Nom du logo à afficher. Pur : testable. Vert pendant la validation (sans clignement)."""
-    if st.get("ok_flash"):
-        return "ok"
-    base = LOGO_BY_MODE.get(st.get("mode"), "neutre")
-    return base + "_ferme" if blinking else base
+    """Nom du logo à afficher. Pur : testable. Toujours le logo noir classique ; le mode se lit au cercle."""
+    return "neutre_ferme" if blinking else "neutre"
+
+
+RING_DEFAULT = QColor(0, 0, 0, 200)
+RING_BY_MODE = {"SOURIS": ORANGE, "CHROME": BLUE}
+GREEN = QColor(52, 199, 89)
+RING_BLINK_S = 0.125     # commande comprise : 2 éclats verts pendant les 0,5 s de « ok_flash »
+
+
+def islet_ring(st, age):
+    """Couleur et épaisseur du cercle autour de la main. Pur : testable.
+    Orange en souris, bleu en Chrome ; une commande comprise le fait clignoter en vert."""
+    if st.get("ok_flash") and int(age / RING_BLINK_S) % 2 == 0:
+        return GREEN, 3.5
+    col = RING_BY_MODE.get(st.get("mode"))
+    return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
 
 
 def load_fonts():
@@ -751,6 +762,8 @@ class _IslandPainter:
             if not pm.isNull():
                 self.logos[name] = pm
         self.logo = None
+        self.ring = (RING_DEFAULT, 2.0)
+        self.flash_t0 = None
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
@@ -814,15 +827,20 @@ class _IslandPainter:
             self.blink_until = now + BLINK_S
             self.next_blink = now + _random.uniform(*BLINK_EVERY)
         logo = islet_logo(st, now < self.blink_until)
+        if st.get("ok_flash"):
+            self.flash_t0 = now if self.flash_t0 is None else self.flash_t0
+        else:
+            self.flash_t0 = None
+        ring = islet_ring(st, now - self.flash_t0 if self.flash_t0 is not None else 0.0)
         discord = discord_icons(st.get("discord"))
         if discord != self.discord:
             self.discord, self.last_change = discord, now
         idle = now - self.last_change
         target = 1.0 if active or idle < ISLAND_FADE_S else ISLAND_FADED
         ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
-        changed = (abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo or ringing
+        changed = (abs(target - self.opacity) > 0.01 or idle < 0.1 or logo != self.logo or ring != self.ring or ringing
                    or self.animating(now))
-        self.opacity, self.logo = target, logo
+        self.opacity, self.logo, self.ring = target, logo, ring
         return changed
 
     def animating(self, now):
@@ -1244,6 +1262,7 @@ class _IslandPainter:
             p.setClipPath(clip)
             p.drawPixmap(QRectF(cx - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
             p.restore()
-        p.setPen(QPen(QColor(0, 0, 0, 200), 2))
+        col, width = self.ring
+        p.setPen(QPen(col, width))
         p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(circle)
+        p.drawEllipse(circle.adjusted(width / 2 - 1, width / 2 - 1, 1 - width / 2, 1 - width / 2))

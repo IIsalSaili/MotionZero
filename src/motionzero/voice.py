@@ -71,6 +71,16 @@ WORDS = {
     "date": "date",
     "stop": "stop",
 }
+
+
+def _chrome_words():
+    """Mots du mode CHROME (« iris retour », « iris suivant »…) : voir core.CHROME_KEYS."""
+    from .core import CHROME_KEYS
+    for w in CHROME_KEYS:
+        WORDS.setdefault(w, w)
+
+
+_chrome_words()
 WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8

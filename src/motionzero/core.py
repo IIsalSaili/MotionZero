@@ -27,6 +27,7 @@ class Mode:
     NEUTRAL = "NEUTRE"    # par défaut : la main ne déclenche rien, seule la voix agit
     READING = "LECTURE"
     MOUSE = "SOURIS"
+    CHROME = "CHROME"     # « iris chrome » : commandes de navigation à la voix ; quitté dès que Chrome n'est plus devant
     IDLE = READING  # compatibilité : l'ancien « repos » est désormais la lecture
 
 
@@ -35,6 +36,21 @@ WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
 from .calendar_view import WORDS as CAL_WORDS
+
+# mode CHROME : mot dit (après « iris ») -> touches envoyées à Chrome, seulement s'il est au premier plan
+CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
+               "suivant": ["ctrl", "tab"], "précédent": ["ctrl", "shift", "tab"],
+               "onglet": ["ctrl", "t"], "ferme": ["ctrl", "w"], "rouvre": ["ctrl", "shift", "t"],
+               "recharge": ["f5"], "favori": ["ctrl", "d"], "haut": ["home"], "bas": ["end"],
+               "descends": ["pagedown"], "monte": ["pageup"],
+               "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
+               "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
+CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
+                 "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
+                 "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE", "favori": "FAVORI",
+                 "haut": "HAUT DE PAGE", "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
+                 "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
+CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 
 ALIASES = {"envoyé": "envoie"}   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
@@ -82,6 +98,7 @@ class Core:
         self.screen = screen
         self.mode = cfg.start_mode
         self.mode_since = -1e9
+        self.chrome_seen = False
         self.last_seen = None
         self.released = True
         self.features = None
@@ -172,6 +189,7 @@ class Core:
             self.open_since = None
         self.mode = mode
         self.mode_since = t
+        self.chrome_seen = False
         self._reset()
         acts.append(("mode", mode))
         if mode == Mode.MOUSE:
@@ -441,7 +459,7 @@ class Core:
             if word == "stop":
                 self.calendar_until = -1e9
                 acts.append(("cal_close",))
-        elif word in CAL_WORDS:
+        elif word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS):
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
         if word == "stop":  # toujours écouté, prioritaire
@@ -450,7 +468,7 @@ class Core:
             self.menu.close()
             self.bubble = None
             self.voice_scroll_until = self.listen_until = -1e9
-            if self.mode in (Mode.MOUSE, Mode.READING):
+            if self.mode in (Mode.MOUSE, Mode.READING, Mode.CHROME):
                 self.set_mode(Mode.NEUTRAL, t, acts)
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
@@ -486,6 +504,18 @@ class Core:
         # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
         self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
+        if word in CHROME_KEYS and (self.mode == Mode.CHROME or word != "ferme"):   # « ferme » ailleurs : inchangé
+            if self.mode != Mode.CHROME:
+                self.last_word = (word, t, False)
+                self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
+                return acts
+            acts.append(("chrome_keys", CHROME_KEYS[word]))
+            if word == "recherche":
+                self.typing = True
+                self.type_t0 = t
+                acts.append(("type_start",))
+            self.last_gesture = (CHROME_LABELS[word], t)
+            return acts
         if word in ("clic", "double", "menu"):
             if word == "menu":
                 acts.append(("click", "right"))
@@ -595,6 +625,10 @@ class Core:
             label = "LECTURE"
         elif word in ("discord", "chrome", "studio", "accueil"):
             acts.append(("open_app", word))
+            if word == "chrome":
+                self.set_mode(Mode.CHROME, t, acts)
+            elif self.mode == Mode.CHROME:
+                self.set_mode(Mode.NEUTRAL, t, acts)
         elif word == "mute":
             acts.append(("discord_mute",))
         elif word == "démute":
@@ -607,6 +641,19 @@ class Core:
             self.listen_until = -1e9
             label = "PAUSE (dis IRIS pour reprendre)"
         self.last_gesture = (label, t)
+        return acts
+
+    def chrome_front(self, front, t):
+        """Appelé par la boucle : Chrome est-il au premier plan ? Le mode CHROME s'arrête dès qu'il ne l'est plus
+        (après l'avoir été, ou passé le délai d'ouverture)."""
+        acts = []
+        if self.mode != Mode.CHROME:
+            return acts
+        if front:
+            self.chrome_seen = True
+        elif self.chrome_seen or t - self.mode_since > CHROME_GRACE_S:
+            self.set_mode(Mode.NEUTRAL, t, acts)
+            self.last_gesture = ("MODE CHROME QUITTE", t)
         return acts
 
     # --- dictée Claude (VS Code) ---------------------------------------------

@@ -178,7 +178,7 @@ def test_iris_discord_et_chrome_ouvrent_l_appli():
     core.voice("iris", 1.0)
     assert core.voice("discord", 1.5) == [("open_app", "discord")]
     core.voice("iris", 2.0)
-    assert core.voice("chrome", 2.5) == [("open_app", "chrome")]
+    assert core.voice("chrome", 2.5) == [("open_app", "chrome"), ("mode", "CHROME")]   # + mode Chrome
 
 
 def test_iris_mute_et_demute():
