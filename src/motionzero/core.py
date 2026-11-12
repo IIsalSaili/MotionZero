@@ -375,7 +375,8 @@ class Core:
         if self.last_seen is None:
             return acts
         gone = t - self.last_seen
-        if self.voice_scroll_armed and gone >= self.cfg.recenter_absent_s:
+        if (self.pointer != "tete" and self.voice_scroll_armed and self.scrolling(t)
+                and gone >= self.cfg.recenter_absent_s):
             self._end_scroll(t)               # main baissée hors de l'image : fin du défilement
         if not self.released and gone >= self.cfg.release_absent_s:
             acts.append(("release_all",))
@@ -630,6 +631,8 @@ class Core:
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
+        if word != "défile" and self.scrolling(t):
+            self._end_scroll(t)               # toute autre commande sort du défilement d'abord
         if word in ("clic", "double", "menu", "glisse"):
             self._aim(self.wake_t, acts)      # là où l'on visait en disant « iris »
         if word in ("clic", "double", "menu"):
@@ -645,8 +648,11 @@ class Core:
             self.dragging = True
         elif word == "lâche":
             acts.append(("release", "mouse", "left"))
+        elif word == "défile" and self.scrolling(t):  # « iris défile » une 2e fois : on en sort
+            self._end_scroll(t)
+            label = "DEFILEMENT FINI"
         elif word == "défile":
-            self.voice_scroll_until = t + c.voice_scroll_s
+            self.voice_scroll_until = math.inf    # actif jusqu'à « iris défile », « stop » ou une autre commande
             self.voice_scroll_armed = False
             self.voice_scroll_since = None
             self._scroll_acc = 0.0
@@ -977,7 +983,7 @@ class Core:
     def _voice_scroll(self, palm, t, acts):
         """« défile » : comme la souris, rien ne bouge tant que la main n'est pas passée au centre de l'image
         (une bande horizontale : seule la hauteur compte). Ensuite, plus la main est au-dessus / en dessous
-        du centre, plus ça défile vite. Fin : « stop », main sortie de l'image, ou voice_scroll_s au neutre."""
+        du centre, plus ça défile vite. Fin : « iris défile » redit, « stop », une autre commande, ou (main) main sortie de l'image."""
         c = self.cfg
         arm, dead, gain, span = self._scroll_params()
         if not self.voice_scroll_armed:
@@ -990,7 +996,6 @@ class Core:
             if t - self.voice_scroll_since >= c.arm_hold_s:
                 self.voice_scroll_armed = True
                 self.voice_scroll_y0, self.voice_scroll_dy = 0.5, dy
-                self.voice_scroll_until = t + c.voice_scroll_s
                 self.last_gesture = ("DEFILE : monte / descends la main", t)
             return
         dy = palm[1] - self.voice_scroll_y0
@@ -1001,7 +1006,6 @@ class Core:
         if abs(dy) <= dead:
             self._scroll_acc = 0.0
             return
-        self.voice_scroll_until = t + c.voice_scroll_s   # hors du neutre : ça reste actif
         rate = min((abs(dy) - dead) * gain, c.voice_scroll_max_rate)  # crans / s
         dt = (t - self.prev_t) if self.prev_t is not None else 0.0
         self._scroll_acc += rate * min(dt, 0.2)

@@ -208,13 +208,13 @@ def test_defile_tete_petit_mouvement_suffit():
     core, _, t = _tete_defile([0.0] * 10)                  # souris armée tête de face
     core.voice("iris", t)
     core.voice("défile", t)
-    core, acts, t = _tete_defile([0.0] * 10 + [-0.04] * 30, core, t)   # tête baissée d'environ 2°
+    core, acts, t = _tete_defile([0.0] * 10 + [-0.04] * 60, core, t)   # tête baissée d'environ 2°, 2 s
     scrolls = [a for a in acts if a[0] == "scroll"]
-    assert len(scrolls) >= 3 and all(s[1] < 0 for s in scrolls)
+    assert 1 <= len(scrolls) <= 5 and all(s[1] < 0 for s in scrolls)
     assert not [a for a in acts if a[0] == "move"]          # le curseur ne bouge pas pendant le défilement
-    core, acts, t = _tete_defile([0.04] * 30, core, t)       # tête levée : ça remonte
+    core, acts, t = _tete_defile([0.04] * 90, core, t)       # tête levée : ça remonte
     ups = [a[1] for a in acts if a[0] == "scroll"]
-    assert ups and ups[-1] > 0 and sum(u > 0 for u in ups) >= 3   # un cran de transition (filtre) toléré
+    assert ups and ups[-1] > 0 and sum(u > 0 for u in ups) >= 2   # un cran de transition (filtre) toléré
 
 
 def test_defile_tete_tremblement_ne_defile_pas():
@@ -248,9 +248,27 @@ def test_defile_tete_butee_un_petit_retour_suffit():
     core, acts, t = _tete_defile([-0.25] * 15, core, t)                # relevée de quelques degrés
     core, acts, t = _tete_defile([-0.25] * 15, core, t)
     assert not [a for a in acts if a[0] == "scroll"]                   # neutre en moins de 0,5 s
-    core, acts, t = _tete_defile([0.3] * 40, core, t)                  # yeux au plafond
+    core, acts, t = _tete_defile([0.3] * 60, core, t)                  # yeux au plafond
     ups = [a[1] for a in acts if a[0] == "scroll"]
     assert ups and ups[-1] > 0
     core, acts, t = _tete_defile([0.25] * 15, core, t)
     core, acts, t = _tete_defile([0.25] * 15, core, t)
     assert not [a for a in acts if a[0] == "scroll"]
+
+
+def test_defile_tete_vitesse_douce_a_fond():
+    """Tête à fond : au plus quelques crans par seconde (avant : envoyé « à l'autre bout de la planète »)."""
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, acts, t = _tete_defile([0.0] * 10 + [-0.3] * 90, core, t)    # 3 s yeux au sol
+    assert len([a for a in acts if a[0] == "scroll"]) <= 9
+
+
+def test_defile_tete_ne_s_arrete_pas_si_le_visage_disparait():
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("défile", t)
+    core, _, t = _tete_defile([0.0] * 10, core, t)
+    core.step_head(None, t + 2.0)
+    assert core.scrolling(t + 2.0)                      # seule la voix en sort

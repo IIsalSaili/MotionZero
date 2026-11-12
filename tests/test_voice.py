@@ -173,12 +173,32 @@ def test_defile_main_immobile_au_centre_ne_defile_pas():
     assert _scrolls(acts) == []
 
 
-def test_defile_jamais_arme_expire():
+def test_defile_reste_actif_puis_iris_defile_en_sort():
     core, clk = Core(Config()), Clock()
     _defile(core, clk)
-    clk.run(core, 9.0, cx=0.5, cy=0.9)                # main jamais amenée au centre
-    acts = clk.run(core, 1.0, cx=0.5, cy=0.61) + clk.run(core, 1.0, cx=0.5, cy=0.8)
+    clk.run(core, 0.3, cx=0.5, cy=0.61)
+    clk.run(core, 20.0, cx=0.5, cy=0.61)               # longtemps au neutre : toujours actif
+    assert core.scrolling(clk.t)
+    _defile(core, clk)                                 # redit : on en sort
+    assert not core.scrolling(clk.t) and core.scroll_gauge(clk.t) is None
+    assert _scrolls(clk.run(core, 1.0, cx=0.5, cy=0.86)) == []
+
+
+def test_defile_autre_commande_en_sort():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    clk.run(core, 0.3, cx=0.5, cy=0.61)
+    core.voice("iris", clk.t)
+    core.voice("souris", clk.t)
+    assert not core.scrolling(clk.t) and core.mouse
+    acts = clk.run(core, 1.0, cx=0.5, cy=0.86)
     assert _scrolls(acts) == []
+
+
+def test_defile_jamais_arme_reste_inerte():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    assert _scrolls(clk.run(core, 3.0, cx=0.5, cy=0.95)) == []   # main jamais amenée au centre
 
 
 def test_defile_main_sortie_de_l_image_arrete():
