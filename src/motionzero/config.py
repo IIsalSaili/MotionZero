@@ -88,6 +88,14 @@ class Config:
     # x2 le 12/11 (demande de l'utilisateur : le moins de mouvements possible, pas la précision)
     gain_min: float = 2.0                # mouvements lents (viser) ; avant 1,0 (1,5 jugé trop réactif à l'époque)
     gain_max: float = 7.0                # mouvements rapides ; avant 3,5
+    # souris à la tête (12/11) : « main » ou « tete » ; ampleur du point virtuel par rapport au visage
+    pointer: str = "main"
+    # orientation de la tête (12/11) : point virtuel par radian de rotation ; ~20° couvrent la moitié de l'écran
+    head_scale: float = 1.4
+    head_scale_y: float = 2.0          # on lève / baisse la tête moins loin qu'on ne la tourne
+    # vitesse propre à la tête : lente pour viser (petits gestes), rapide pour traverser l'écran
+    head_gain_min: float = 0.8
+    head_gain_max: float = 7.0
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume

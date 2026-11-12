@@ -53,6 +53,26 @@ def lower_priority():
         logging.getLogger("motionzero").warning("priorite du processus non changee")
 
 
+POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
+
+
+def read_pointer(path, default="main"):
+    try:
+        with open(path, encoding="utf-8") as f:
+            value = f.read().strip()
+    except OSError:
+        return default
+    return value if value in ("main", "tete") else default
+
+
+def write_pointer(path, value):
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(value)
+    except OSError:
+        logging.getLogger("motionzero").warning("choix du pointeur non enregistre")
+
+
 def detect_period(disabled, last_hand_t, t):
     """Intervalle entre deux détections : pleine vitesse avec une main, ralenti sinon."""
     if disabled or t - last_hand_t >= IDLE_AFTER_S:
@@ -87,6 +107,7 @@ def main(argv=None):
 
     set_dpi_aware()
     cfg = load_config(args.config)
+    cfg.pointer = read_pointer(POINTER_FILE, cfg.pointer)    # main ou tête : le dernier choix est gardé
     core = Core(cfg, primary_screen())
     try:                                       # repères des poses de l'utilisateur (index pointé = clic)
         from .poses import load_centroids
@@ -101,6 +122,16 @@ def main(argv=None):
     landmarker = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "hand_landmarker.task")),
         running_mode=vision.RunningMode.VIDEO, num_hands=2))
+    faces = {"lm": None}                       # détecteur de visage : créé au 1er passage à la tête seulement
+
+    def face_landmarker():
+        if faces["lm"] is None:
+            faces["lm"] = vision.FaceLandmarker.create_from_options(vision.FaceLandmarkerOptions(
+                base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "face_landmarker.task")),
+                running_mode=vision.RunningMode.VIDEO, num_faces=1,
+                output_facial_transformation_matrixes=True))   # orientation de la tête (souris à la tête)
+            log.info("detecteur de visage pret (souris a la tete)")
+        return faces["lm"]
     cam = Camera(cfg.camera_index, cfg.width, cfg.height).start()
     listener = None
     if args.voice:
@@ -114,6 +145,7 @@ def main(argv=None):
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     launcher = None
     app_messages = queue.Queue()
+    pointer_requests = queue.Queue()           # clics sur « main / tête » (fil Qt) -> boucle principale
 
     def app_message(msg):
         # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
@@ -145,9 +177,11 @@ def main(argv=None):
 
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
     qt = QApplication.instance() or QApplication([])
-    view_win = PreviewWindow()
+    view_win = PreviewWindow(pointer=cfg.pointer)
+    view_win.pointer_clicked.connect(lambda: pointer_requests.put(1))
     stop = threading.Event()
     bridge = Bridge()
+    bridge.pointer.connect(view_win.set_pointer)          # choix fait à la voix : le bouton suit
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
     # panneau « Consommation » de la page d'accueil : mesuré seulement quand la page est visible
     live = {"detect_hz": DETECT_MAX_FPS}       # écrit par la boucle, lu par le fil de mesure
@@ -250,24 +284,46 @@ def main(argv=None):
                         last_detect = last_frame_t = t
                         view = cv2.flip(frame, 1)
                         all_hands, world_hands = [], []
-                        if not disabled:   # en pause, la main ne sert à rien : pas de MediaPipe
+                        if not disabled and core.pointer == "tete":
+                            # souris à la tête : seul le détecteur de visage tourne (pas de double charge)
+                            ts = max(int((t - t0) * 1000), last_ts + 1)
+                            last_ts = ts
+                            rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
+                            try:
+                                fres = face_landmarker().detect_for_video(
+                                    mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+                                lms = [(p.x, p.y) for p in fres.face_landmarks[0]] if fres.face_landmarks else None
+                                mats = fres.facial_transformation_matrixes
+                                matrix = mats[0] if lms is not None and mats else None
+                            except Exception:
+                                log.exception("detection du visage")
+                                lms = matrix = None
+                            if lms is not None:
+                                last_hand_t = t
+                            pts = None
+                            acts = core.step_head(lms, t, matrix)
+                            frames += 1
+                            if t - fps_t >= 1.0:
+                                fps, frames, fps_t = frames / (t - fps_t), 0, t
+                        elif not disabled:   # en pause, la main ne sert à rien : pas de MediaPipe
                             ts = max(int((t - t0) * 1000), last_ts + 1)
                             last_ts = ts
                             rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
                             res = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
                             all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
                             world_hands = res.hand_world_landmarks
-                        pts = tracker.update(all_hands, t)  # les deux mains suivies ; celle qui bouge agit
-                        if all_hands:
-                            last_hand_t = t
-                        world = None                        # la même main en 3D (index pointé = clic)
-                        for j, h in enumerate(all_hands):
-                            if h is pts and j < len(world_hands):
-                                world = [(p.x, p.y, p.z) for p in world_hands[j]]
-                        acts = core.step(pts, t, world)
-                        frames += 1
-                        if t - fps_t >= 1.0:
-                            fps, frames, fps_t = frames / (t - fps_t), 0, t
+                        if disabled or core.pointer != "tete":
+                            pts = tracker.update(all_hands, t)  # les deux mains suivies ; celle qui bouge agit
+                            if all_hands:
+                                last_hand_t = t
+                            world = None                        # la même main en 3D (index pointé = clic)
+                            for j, h in enumerate(all_hands):
+                                if h is pts and j < len(world_hands):
+                                    world = [(p.x, p.y, p.z) for p in world_hands[j]]
+                            acts = core.step(pts, t, world)
+                            frames += 1
+                            if t - fps_t >= 1.0:
+                                fps, frames, fps_t = frames / (t - fps_t), 0, t
                     elif t - last_frame_t > STALE_S + detect_period(disabled, last_hand_t, t):
                         # caméra muette : on traite comme « main absente » (relâche tout, puis repos)
                         view, pts = last_view.copy() // 3, None
@@ -287,6 +343,8 @@ def main(argv=None):
                         acts = acts + core.open_tick(t, listener.last_speech_t)
                     while not app_messages.empty():
                         core.last_gesture = (app_messages.get_nowait(), t)
+                    while not pointer_requests.empty():     # bouton « main / tête » de l'accueil (fil Qt)
+                        acts = acts + core.set_pointer_toggle(t)
                     if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
                         chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
                         acts = acts + core.chrome_front(chrome_in_front(), t)
@@ -333,6 +391,11 @@ def main(argv=None):
                         if a[0] == "mode":
                             sounds.play(a[1])
                             log.info("mode %s", a[1])
+                        elif a[0] == "pointer":
+                            write_pointer(POINTER_FILE, a[1])
+                            bridge.pointer.emit(a[1])
+                            sounds.play("MODE")
+                            log.info("souris pilotee par : %s", a[1])
                         elif a[0] == "mouse":
                             sounds.play("SOURIS" if a[1] else "REPOS")
                             log.info("souris %s", "allumee" if a[1] else "eteinte")
@@ -404,6 +467,8 @@ def main(argv=None):
                 listener.stop()
             cam.stop()
             landmarker.close()
+            if faces["lm"] is not None:
+                faces["lm"].close()
             log.info("arret (images rejetees=%d, reconnexions=%d)", cam.rejected, cam.reconnections)
 
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)

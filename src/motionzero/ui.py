@@ -12,7 +12,7 @@ import time as _time
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
                            QPainterPath, QPen, QPixmap)
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 __all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton",
            "set_capture_visible"]
@@ -25,6 +25,7 @@ class Bridge(QObject):
     done = Signal()          # le moteur s'est arrêté
     stats = Signal(object)   # mesures de consommation (panneau de la page d'accueil)
     repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
+    pointer = Signal(str)    # souris à la main / à la tête (changé à la voix) -> bouton de l'accueil
 
 
 class ConsoPanel(QWidget):
@@ -160,22 +161,48 @@ class ConsoPanel(QWidget):
         p.end()
 
 
+def pointer_button_text(pointer):
+    """Texte du bouton de l'accueil. Pur : testable."""
+    return "Souris : tête  ·  passer à la main" if pointer == "tete" else "Souris : main  ·  passer à la tête"
+
+
 class PreviewWindow(QWidget):
     closed = Signal()
+    pointer_clicked = Signal()                 # « main / tête » : traité par la boucle principale (jamais ici)
 
-    def __init__(self):
+    def __init__(self, pointer="main"):
         super().__init__()
         self.setWindowTitle("motionzero")
         self.label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.label.setText("Démarrage de la caméra…")
         self.conso = ConsoPanel()
+        self.pointer = pointer
+        self.pointer_btn = QPushButton(pointer_button_text(pointer))
+        self.pointer_btn.setMinimumHeight(56)  # grande cible (clic à la main ou à la tête)
+        self.pointer_btn.setStyleSheet("QPushButton { background: #000; color: #fff; border: 1px solid #555;"
+                                       " border-radius: 28px; font: bold 13pt 'Atkinson Hyperlegible'; }"
+                                       "QPushButton:hover { border-color: #fff; }")
+        self.pointer_btn.clicked.connect(self._toggle_pointer)
+        side = QVBoxLayout()
+        side.setContentsMargins(8, 8, 8, 8)
+        side.addWidget(self.conso, 1)
+        side.addWidget(self.pointer_btn)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
         lay.addWidget(self.label, 1)
-        lay.addWidget(self.conso)
+        lay.addLayout(side)
         self._sized = False
         self.visible_flag = True   # lu par le moteur : réduite, l'aperçu n'est plus dessiné
+
+    def _toggle_pointer(self):
+        self.set_pointer("main" if self.pointer == "tete" else "tete")
+        self.pointer_clicked.emit()
+
+    def set_pointer(self, pointer):
+        """Choix courant (aussi changé à la voix) : le texte du bouton suit."""
+        self.pointer = pointer
+        self.pointer_btn.setText(pointer_button_text(pointer))
 
     def changeEvent(self, event):
         super().changeEvent(event)

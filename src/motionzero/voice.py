@@ -55,6 +55,9 @@ WORDS = {
     "mute": "mute",       # « iris mute » : coupe Discord
     "muet": "muet",       # « iris muet » : pareil, en français
     "sourdine": "sourdine",  # « iris sourdine » : comme « défun » (casque + micro)
+    "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
+    "main": "main",
+    "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
     "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
