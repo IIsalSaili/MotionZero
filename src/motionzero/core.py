@@ -567,8 +567,11 @@ class Core:
             self.freeze_until = -1e9
             self.last_gesture = (VOICE_LABELS[word], t)
             return [("hotkey", VOICE_HOTKEYS[word])]
-        if self.mode == Mode.CHROME and word in ("clic", "double"):
-            # mode Chrome : clic et double clic aussi sans « iris » (demande de l'utilisateur, 12/11)
+        if (self.mode == Mode.CHROME and word in ("clic", "double")) or (self.mouse and word in ("clic", "double", "menu")):
+            # mode Chrome ou souris allumée : clic, double clic (et clic droit en souris) sans « iris »
+            # (demandes de l'utilisateur, 12/11)
+            # « iris clic » : on vise le début de « iris » ; « clic » seul : le début du mot
+            ref = self.wake_t if self.listening(t) else (t_start if t_start is not None else t)
             self.last_word = (word, t, True)
             self.listen_until = -1e9
             self.freeze_until = -1e9
@@ -576,7 +579,9 @@ class Core:
             self.last_click_t = t
             self.travel = 0.0
             self.last_gesture = (VOICE_LABELS[word], t)
-            self._aim(t_start if t_start is not None else t, acts)
+            self._aim(ref, acts)
+            if word == "menu":
+                return acts + [("click", "right")]
             return acts + [("click", "left")] * (2 if word == "double" else 1)
         if self.mode == Mode.CHROME and word in CHROME_KEYS:
             # mode Chrome : ses mots marchent sans « iris » (demande de l'utilisateur, 12/11). Ils ne sont

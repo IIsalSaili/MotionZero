@@ -71,3 +71,17 @@ def test_ilot_et_cercle_avec_souris():
     assert island_text(st)[0] == "CHROME · SOURIS"
     assert island_text({"mode": "NEUTRE", "mouse": True})[0] == "SOURIS"
     assert islet_ring(st, 0)[0] == ORANGE
+
+
+def test_clic_sans_iris_quand_la_souris_est_allumee():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("souris", 1.2)
+    assert core.voice("clic", 2.0)[-1] == ("click", "left")
+    assert core.voice("double", 3.0)[-2:] == [("click", "left"), ("click", "left")]
+    assert core.voice("menu", 4.0)[-1] == ("click", "right")
+
+
+def test_clic_garde_iris_souris_eteinte():
+    core = Core(Config())
+    assert core.voice("clic", 1.0) == [] and core.voice("menu", 1.5) == []
