@@ -32,9 +32,10 @@ class HeadPointer:
     Mesuré le 12/11 : sans lissage propre, le curseur tremblait tête immobile (bruit du maillage, amplifié
     par la taille du visage, l'ampleur et la vitesse de la souris)."""
 
-    def __init__(self, scale=1.5):
+    def __init__(self, scale=1.5, scale_y=None):
         from .filters import OneEuro
         self.scale = scale
+        self.scale_y = scale if scale_y is None else scale_y   # haut / bas : le nez bouge moins qu'en tournant
         self.base = None
         self.fx = OneEuro(HEAD_MIN_CUTOFF, HEAD_BETA)
         self.fy = OneEuro(HEAD_MIN_CUTOFF, HEAD_BETA)
@@ -59,5 +60,5 @@ class HeadPointer:
         if self.base is None:
             self.base = off                  # tête de face maintenant = centre de l'écran
         x = 0.5 + self.scale * (off[0] - self.base[0])
-        y = 0.5 + self.scale * (off[1] - self.base[1])
+        y = 0.5 + self.scale_y * (off[1] - self.base[1])
         return (min(max(x, 0.0), 1.0), min(max(y, 0.0), 1.0))

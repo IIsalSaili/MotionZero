@@ -106,7 +106,7 @@ class Core:
         self.mouse = False
         # ce qui pilote la souris : la main ou la tête (choix retenu par l'appli, voir app.POINTER_FILE)
         self.pointer = cfg.pointer if cfg.pointer in ("main", "tete") else "main"
-        self.head = HeadPointer(cfg.head_scale)
+        self.head = HeadPointer(cfg.head_scale, cfg.head_scale_y)
         if self.mode == Mode.MOUSE:
             self.mode, self.mouse = Mode.NEUTRAL, True
         self.mode_since = -1e9

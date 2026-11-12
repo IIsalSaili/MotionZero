@@ -141,3 +141,14 @@ def test_tete_qui_tourne_suit_quand_meme():
     for i in range(30):
         x, _ = hp.point(face(nose_x=0.5 + 0.0015 * i), i / 30)   # rotation franche
     assert x > 0.6
+
+
+def test_vertical_plus_sensible():
+    """Lever la tête déplace moins le nez que la tourner : la verticale est amplifiée deux fois plus."""
+    hp = HeadPointer(scale=1.5, scale_y=3.0)
+    hp.point(face())
+    x, _ = hp.point(face(nose_x=0.52))
+    _, y = hp.point(face(nose_y=0.53))
+    assert abs((x - 0.5) - 1.5 * 0.1) < 1e-9 and abs((y - 0.5) - 3.0 * 0.1) < 1e-9
+    from motionzero.config import Config
+    assert Config().head_scale_y == 2 * Config().head_scale

@@ -91,6 +91,7 @@ class Config:
     # souris à la tête (12/11) : « main » ou « tete » ; ampleur du point virtuel par rapport au visage
     pointer: str = "main"
     head_scale: float = 1.5
+    head_scale_y: float = 3.0          # vertical x2 : lever / baisser la tête bouge moins le nez (demande, 12/11)
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
