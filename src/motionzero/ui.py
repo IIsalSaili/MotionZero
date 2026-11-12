@@ -263,6 +263,16 @@ class GlassOverlay(QWidget):
         self.loupe = None         # (centre de la loupe, image agrandie) ou None
         self.progress = 0.0
         self.lost = False
+        self.ghost = None         # (main, centre, rayon) en coordonnées Qt, ou None
+        self.hand_icon = None
+        if role != "ui":
+            from PySide6.QtCore import QByteArray
+            from PySide6.QtSvg import QSvgRenderer
+            try:
+                with open(_os.path.join(_ICON_DIR, "hand.svg"), encoding="utf-8") as f:
+                    self.hand_icon = QSvgRenderer(QByteArray(f.read().replace("currentColor", "#d0d0d0").encode()))
+            except OSError:
+                self.hand_icon = None     # sans l'icône : un simple disque gris
         self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
         self._last_st = {}
         self._anim = QTimer(self)                 # tourne seulement pendant une animation (logo, alarme)
@@ -291,6 +301,8 @@ class GlassOverlay(QWidget):
             self.cursor = None
         self.progress = st.get("progress", 0.0)
         self.lost = st.get("lost", False)
+        old_ghost = self.ghost
+        self.ghost = ghost_geometry(st, self.dpr) if self.island is None else None
         if self.island is not None:
             self._last_st = st
             now = _time.perf_counter()
@@ -306,10 +318,31 @@ class GlassOverlay(QWidget):
             if box is not None:
                 self.update(box)
         # repeindre seulement autour de l'ancien et du nouveau curseur (Qt recopie la fenêtre à chaque image)
+        for g in (old_ghost, self.ghost):
+            if g is not None:
+                self.update(_ghost_box(g))
         if old is not None:
             self.update(self._box(old))
         if self.cursor is not None:
             self.update(self._box(self.cursor))
+
+    def _paint_ghost(self, p):
+        hand, ctr, r = self.ghost
+        p.setBrush(Qt.BrushStyle.NoBrush)
+        for col, w in ((QColor(0, 0, 0, 110), 4), (QColor(220, 220, 220, 170), 2)):   # zone du centre
+            p.setPen(QPen(col, w, Qt.PenStyle.DashLine))
+            p.drawEllipse(ctr, r, r)
+        box = QRectF(hand.x() - GHOST_S / 2, hand.y() - GHOST_S / 2, GHOST_S, GHOST_S)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 90))                       # pastille sombre : lisible sur fond clair
+        p.drawEllipse(box.adjusted(-8, -8, 8, 8))
+        p.setOpacity(0.85)
+        if self.hand_icon is not None:
+            self.hand_icon.render(p, box)
+        else:
+            p.setBrush(QColor(200, 200, 200))
+            p.drawEllipse(box)
+        p.setOpacity(1.0)
 
     def _anim_tick(self):
         now = _time.perf_counter()
@@ -370,6 +403,8 @@ class GlassOverlay(QWidget):
             self._paint_loupe(p)
         if self.island is not None and event.rect().intersects(self.island.rect()):
             self.island.paint(p)
+        if self.ghost is not None:
+            self._paint_ghost(p)
         if self.cursor is None:
             return
         c, r = self.cursor, RING_R
@@ -683,6 +718,28 @@ def reminder_texts(kind, data):
     if data.get("more"):
         title += f" · +{data['more']} en attente"
     return title, data.get("text", ""), meta
+
+
+GHOST_S = 56     # taille de la main fantôme (px logiques)
+
+
+def ghost_geometry(st, dpr):
+    """Main fantôme : (position de la main, centre visé, rayon) en coordonnées Qt, ou None. Pur : testable."""
+    g = st.get("ghost")
+    if not g or not st.get("arming"):
+        return None
+    cur = st.get("cursor")
+    x, y, r = g
+    ctr = QPointF(cur[0] / dpr, cur[1] / dpr) if cur is not None else QPointF(x / dpr, y / dpr)
+    return (QPointF(x / dpr, y / dpr), ctr, r / dpr)
+
+
+def _ghost_box(g):
+    hand, ctr, r = g
+    m = GHOST_S / 2 + 12
+    a = QRect(int(hand.x() - m), int(hand.y() - m), int(2 * m), int(2 * m))
+    b = QRect(int(ctr.x() - r - 6), int(ctr.y() - r - 6), int(2 * r + 12), int(2 * r + 12))
+    return a.united(b)
 
 
 def islet_logo(st, blinking):

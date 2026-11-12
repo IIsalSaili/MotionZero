@@ -648,6 +648,18 @@ class Core:
         self.last_gesture = (label, t)
         return acts
 
+    def ghost(self):
+        """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
+        Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
+        if self.mode != Mode.MOUSE or self.armed or self.palm is None:
+            return None
+        sx, sy, sw, sh = self.screen
+        ax, ay = self.cfg.arm_center
+        cx, cy = sx + sw / 2, sy + sh / 2
+        x = min(max(cx + (self.palm[0] - ax) * sw, sx), sx + sw - 1)
+        y = min(max(cy + (self.palm[1] - ay) * sh, sy), sy + sh - 1)
+        return (x, y, self.cfg.arm_radius * sw)
+
     def chrome_front(self, front, t):
         """Appelé par la boucle : Chrome est-il au premier plan ? Le mode CHROME s'arrête dès qu'il ne l'est plus
         (après l'avoir été, ou passé le délai d'ouverture)."""
