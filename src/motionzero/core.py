@@ -487,6 +487,16 @@ class Core:
                 self.last_gesture = (VOICE_LABELS[word], t)
                 return [("hotkey", VOICE_HOTKEYS[word])]
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
+        if self.mode == Mode.CHROME and word in ("clic", "double"):
+            # mode Chrome : clic et double clic aussi sans « iris » (demande de l'utilisateur, 12/11)
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            self.freeze_until = -1e9
+            self.menu.close()
+            self.last_click_t = t
+            self.travel = 0.0
+            self.last_gesture = (VOICE_LABELS[word], t)
+            return [("click", "left")] * (2 if word == "double" else 1)
         if self.mode == Mode.CHROME and word in CHROME_KEYS:
             # mode Chrome : ses mots marchent sans « iris » (demande de l'utilisateur, 12/11). Ils ne sont
             # écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs.
