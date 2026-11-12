@@ -16,8 +16,8 @@ FILES = {"ECOUTE": "ecoute", "OK": "ok", "NON": "non", "MODE": "mode", "PARLE": 
          "RAPPEL": "rappel", "ALARME": "alarme"}
 ALIASES = {"LECTURE": "MODE", "CHROME": "MODE", "NEUTRE": "MODE", "REPOS": "MODE", "SOURIS": "MODE",
            "DESACTIVE": "MODE"}
-RAMP_S = 60.0                 # alarme : de presque rien au volume normal en 60 s
-RAMP_FROM_DB, RAMP_TO_DB = -40.0, -4.0
+RAMP_S = 5.0                  # alarme : de léger au volume normal en 5 s (60 s : inaudible pendant que la voix lit)
+RAMP_FROM_DB, RAMP_TO_DB = -30.0, -4.0
 STOP_FADE_S = 0.03            # « stop » : fondu très court, pas de clic
 CUT_FADE_S = 0.02             # un nouveau son coupe le précédent (« iris stop » dit d'un trait : 2 sons au même
                               # instant qui s'additionnaient, mesuré le 12/11)

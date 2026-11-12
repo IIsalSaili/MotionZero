@@ -17,14 +17,14 @@ def test_son_fini_retire():
 
 
 def test_alarme_part_tout_bas_puis_monte():
-    assert ramp_gain(0) < 0.011 and ramp_gain(30) < ramp_gain(60) and ramp_gain(120) == ramp_gain(60)
+    assert ramp_gain(0) < 0.04 and ramp_gain(2) < ramp_gain(5) and ramp_gain(30) == ramp_gain(5)
     m = Mixer()
     m.start_alarm(np.ones(RATE, np.float32))
-    debut = m.fill(RATE).max()
+    debut = m.fill(RATE // 10).max()                     # 1re seconde : léger, mais audible tout de suite
     for _ in range(59):
         m.fill(RATE)                                     # la boucle continue au-delà de la durée du fichier
     fin = m.fill(RATE).max()
-    assert debut < 0.02 and fin > 0.5 and m.ringing
+    assert 0.02 < debut < 0.06 and fin > 0.5 and m.ringing
 
 
 def test_rejouer_l_alarme_ne_la_relance_pas():
