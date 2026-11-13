@@ -93,9 +93,23 @@ def test_ouvrir_naviguer_fermer():
     assert core.voice("dix-huit", 4.0) == [("cal", "dix-huit")]
     core.voice("iris", 5.0)
     assert core.voice("jeudi", 5.5) == [("cal", "jeudi")]               # avec « iris » aussi
-    assert core.voice("ferme", 6.0) == []                                # « ferme » ne touche plus à l'affichage
-    assert core.voice("merci", 6.2) == [("cal_close",)]                  # « merci » / « ok » le ferment
+    assert core.voice("ferme", 6.0) == [("cal_close",)]                  # ferme le calendrier, pas une appli
     assert core.voice("suivant", 7.0) == []                              # fermé : plus rien
+
+
+def test_calendrier_ferme_aussi_par_merci_ok_et_en_mode_chrome():
+    """13/11 : retirer « ferme » au calendrier l'avait rendu infermable à la voix. Tous ses mots de sortie."""
+    from motionzero.core import Mode
+    for mot, chrome in (("ferme", False), ("merci", False), ("ok", False), ("ferme", True), ("ok", True)):
+        core = Core(Config())
+        if chrome:
+            core.mode = Mode.CHROME
+        core.voice("iris", 1.0)
+        core.voice("calendrier", 1.2)
+        assert core.calendar_until > 2.0, mot
+        acts = core.voice(mot, 2.0)                                       # sans « iris »
+        assert ("cal_close",) in acts and core.calendar_until < 0, (mot, chrome)
+        assert not [a for a in acts if a[0] == "chrome_keys"]              # jamais l'onglet fermé à la place
 
 
 def test_mots_du_calendrier_ignores_sans_bruit():

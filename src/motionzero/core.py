@@ -528,14 +528,13 @@ class Core:
             self.last_word = (word, t, True)
             return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
         if t < self.calendar_until:
-            # calendrier ouvert : ses mots marchent sans « iris » ; merci / ok / stop le ferment
-            # (« ferme » ne touche plus à l'affichage : il ferme un onglet ou une appli)
+            # calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / ok / stop le ferment
             if word in CAL_WORDS:
                 self.calendar_until = t + CAL_IDLE_S
                 self.last_word = (word, t, True)
                 self.listen_until = -1e9
                 return [("cal", word)]
-            if word == "merci":
+            if word in ("ferme", "merci"):
                 self.calendar_until = -1e9
                 self.last_word = (word, t, True)
                 self.listen_until = -1e9
@@ -704,8 +703,9 @@ class Core:
             self.bubble = None
             acts.append(("type_start",))
         elif word == "ferme":
-            # ferme seulement une appli (son nom écouté ensuite). L'affichage du haut : « merci » / « ok »
-            acts.append(("open_start",))
+            # retire la réponse affichée ET écoute un éventuel nom d'appli à fermer (en mode Chrome, « ferme »
+            # ferme l'onglet : pour l'affichage du haut, « merci » / « ok » marchent partout)
+            acts += [("ask_close",), ("open_start",)]
             self.opening = True
             self.open_t0 = t
             self.open_kind = "close"
