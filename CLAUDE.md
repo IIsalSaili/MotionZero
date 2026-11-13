@@ -6,7 +6,8 @@ L'utilisateur n'a plus l'usage pratique de ses mains : il travaille AVEC l'appli
 ## Commandes
 - Tests : `.venv/Scripts/python -m pytest -q` (~11 s, tout passe sans caméra ; `test_real_recording` se saute si `recordings/essai1.jsonl` manque).
 - Lancer : `.venv/Scripts/python -m motionzero --voice` (en arrière-plan). Raccourci bureau « Iris » = même chose avec `pythonw`.
-- Arrêter avant relance : tuer le processus python/pythonw dont la ligne de commande contient `-m motionzero` (`taskkill /F /PID`, JAMAIS `/T` : il tue aussi les applis ouvertes par Iris, Chrome compris, et le bot Discord), sinon deux instances coexistent.
+- Relancer : `.venv/Scripts/pythonw.exe tools/relancer.pyw` (tue Iris sans `/T`, relance Iris + gardien). JAMAIS `taskkill /T` : il tue aussi les applis ouvertes par Iris, Chrome compris, et le bot Discord.
+- Gardien `motionzero.garde` (lancé au démarrage de Windows, raccourci « Iris (gardien) » du dossier Démarrage) : relance Iris si elle plante ou se fige. Un STOP écrit `logs/arret_voulu` et empêche la relance ; pour arrêter Iris à la main sans relance, écrire ce fichier avant de la tuer.
 - Rejouer un enregistrement : `tools/replay.py` ; enregistrer : `tools/record.py`.
 
 ## Règles

@@ -247,6 +247,8 @@ def main(argv=None):
     eye_btn = EyeButton(stop_btn)              # œil : montrer / masquer l'overlay dans les partages
     repair_btn = RepairButton()                # tout en bas à gauche : réparer le son (micro figé)
 
+    restart = {"on": False}                    # sortie pour redémarrer : ni « bye » au bot, ni arrêt voulu
+
     def repair_sound():
         """Fil « reparation » : le message passe par la queue de la boucle (jamais Core ici)."""
         from . import audio_repair
@@ -259,6 +261,14 @@ def main(argv=None):
         except Exception:
             log.exception("reparation du son")
             msg = "REPARATION DU SON : ERREUR"
+        if msg.startswith("MICRO NON ROUVERT"):
+            # plus rien à faire sans redémarrer : Iris quitte SANS arrêt voulu, le gardien (ou le bot) la relance
+            app_message("MICRO NON ROUVERT : Iris redemarre…")
+            log.error("micro non rouvert : redemarrage demande")
+            time.sleep(3)
+            restart["on"] = True
+            bridge.done.emit()
+            return
         app_message(msg)
         bridge.repair_done.emit()
 
@@ -286,6 +296,8 @@ def main(argv=None):
         stop.set()
         ctl.release_all()
         bot.bye()                              # arrêt voulu : le bot ne relance pas Iris
+        from . import garde
+        garde.mark_stop()                      # ni le gardien
         qt.quit()
 
     glass.closed.connect(lambda: emergency("verre ferme"))
@@ -525,6 +537,8 @@ def main(argv=None):
 
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
+    from . import garde
+    threading.Thread(target=garde.run_beat, args=(live, stop), name="battement", daemon=True).start()
     threading.Thread(target=watch_engine, args=(live, stop, os.path.join(ROOT, "logs", "blocage.txt")),
                      name="surveillance", daemon=True).start()
     view_win.show()
@@ -539,7 +553,8 @@ def main(argv=None):
     vscode.SINK_HWND = int(sink.winId())
     qt.exec()
     stop.set()
-    bot.bye()
+    if not restart["on"]:
+        bot.bye()
     worker.join(timeout=3)
     if worker.is_alive():      # moteur bloqué : tout est déjà relâché, on quitte quand même
         ctl.release_all()

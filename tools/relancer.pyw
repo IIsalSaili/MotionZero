@@ -10,11 +10,18 @@ PYTHONW = os.path.join(ROOT, ".venv", "Scripts", "pythonw.exe")
 NO_WINDOW = 0x08000000
 
 ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*-m motionzero*' -and "
+      "$_.CommandLine -notlike '*motionzero.garde*' -and "
       "$_.ProcessId -ne %d } | ForEach-Object { $_.ProcessId }" % os.getpid())
 out = subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True, text=True,
                      creationflags=NO_WINDOW).stdout
 for pid in out.split():
     subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True, creationflags=NO_WINDOW)
 
+try:
+    os.remove(os.path.join(ROOT, "logs", "arret_voulu"))   # relance voulue : le gardien reprend la surveillance
+except OSError:
+    pass
 subprocess.Popen([PYTHONW, "-m", "motionzero", "--voice"], cwd=ROOT, creationflags=NO_WINDOW)
+# gardien (relance si plantage) ; s'il tourne déjà, le nouveau s'arrête tout seul
+subprocess.Popen([PYTHONW, "-m", "motionzero.garde"], cwd=ROOT, creationflags=NO_WINDOW)
 sys.exit(0)

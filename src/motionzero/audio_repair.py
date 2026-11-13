@@ -52,7 +52,7 @@ def repair(reopen, heard_since, wait=time.sleep, clock=time.perf_counter) -> str
         reopen()
     except Exception:
         log.exception("reouverture du micro")
-        return "MICRO NON ROUVERT : relance Iris"
+        return "MICRO NON ROUVERT"
     for _ in range(10):
         if heard_since(t0):
             log.info("son repare, micro rouvert")
