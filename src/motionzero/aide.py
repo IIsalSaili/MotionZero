@@ -36,6 +36,7 @@ GROUPS = [
         ("tab", "fenêtre suivante"),
         ("ouvre / ferme", "puis le nom"),
         ("chrome", "Chrome et ses mots"),
+        ("suivant / précédent", "onglet de VS Code"),
         ("discord", "Discord devant"),
         ("studio", "VS Code devant"),
         ("accueil", "accueil d'Iris"),

@@ -61,6 +61,8 @@ ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (dema
            # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
            "muet": "mute", "sourdine": "défun",
            "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
+EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"]}   # VS Code (pas Ctrl+Tab :
+                          # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back", "efface")   # après « iris skip / back / efface », redits seuls sans « iris »
@@ -593,7 +595,8 @@ class Core:
             if word == "stop":
                 self.calendar_until = -1e9
                 acts.append(("cal_close",))       # puis le « stop » habituel
-        elif word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS):
+        elif (word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS)
+              and not (word in EDITOR_TABS and self.listening(t))):   # « iris suivant » : onglet de VS Code
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
         return None
@@ -708,6 +711,12 @@ class Core:
         self.last_word = (word, t, True)
         self.freeze_until = -1e9              # commande reçue : le curseur est libéré après elle
         self.listen_until = -1e9
+        if word in EDITOR_TABS:
+            # hors mode Chrome : onglet suivant / précédent de VS Code (onglets Claude), après « iris » seulement.
+            # L'appli vérifie que VS Code est devant avant d'envoyer la touche.
+            acts.append(("editor_tab", EDITOR_TABS[word]))
+            self.last_gesture = ("ONGLET " + ("SUIVANT" if word == "suivant" else "PRECEDENT") + " (VS Code)", t)
+            return acts
         if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
             # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
             self.last_word = (word, t, False)

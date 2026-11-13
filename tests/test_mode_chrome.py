@@ -43,7 +43,7 @@ def test_hors_mode_chrome_les_mots_ne_font_rien():
     assert core.voice("retour", 1.5) == []
     assert "seulement en mode Chrome" in core.last_gesture[0]
     core.voice("iris", 2.0)
-    assert core.voice("suivant", 2.5) == []     # calendrier fermé, pas Chrome : ignoré
+    assert core.voice("suivant", 2.5) == [("editor_tab", ["ctrl", "pagedown"])]   # hors Chrome : onglet de VS Code (13/11)
 
 
 def test_ferme_garde_son_sens_hors_chrome():
