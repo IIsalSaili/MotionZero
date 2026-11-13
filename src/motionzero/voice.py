@@ -17,6 +17,18 @@ log = logging.getLogger("motionzero.voice")
 
 # reconnaissance libre (2e avis) réveillée seulement par la parole : ~moitié moins de processeur au repos
 FREE_WAKE_RATIO = 2.0     # volume au-dessus du bruit de fond qui la réveille
+QUIET_WAKE_RATIO = 1.3    # voix basse (le soir) : réveillée par une voix plus faible (13/11 : « entendu librement : '' »)
+QUIET_CHOICES = ("auto", "oui", "non")   # bouton de l'accueil ; auto = de QUIET_FROM_H à QUIET_TO_H
+QUIET_FROM_H, QUIET_TO_H = 22, 7
+
+
+def quiet_active(choice, hour, start=QUIET_FROM_H, end=QUIET_TO_H):
+    """Voix basse en ce moment ? Pur : testable."""
+    if choice == "oui":
+        return True
+    if choice == "non":
+        return False
+    return hour >= start or hour < end
 FREE_TAIL_S = 2.0         # elle continue 2 s après le dernier son (le temps de finir sa phrase)
 FREE_PREROLL_S = 1.0      # son gardé pendant son sommeil et rejoué au réveil
 MAX_CAPTURE_S = 60.0      # enregistrement (question, type, ouvre) plafonné : jamais de mémoire sans fin
@@ -180,12 +192,13 @@ FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase
 ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
 
 
+QUIET_IRIS_CONF = 0.7       # voix basse : « iris » moins net, accepté plus tôt
 IRIS_SURE_CONF = 0.9        # « iris » entendu net par la grammaire, dans une phrase courte : pas de 2e avis
 AFTER_IRIS_S = 4.0          # mot dit seul juste après un « iris » accepté : c'est la commande attendue
 SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
 
 
-def confirmed(words, free_text, n_heard=None, after_iris=False):
+def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
@@ -196,7 +209,10 @@ def confirmed(words, free_text, n_heard=None, after_iris=False):
     n_heard : nombre de mots de la phrase entendue par la grammaire.
     after_iris : un « iris » vient d'être accepté. Le mot suivant est accepté sans 2e vérification : avec du
     bruit autour, la reconnaissance libre colle tout en une longue phrase (mesuré le 13/11 : « iris » puis
-    « pause » refusé 5 fois de suite, « ...les couilles pose l s »). Il n'agit de toute façon qu'après « iris »."""
+    « pause » refusé 5 fois de suite, « ...les couilles pose l s »). Il n'agit de toute façon qu'après « iris ».
+    quiet : voix basse (le soir). Parlé doucement, la reconnaissance libre n'entend rien (texte vide) ou
+    déforme « iris » (« cerise claude », 13/11) : un texte vide confirme un mot seul, « iris » moins net suffit,
+    et un mot finissant par « ris », « rise » ou « rice » (cerise, Maurice) compte pour « iris ». Les phrases longues restent refusées."""
     names = [w["word"] for w in words]
     if not names or set(names) & ALWAYS_HEARD:
         return True
@@ -204,10 +220,11 @@ def confirmed(words, free_text, n_heard=None, after_iris=False):
         return True
     tokens = free_text.lower().split()
     if names[0] == WAKE_WORD:
-        if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= IRIS_SURE_CONF:
+        sure = QUIET_IRIS_CONF if quiet else IRIS_SURE_CONF
+        if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= sure:
             return True
-        return any(tok.startswith("iri") for tok in tokens)
-    return 0 < len(tokens) <= FREE_MAX_WORDS
+        return any(tok.startswith("iri") or (quiet and tok.endswith(("ris", "rise", "rice"))) for tok in tokens)
+    return (0 if quiet else 1) <= len(tokens) <= FREE_MAX_WORDS
 
 
 def rejection(res, min_conf=0.6):
@@ -248,6 +265,7 @@ class VoiceListener:
         self._partial = ""          # dernier texte provisoire de la reconnaissance
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
+        self.quiet = False          # voix basse : écrit par la boucle principale (un booléen), lu ici
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
@@ -334,7 +352,7 @@ class VoiceListener:
         now = time.perf_counter()
         # Reconnaissance libre (la plus chère) : seulement quand quelqu'un parle. Le reste du temps, le
         # son est gardé ~1 s et lui est redonné au réveil, pour ne pas perdre le début de la phrase.
-        if rms >= self.ambient * FREE_WAKE_RATIO or self._partial:
+        if rms >= self.ambient * (QUIET_WAKE_RATIO if self.quiet else FREE_WAKE_RATIO) or self._partial:
             self._free_until = now + FREE_TAIL_S
         if now < self._free_until:
             for old in self._free_pre:
@@ -369,7 +387,8 @@ class VoiceListener:
         if not words:
             return
         after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
-        if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris):
+        if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
+                                                   self.quiet):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())

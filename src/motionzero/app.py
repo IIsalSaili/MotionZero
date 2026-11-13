@@ -99,6 +99,23 @@ def drain(q):
 
 
 POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
+QUIET_FILE = os.path.join(ROOT, "voix_basse.txt")   # « auto », « oui » ou « non » (non versionné)
+
+
+def read_quiet(path):
+    from .voice import QUIET_CHOICES
+    try:
+        with open(path, encoding="utf-8") as f:
+            value = f.read().strip()
+    except OSError:
+        return "auto"
+    return value if value in QUIET_CHOICES else "auto"
+
+
+def next_quiet(choice):
+    """Bouton de l'accueil : le soir -> toujours -> jamais -> le soir."""
+    from .voice import QUIET_CHOICES
+    return QUIET_CHOICES[(QUIET_CHOICES.index(choice) + 1) % 3] if choice in QUIET_CHOICES else "auto"
 
 
 def read_pointer(path, default="main"):
@@ -141,6 +158,8 @@ class Engine:
         self.last_level_log = 0.0
         self.last_rej_seen = self.last_fail_seen = None
         self.chrome_check_t = 0.0
+        self.quiet_check_t = -1e9
+        self.quiet_choice = getattr(d, "quiet_choice", "auto")
         self.last_hand_t = self.t0
         self.errors = deque(maxlen=20)
         self.shown = None                     # dernière image dessinée (capture des tests)
@@ -277,6 +296,7 @@ class Engine:
             core.last_gesture = (msg, t)
         for _ in drain(d.pointer_requests):   # bouton « main / tête » de l'accueil (fil Qt)
             acts += core.set_pointer_toggle(t)
+        self._quiet(t)
         if core.mode == Mode.CHROME and t - self.chrome_check_t >= 0.3:
             self.chrome_check_t = t           # mode Chrome : quitté dès que Chrome n'est plus devant
             acts += core.chrome_front(chrome_in_front(), t)
@@ -316,6 +336,24 @@ class Engine:
             if is_failure(lg[0]):
                 d.sounds.play("NON")          # rien entendu, pas compris, réglage impossible…
         return acts
+
+    def _quiet(self, t):
+        """Voix basse : choix de l'accueil (enregistré) et heure ; le micro est prévenu par un simple booléen."""
+        d = self.d
+        for _ in drain(d.quiet_requests):
+            self.quiet_choice = next_quiet(self.quiet_choice)
+            write_pointer(QUIET_FILE, self.quiet_choice)
+            d.bridge.quiet.emit(self.quiet_choice)
+            _log.info("voix basse : %s", self.quiet_choice)
+            self.quiet_check_t = -1e9
+        if d.listener is None or t - self.quiet_check_t < 1.0:
+            return
+        self.quiet_check_t = t
+        from .voice import quiet_active
+        on = quiet_active(self.quiet_choice, datetime.datetime.now().hour)
+        if on != d.listener.quiet:
+            d.listener.quiet = on
+            _log.info("voix basse %s", "activee" if on else "desactivee")
 
     # --- 4. actions : chaque service prend les siennes et renvoie le reste ---
     def resolve(self, acts, t):
@@ -467,6 +505,8 @@ def main(argv=None):
     launcher = None
     app_messages = queue.Queue()
     pointer_requests = queue.Queue()           # clics sur « main / tête » (fil Qt) -> boucle principale
+    quiet_requests = queue.Queue()             # clics sur « voix basse » (fil Qt) -> boucle principale
+    quiet_choice = read_quiet(QUIET_FILE)
 
     def app_message(msg):
         # appelé depuis un fil d'arrière-plan : le message est remis à la boucle principale.
@@ -497,13 +537,15 @@ def main(argv=None):
 
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
     qt = QApplication.instance() or QApplication([])
-    view_win = PreviewWindow(pointer=cfg.pointer)
+    view_win = PreviewWindow(pointer=cfg.pointer, quiet=quiet_choice)
+    view_win.quiet_clicked.connect(lambda: quiet_requests.put(1))
     def _pointer_clicked():
         log.info("bouton main / tete de l'accueil")
         pointer_requests.put(1)
     view_win.pointer_clicked.connect(_pointer_clicked)
     stop = threading.Event()
     bridge = Bridge()
+    bridge.quiet.connect(view_win.set_quiet)
     bridge.pointer.connect(view_win.set_pointer)          # choix fait à la voix : le bouton suit
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
     # panneau « Consommation » de la page d'accueil : mesuré seulement quand la page est visible
@@ -592,6 +634,7 @@ def main(argv=None):
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
         face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
+        quiet_requests=quiet_requests, quiet_choice=quiet_choice,
         speaker=speaker, desk=desk, discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
         bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
 

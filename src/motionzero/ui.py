@@ -26,6 +26,7 @@ class Bridge(QObject):
     stats = Signal(object)   # mesures de consommation (panneau de la page d'accueil)
     repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
     pointer = Signal(str)    # souris à la main / à la tête (changé à la voix) -> bouton de l'accueil
+    quiet = Signal(str)      # choix « voix basse » enregistré -> bouton de l'accueil
 
 
 class ConsoPanel(QWidget):
@@ -166,11 +167,18 @@ def pointer_button_text(pointer):
     return "Souris : tête  ·  passer à la main" if pointer == "tete" else "Souris : main  ·  passer à la tête"
 
 
+def quiet_button_text(choice):
+    """Texte du bouton « voix basse » de l'accueil. Pur : testable."""
+    return {"oui": "Voix basse : toujours", "non": "Voix basse : jamais"}.get(
+        choice, "Voix basse : le soir (22 h - 7 h)")
+
+
 class PreviewWindow(QWidget):
     closed = Signal()
     pointer_clicked = Signal()                 # « main / tête » : traité par la boucle principale (jamais ici)
+    quiet_clicked = Signal()                   # « voix basse » : idem
 
-    def __init__(self, pointer="main"):
+    def __init__(self, pointer="main", quiet="auto"):
         super().__init__()
         self.setWindowTitle("motionzero")
         self.label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
@@ -186,10 +194,17 @@ class PreviewWindow(QWidget):
         # « cliquait » le bouton sans que personne ne l'ait touché
         self.pointer_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.pointer_btn.clicked.connect(self._toggle_pointer)
+        self.quiet_btn = QPushButton(quiet_button_text(quiet))
+        self.quiet_btn.setMinimumHeight(56)
+        self.quiet_btn.setStyleSheet(self.pointer_btn.styleSheet())
+        self.quiet_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.quiet_btn.setToolTip("Iris accepte une voix plus faible. Clic : le soir / toujours / jamais")
+        self.quiet_btn.clicked.connect(self.quiet_clicked.emit)
         side = QVBoxLayout()
         side.setContentsMargins(8, 8, 8, 8)
         side.addWidget(self.conso, 1)
         side.addWidget(self.pointer_btn)
+        side.addWidget(self.quiet_btn)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -206,6 +221,9 @@ class PreviewWindow(QWidget):
         """Choix courant (aussi changé à la voix) : le texte du bouton suit."""
         self.pointer = pointer
         self.pointer_btn.setText(pointer_button_text(pointer))
+
+    def set_quiet(self, choice):
+        self.quiet_btn.setText(quiet_button_text(choice))
 
     def changeEvent(self, event):
         super().changeEvent(event)
