@@ -23,7 +23,7 @@ from mediapipe.tasks.python import BaseOptions, vision
 from .camera import OK, Camera
 from .config import load_config
 from .core import Core, Mode
-from .power import keep_system_awake, power_actions
+from .power import power_actions
 from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
@@ -519,7 +519,6 @@ def main(argv=None):
                 faces["lm"].close()
             log.info("arret (images rejetees=%d, reconnexions=%d)", cam.rejected, cam.reconnections)
 
-    keep_system_awake()                     # PC jamais en veille tant qu'Iris tourne (l'écran, lui, s'éteint)
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
     threading.Thread(target=watch_engine, args=(live, stop, os.path.join(ROOT, "logs", "blocage.txt")),

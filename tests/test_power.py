@@ -1,9 +1,9 @@
-"""Veille : PC gardé éveillé, « iris réveil » / « iris wake » rallume l'écran ; surveillance de la boucle."""
+"""« iris réveil » / « iris wake » rallume l'écran ; surveillance de la boucle."""
 import threading
 
 from motionzero.config import Config
 from motionzero.core import Core
-from motionzero.power import ES_DISPLAY_REQUIRED, ES_SYSTEM_REQUIRED, keep_system_awake, power_actions, wake_screen
+from motionzero.power import ES_DISPLAY_REQUIRED, power_actions, wake_screen
 
 
 class Fake:
@@ -20,17 +20,10 @@ class Fake:
         self.calls.append(("mouse", a))
 
 
-def test_pc_garde_eveille():
-    k = Fake()
-    assert keep_system_awake(k) and k.calls[0][1] & ES_SYSTEM_REQUIRED
-    assert not keep_system_awake(Fake(ret=0))
-    assert not keep_system_awake(Fake(boom=True))          # échec : Iris continue
-
-
-def test_reveil_rallume_l_ecran_puis_le_laisse_se_reeteindre():
+def test_reveil_rallume_l_ecran_sans_bloquer_la_veille():
     k, u = Fake(), Fake()
     assert wake_screen(k, u)
-    assert k.calls[0][1] & ES_DISPLAY_REQUIRED and not k.calls[-1][1] & ES_DISPLAY_REQUIRED
+    assert k.calls == [("state", ES_DISPLAY_REQUIRED)]     # ponctuel, jamais ES_CONTINUOUS ni ES_SYSTEM_REQUIRED
     assert [c for c in u.calls if c[0] == "mouse"]
     assert not wake_screen(Fake(boom=True), u)
 
