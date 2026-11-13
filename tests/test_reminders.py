@@ -349,3 +349,21 @@ def test_animation_du_logo():
     k, a = clock_anim(5.0 + CLOCK_ANIM_S / 2, 0.0, 5.0)
     assert 0 < k < 1 and a > 0                                            # retour : tourne à droite
     assert clock_anim(5.0 + CLOCK_ANIM_S, 0.0, 5.0) == (0.0, 360.0)       # revenu
+
+
+def test_rappel_en_attente_affiche_en_haut():
+    """Plus de voix : le rappel compris doit s'afficher dans l'île pendant « dis ENVOIE »."""
+    from datetime import datetime
+    from motionzero.reminders import Reminder, pending_text
+    from motionzero.ui import island_text
+    now = datetime(2026, 11, 13, 12, 0)
+    assert pending_text(None, now) is None
+    r = Reminder(text="appeler maman", at="2026-11-14T18:30")
+    txt = pending_text(("create", r), now)
+    assert txt == "Rappel · demain à 18:30 · appeler maman"
+    assert pending_text(("create", Reminder(text="pâtes", at="2026-11-13T19:00")), now) == \
+        "Rappel · aujourd'hui à 19:00 · pâtes"
+    assert pending_text(("cancel", r), now).startswith("Supprimer · ")
+    st = {"confirming": True, "reminders": {"pending": txt}}
+    assert island_text(st)[1] == txt + " — dis ENVOIE"
+    assert island_text({"confirming": True})[1] == "Dis ENVOIE ou ANNULE"   # dictée Claude : inchangé

@@ -920,7 +920,8 @@ def island_text(st):
     if st.get("typing"):
         return mode, "Dicte ton texte…", True
     if st.get("confirming"):
-        return mode, "Dis ENVOIE ou ANNULE", True
+        pending = (st.get("reminders") or {}).get("pending")
+        return mode, (f"{pending} — dis ENVOIE" if pending else "Dis ENVOIE ou ANNULE"), True
     if st.get("listening"):
         return mode, "Iris écoute…", True
     head = st.get("pointer") == "tete"
