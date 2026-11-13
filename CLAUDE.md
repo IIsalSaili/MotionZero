@@ -25,4 +25,5 @@ L'utilisateur n'a plus l'usage pratique de ses mains : il travaille AVEC l'appli
 ## Pièges
 - Whisper tourne sur GPU via les DLL `nvidia-cublas-cu12` / `nvidia-cudnn-cu12` du venv ; il est chargé seulement avec la voix et déchargé après 10 min d'inactivité.
 - Pas de touches simulées pour piloter Claude Code : voir `plan-voix-claude.md`.
+- Documentation : `docs/guide/README.md` (à tenir à jour quand une commande ou un module change).
 - Plans existants : `plan-overlay.md`, `plan-voix-claude.md`, `motionzero.md`.
