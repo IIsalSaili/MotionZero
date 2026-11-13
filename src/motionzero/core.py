@@ -38,7 +38,7 @@ VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], 
                  "skip": ["right"], "back": ["left"],   # flèches : ±10 s sur YouTube
                  # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
                  "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
-                 "agrandis": ["win", "up"], "réduis": ["win", "down"],
+                 "réduis": ["win", "down"],
                  "gauche": ["win", "left"], "droite": ["win", "right"]}
 from .calendar_view import WORDS as CAL_WORDS
 
@@ -77,7 +77,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
                 "sélection": "TOUT SELECTIONNE (Ctrl+A)", "coupe": "COUPER (Ctrl+X)", "efface": "MOT EFFACE",
-                "agrandis": "FENETRE AGRANDIE", "réduis": "FENETRE REDUITE",
+"réduis": "FENETRE REDUITE",
                 "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
                 "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE"}
@@ -92,7 +92,9 @@ OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherc
 
 
 # « iris + mot » sans état : une action, et un libellé (None = celui de VOICE_LABELS)
-SIMPLE_ACTIONS = {"envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
+SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partout, Chrome compris
+                  "agrandis": (("window", "max"), "PLEIN ECRAN"),      # hors mode Chrome (là : zoom)
+                  "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
                   "tab": (("alt_tab",), None),
                   "réveil": (("wake",), "ECRAN RALLUME"), "wake": (("wake",), "ECRAN RALLUME"),
@@ -673,7 +675,7 @@ class Core:
         self.last_word = (word, t, True)
         self.freeze_until = -1e9              # commande reçue : le curseur est libéré après elle
         self.listen_until = -1e9
-        if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS:
+        if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
             # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
@@ -843,7 +845,16 @@ class Core:
 
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
-        Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
+        Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier.
+        « défile » pas encore armé (main) : (x, y, demi-bande, y du centre) — seule la hauteur compte."""
+        sx, sy, sw, sh = self.screen
+        if (self.palm is not None and self.pointer != "tete" and self.voice_scroll_until > (self.prev_t or 0.0)
+                and not self.voice_scroll_armed):
+            arm = self._scroll_params()[0]
+            cy = sy + sh / 2
+            x = min(max(sx + self.palm[0] * sw, sx), sx + sw - 1)
+            y = min(max(cy + (self.palm[1] - 0.5) * sh, sy), sy + sh - 1)
+            return (x, y, arm * sh, cy)
         if not self.mouse or self.armed or self.palm is None or self.voice_scroll_until > (self.prev_t or 0.0):
             return None
         sx, sy, sw, sh = self.screen

@@ -26,6 +26,7 @@ from .camera import OK, Camera
 from .config import load_config
 from .core import Core, Mode
 from .power import power_actions
+from .fenetre import window_actions
 from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
@@ -325,6 +326,7 @@ class Engine:
         acts = d.desk.actions(acts, d.core, t)
         acts = discord_actions(acts, d.speaker)
         acts = power_actions(acts)
+        acts = window_actions(acts)
         return vscode_actions(acts, d.core, d.vscode_ctl, d.sounds, t, d.discord_voice)
 
     def after(self, acts):

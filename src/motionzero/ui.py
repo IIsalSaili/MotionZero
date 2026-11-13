@@ -396,11 +396,15 @@ class GlassOverlay(QWidget):
         p.drawEllipse(c, 5, 5)
 
     def _paint_ghost(self, p):
-        hand, ctr, r = self.ghost
+        hand, ctr, r, band = self.ghost
         p.setBrush(Qt.BrushStyle.NoBrush)
         for col, w in ((QColor(0, 0, 0, 110), 4), (QColor(220, 220, 220, 170), 2)):   # zone du centre
             p.setPen(QPen(col, w, Qt.PenStyle.DashLine))
-            p.drawEllipse(ctr, r, r)
+            if band:                          # « défile » : amener la main entre les deux traits
+                for yy in (ctr.y() - r, ctr.y() + r):
+                    p.drawLine(QPointF(ctr.x() - BAND_HALF_W, yy), QPointF(ctr.x() + BAND_HALF_W, yy))
+            else:
+                p.drawEllipse(ctr, r, r)
         box = QRectF(hand.x() - GHOST_S / 2, hand.y() - GHOST_S / 2, GHOST_S, GHOST_S)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 90))                       # pastille sombre : lisible sur fond clair
@@ -833,12 +837,15 @@ def paint_volume(p, box, level, muted):
 def ghost_geometry(st, dpr):
     """Main fantôme : (position de la main, centre visé, rayon) en coordonnées Qt, ou None. Pur : testable."""
     g = st.get("ghost")
+    if g and len(g) == 4:                     # « défile » : bande horizontale à atteindre (seule la hauteur compte)
+        x, y, r, cy = g
+        return (QPointF(x / dpr, y / dpr), QPointF(x / dpr, cy / dpr), r / dpr, True)
     if not g or not st.get("arming"):
         return None
     cur = st.get("cursor")
     x, y, r = g
     ctr = QPointF(cur[0] / dpr, cur[1] / dpr) if cur is not None else QPointF(x / dpr, y / dpr)
-    return (QPointF(x / dpr, y / dpr), ctr, r / dpr)
+    return (QPointF(x / dpr, y / dpr), ctr, r / dpr, False)
 
 
 GAUGE_W = 14            # largeur de la jauge de défilement (px Qt)
@@ -866,10 +873,16 @@ def gauge_geometry(st, w, h):
     return {"track": track, "band": band, "hand": hand, "armed": armed, "box": box}
 
 
+BAND_HALF_W = 300       # « défile » : demi-largeur des traits de la bande du centre, autour de la main
+
+
 def _ghost_box(g):
-    hand, ctr, r = g
+    hand, ctr, r, band = g
     m = GHOST_S / 2 + 12
     a = QRect(int(hand.x() - m), int(hand.y() - m), int(2 * m), int(2 * m))
+    if band:
+        b = QRect(int(ctr.x() - BAND_HALF_W - 6), int(ctr.y() - r - 6), int(2 * BAND_HALF_W + 12), int(2 * r + 12))
+        return a.united(b)
     b = QRect(int(ctr.x() - r - 6), int(ctr.y() - r - 6), int(2 * r + 12), int(2 * r + 12))
     return a.united(b)
 

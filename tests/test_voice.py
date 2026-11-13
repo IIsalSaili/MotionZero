@@ -409,4 +409,5 @@ def test_defile_pas_de_main_fantome_souris_pendant_le_defilement():
     clk.run(core, 0.2, cx=0.5, cy=0.95)
     _defile(core, clk)
     clk.run(core, 0.2, cx=0.5, cy=0.95)
-    assert core.ghost() is None
+    g = core.ghost()                                  # pas la main fantôme de la souris : la bande du défilement
+    assert g is not None and len(g) == 4
