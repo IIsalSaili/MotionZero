@@ -94,8 +94,8 @@ class Config:
     head_scale: float = 1.4
     head_scale_y: float = 2.0          # on lève / baisse la tête moins loin qu'on ne la tourne
     # vitesse propre à la tête : lente pour viser (petits gestes), rapide pour traverser l'écran
-    head_gain_min: float = 0.8
-    head_gain_max: float = 7.0
+    head_gain_min: float = 0.5
+    head_gain_max: float = 3.0
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume

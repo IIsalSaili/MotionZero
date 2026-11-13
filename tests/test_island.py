@@ -35,3 +35,11 @@ def test_cercle_du_logo_selon_le_mode():
     assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.0)[0] == GREEN
     assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.2)[0] == BLUE
     assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.3)[0] == GREEN
+
+
+def test_mode_tete_parle_du_visage():
+    from motionzero.ui import island_text
+    st = {"mouse": True, "pointer": "tete", "lost": True}
+    assert island_text(st)[1] == "Visage non détecté"
+    assert island_text({"mouse": True, "pointer": "tete", "lost": False, "arming": True})[1] == "Tête de face pour démarrer"
+    assert island_text({"mouse": True, "pointer": "tete", "lost": False, "arming": False})[1] is None

@@ -126,6 +126,18 @@ def describe(r: Reminder, now: datetime) -> str:
     return f"le {t:%d/%m} {hm}"
 
 
+def pending_text(pending, now: datetime) -> str | None:
+    """« Rappel · demain à 18:30 · appeler maman », « Supprimer · … » ; None sans rien en attente."""
+    if not pending:
+        return None
+    what, r = pending
+    when = describe(r, now)
+    if when.startswith("à "):
+        when = "aujourd'hui " + when
+    label = "Supprimer" if what == "cancel" else ("Alarme" if r.alarm else "Rappel")
+    return f"{label} · {when} · {r.text}"
+
+
 def short_when(r: Reminder, now: datetime) -> str:
     """Pour la petite pastille : « 18:30 », « mar. 9:00 »."""
     t = r.when
@@ -536,5 +548,7 @@ class Desk:
             "list": self.list_lines if t < self.list_until else None,
             "calendar": self.cal.view(self.r.items, now) if self.cal.open else None,
             "timers": self.timers.state(t),
+            # en attente d'« envoie » : ce qu'Iris a compris, affiché en haut (il n'y a plus de voix pour le dire)
+            "pending": pending_text(self.pending, now),
             "next": None if nxt is None else short_when(nxt, now),   # pour la future vue calendrier
         }

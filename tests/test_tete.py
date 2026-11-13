@@ -281,3 +281,20 @@ def test_defile_tete_bouger_un_peu_reste_dans_le_vert():
     core.voice("défile", t)
     core, acts, t = _tete_defile([0.0] * 10 + [0.04] * 45 + [-0.04] * 45, core, t)
     assert not [a for a in acts if a[0] == "scroll"]
+
+
+def test_sensibilite_tete_douce():
+    """Tête tournée d'environ 6° (0,1 rad) en 0,5 s : le curseur bouge, mais reste loin du bord (avant :
+    jugé « impossible à contrôler »)."""
+    core = _tete_souris()
+    t = 1.0
+    for _ in range(10):
+        lms, m = turned()
+        core.step_head(lms, t, m)
+        t += 0.05
+    x0 = core.cursor[0]
+    for i in range(15):
+        lms, m = turned(yaw=0.1 * (i + 1) / 15)
+        core.step_head(lms, t, m)
+        t += 1 / 30
+    assert 20 < core.cursor[0] - x0 < 350
