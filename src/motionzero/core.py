@@ -8,7 +8,7 @@ Modes :
             Main immobile 0,8 s -> menu à 4 directions :
               gauche = clic gauche, droite = clic droit, haut = double clic, bas = retour lecture.
             Main absente 2 s -> retour lecture.
-  DESACTIVE : bouton STOP.
+  DESACTIVE : bouton STOP ou « iris pause » ; « iris reprise » pour revenir.
 
 Actions renvoyées :
   ("mode", nom) ; ("key", nom) ; ("move", x, y) ; ("click", "left"|"right") ; ("release_all",)
@@ -542,7 +542,7 @@ class Core:
         if self.dictating or self.asking or self.typing or self.opening:
             return []  # dictée ou question en cours : tes mots sont du texte, pas des commandes
         acts = []
-        for step in (self._v_confirm, self._v_calendar, self._v_stop, self._v_without_iris, self._v_wake):
+        for step in (self._v_confirm, self._v_calendar, self._v_stop, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
             if done is not None:
                 return done
@@ -662,11 +662,27 @@ class Core:
         if word != WAKE_WORD:
             return None
         self.wake_t = t_start if t_start is not None else t
-        if self.mode == Mode.DISABLED:
-            self.set_mode(Mode.NEUTRAL, t, acts)
         self.listen_until = t + self.cfg.listen_s
+        if self.mode == Mode.DISABLED:
+            # en pause, « iris » seul ne réveille plus (il était dit dans la conversation) : il faut « iris reprise »
+            self.last_word = (word, t, True)
+            self.last_gesture = ("PAUSE : dis IRIS REPRISE", t)
+            return acts
         self.last_word = (word, t, True)
         self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
+        return acts
+
+    def _v_resume(self, word, t, t_start, acts):
+        """En pause : seul « iris reprise » réactive ; tout autre mot est ignoré."""
+        if self.mode != Mode.DISABLED:
+            return None
+        if word == "reprise" and t < self.listen_until:
+            self.listen_until = -1e9
+            self.set_mode(Mode.NEUTRAL, t, acts)
+            self.last_word = (word, t, True)
+            self.last_gesture = ("REPRISE", t)
+        else:
+            self.last_word = (word, t, False)
         return acts
 
     def _v_command(self, word, t, acts):
@@ -824,7 +840,7 @@ class Core:
         acts.append(("release_all",))
         self.set_mode(Mode.DISABLED, t, acts)
         self.listen_until = -1e9
-        return "PAUSE (dis IRIS pour reprendre)"
+        return "PAUSE (dis IRIS REPRISE pour reprendre)"
 
     def scroll_gauge(self, t):
         """Jauge du défilement vocal : (hauteur de la main 0..1, armé ?, demi-bande d'armement, demi-zone neutre),

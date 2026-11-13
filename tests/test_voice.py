@@ -99,7 +99,30 @@ def test_pause_puis_iris_reprend():
     assert core.mode == Mode.DISABLED
     assert core.voice("clic", 2.0) == []
     core.voice("iris", 3.0)
+    assert core.mode == Mode.DISABLED          # « iris » seul ne réactive plus
+    assert core.voice("clic", 3.5) == []        # ni « iris clic »
+    assert core.mode == Mode.DISABLED
+    core.voice("iris", 4.0)
+    core.voice("reprise", 4.5)
     assert core.mode == Mode.NEUTRAL
+
+
+def test_reprise_seule_ou_trop_tard_ne_fait_rien():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("pause", 1.5)
+    core.voice("reprise", 2.0)                  # sans « iris »
+    assert core.mode == Mode.DISABLED
+    core.voice("iris", 3.0)
+    core.voice("reprise", 3.0 + core.cfg.listen_s + 1)   # écoute refermée
+    assert core.mode == Mode.DISABLED
+
+
+def test_reprise_hors_pause_sans_effet():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("reprise", 1.5)
+    assert core.mode != Mode.DISABLED
 
 
 def test_raccourcis_clavier_vocaux():
@@ -290,6 +313,11 @@ def test_deuxieme_verification():
     assert not confirmed(w("iris", "colle"), "il colle")            # pas de « iris » prononcé
     assert confirmed(w("stop"), "arrête stop tout de suite là")    # sécurité : jamais bloqué
     assert confirmed(w("lâche"), "")
+    # juste après un « iris » accepté : le mot seul passe malgré le bruit (13/11, « pause » refusé en boucle)
+    bruit = "à cambridge iris elle seule chose son album de ce côté les couilles pose"
+    assert not confirmed(w("pause"), bruit)
+    assert confirmed(w("pause"), bruit, after_iris=True)
+    assert not confirmed(w("pause", "clic"), bruit, after_iris=True)   # plusieurs mots : vérifiés comme avant
 
 
 def test_phrase_vide_ne_fait_pas_planter_l_ecoute():
