@@ -8,12 +8,14 @@ L'interface est en Qt (fil principal) ; caméra, MediaPipe et Core tournent dans
 """
 import argparse
 import ctypes
+import datetime
 import logging
 import os
 import queue
 import threading
 import time
 from collections import deque
+from types import SimpleNamespace
 
 import cv2
 import mediapipe as mp
@@ -121,6 +123,280 @@ def detect_period(disabled, last_hand_t, t):
     return 1.0 / DETECT_MAX_FPS
 
 
+class Engine:
+    """Boucle principale (fil « moteur ») : caméra -> détection -> Core -> actions -> affichage.
+    Un tour = tick() : détecter, écouter, faire, montrer. `d` porte les services créés par main()
+    (caméra, Core, voix, bot, rappels, interface…) ; l'état propre à la boucle vit ici."""
+
+    def __init__(self, d):
+        self.d = d
+        self.t0 = time.perf_counter()
+        self.seq, self.last_ts, self.fps, self.frames, self.fps_t = 0, -1, 0.0, 0, self.t0
+        self.last_detect, self.last_frame_t = 0.0, self.t0
+        self.last_view = np.zeros((d.cfg.height, d.cfg.width, 3), np.uint8)
+        self.pts = None
+        self.face_lost = True                 # souris à la tête : visage vu à la dernière détection ?
+        self.last_level_log = 0.0
+        self.last_rej_seen = self.last_fail_seen = None
+        self.chrome_check_t = 0.0
+        self.last_hand_t = self.t0
+        self.errors = deque(maxlen=20)
+        self.shown = None                     # dernière image dessinée (capture des tests)
+        self.frame_seen = False               # une image est arrivée à ce tour
+
+    def run(self):
+        d = self.d
+        try:
+            while not d.stop.is_set():
+                try:
+                    if self.tick():
+                        break
+                except Exception:
+                    # une erreur dans un tour de boucle ne doit jamais arrêter motionzero : on la note,
+                    # on relâche tout ce qui est tenu, et on continue (l'utilisateur en dépend)
+                    self.errors.append(time.perf_counter())
+                    _log.exception("erreur dans la boucle principale (on continue)")
+                    d.ctl.release_all()
+                    if len(self.errors) >= 20 and self.errors[-1] - self.errors[-20] < 10.0:
+                        raise   # erreur en boucle : inutile d'insister
+                    time.sleep(0.05)
+        finally:
+            d.ctl.release_all()
+            if d.listener is not None:
+                d.listener.stop()
+            d.cam.stop()
+            d.landmarker.close()
+            if d.faces["lm"] is not None:
+                d.faces["lm"].close()
+            _log.info("arret (images rejetees=%d, reconnexions=%d)", d.cam.rejected, d.cam.reconnections)
+
+    def tick(self):
+        """Un tour de boucle. Renvoie True quand la durée de test (--duration) est écoulée."""
+        d = self.d
+        t = time.perf_counter()
+        d.live["beat"] = t                    # surveillé : voir watch_engine et garde.run_beat
+        view, acts = self.detect(t)
+        acts = acts + self.background(t)
+        acts = acts + self.listen(t)
+        acts = self.resolve(acts, t)
+        d.ctl.execute(acts, t)
+        self.after(acts)
+        if view is not None:
+            self.publish(view, t)
+        else:
+            time.sleep(0.002)                 # rien de neuf : ne pas monopoliser le processeur
+        if d.args.duration and t - self.t0 >= d.args.duration:
+            if d.args.screenshot and self.shown is not None:
+                cv2.imwrite(d.args.screenshot, self.shown)
+            return True
+        return False
+
+    # --- 1. caméra et détection ---
+    def _count_frame(self, t):
+        self.frames += 1
+        if t - self.fps_t >= 1.0:
+            self.fps, self.frames, self.fps_t = self.frames / (t - self.fps_t), 0, t
+
+    def _timestamp(self, t):
+        self.last_ts = max(int((t - self.t0) * 1000), self.last_ts + 1)
+        return self.last_ts
+
+    def detect(self, t):
+        """(image à montrer ou None, actions de la main / de la tête)."""
+        d, core = self.d, self.d.core
+        frame, new_seq = d.cam.read(self.seq)
+        self.frame_seen = frame is not None
+        disabled = core.mode == Mode.DISABLED
+        period = detect_period(disabled, self.last_hand_t, t)
+        d.live["detect_hz"] = 0 if disabled else 1.0 / detect_period(False, self.last_hand_t, t)
+        if frame is not None and t - self.last_detect >= period:
+            self.seq = new_seq
+            self.last_detect = self.last_frame_t = t
+            view = cv2.flip(frame, 1)
+            if not disabled and core.pointer == "tete":
+                return view, self._detect_head(view, t)
+            return view, self._detect_hands(view, t, disabled)
+        if t - self.last_frame_t > STALE_S + period:
+            # caméra muette : on traite comme « main absente » (relâche tout, puis repos)
+            self.pts = None
+            return self.last_view.copy() // 3, core.step(None, t)
+        if frame is not None:
+            # image dispo mais plafond atteint : on dort jusqu'à la prochaine détection
+            # (au plus 20 ms, pour que la voix reste réactive)
+            time.sleep(min(max(self.last_detect + period - t, 0.005), 0.02))
+        return None, []
+
+    def _detect_head(self, view, t):
+        """Souris à la tête : seul le détecteur de visage tourne (pas de double charge)."""
+        ts = self._timestamp(t)
+        rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
+        try:
+            fres = self.d.face_landmarker().detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+            lms = [(p.x, p.y) for p in fres.face_landmarks[0]] if fres.face_landmarks else None
+            mats = fres.facial_transformation_matrixes
+            matrix = mats[0] if lms is not None and mats else None
+        except Exception:
+            _log.exception("detection du visage")
+            lms = matrix = None
+        self.face_lost = lms is None
+        if lms is not None:
+            self.last_hand_t = t
+        self.pts = None
+        self._count_frame(t)
+        return self.d.core.step_head(lms, t, matrix)
+
+    def _detect_hands(self, view, t, disabled):
+        all_hands, world_hands = [], []
+        if not disabled:                      # en pause, la main ne sert à rien : pas de MediaPipe
+            ts = self._timestamp(t)
+            rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
+            res = self.d.landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
+            all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
+            world_hands = res.hand_world_landmarks
+        self.pts = self.d.tracker.update(all_hands, t)   # les deux mains suivies ; celle qui bouge agit
+        if all_hands:
+            self.last_hand_t = t
+        world = None                          # la même main en 3D
+        for j, h in enumerate(all_hands):
+            if h is self.pts and j < len(world_hands):
+                world = [(p.x, p.y, p.z) for p in world_hands[j]]
+        self._count_frame(t)
+        return self.d.core.step(self.pts, t, world)
+
+    # --- 2. ce qui arrive des autres fils et services (toujours via des files : jamais Core touché ailleurs) ---
+    def background(self, t):
+        d, core = self.d, self.d.core
+        acts = []
+        if d.listener is not None:
+            speech = d.listener.last_speech_t
+            acts += core.dictation_tick(t, speech) + core.ask_tick(t, speech)
+            acts += core.type_tick(t, speech) + core.open_tick(t, speech)
+        for msg in drain(d.app_messages):
+            core.last_gesture = (msg, t)
+        for _ in drain(d.pointer_requests):   # bouton « main / tête » de l'accueil (fil Qt)
+            acts += core.set_pointer_toggle(t)
+        if core.mode == Mode.CHROME and t - self.chrome_check_t >= 0.3:
+            self.chrome_check_t = t           # mode Chrome : quitté dès que Chrome n'est plus devant
+            acts += core.chrome_front(chrome_in_front(), t)
+        bot_events(d.bot, core, d.speaker, d.discord_voice, t)
+        d.desk.events(core, t)
+        return acts
+
+    # --- 3. voix ---
+    def listen(self, t):
+        d, core, listener = self.d, self.d.core, self.d.listener
+        acts = []
+        if listener is not None:
+            listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
+            if t - listener.iris_heard_t < 0.5:
+                core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
+            for ev in listener.poll():
+                new = core.voice(ev.word, ev.t_end, t_start=ev.t_start)
+                acts += new
+                accepted = core.last_word and core.last_word[2]
+                _log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
+                if ev.word == "iris" and accepted:
+                    d.sounds.play("ECOUTE")
+                elif accepted and not any(a[0] in ("mode", "mouse") for a in new):
+                    d.sounds.play("OK")       # commande comprise (un changement de mode a son propre son)
+            rej = listener.last_rejected
+            if rej is not None and rej is not self.last_rej_seen:
+                self.last_rej_seen = rej
+                if core.listening(t):         # après « iris » seulement : la conversation reste muette
+                    d.sounds.play("NON")
+            if core.dictating and t - self.last_level_log >= 1.0:
+                self.last_level_log = t
+                _log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
+                         listener.last_rms, listener.ambient, t - listener.last_speech_t)
+        lg = core.last_gesture
+        if lg is not None and lg is not self.last_fail_seen:
+            self.last_fail_seen = lg
+            if is_failure(lg[0]):
+                d.sounds.play("NON")          # rien entendu, pas compris, réglage impossible…
+        return acts
+
+    # --- 4. actions : chaque service prend les siennes et renvoie le reste ---
+    def resolve(self, acts, t):
+        d = self.d
+        if d.listener is not None:
+            acts = question_actions(acts, d.listener, d.asker)
+            acts = type_actions(acts, d.listener, d.typer, d.sounds)
+            acts = open_actions(acts, d.listener, d.launcher, d.asker, d.bot, d.app_message, d.desk)
+        acts = d.desk.actions(acts, d.core, t)
+        acts = discord_actions(acts, d.speaker)
+        acts = power_actions(acts)
+        return vscode_actions(acts, d.core, d.vscode_ctl, d.sounds, t, d.discord_voice)
+
+    def after(self, acts):
+        """Sons et journal des actions faites."""
+        d = self.d
+        for a in acts:
+            if a[0] == "mode":
+                d.sounds.play(a[1])
+                _log.info("mode %s", a[1])
+            elif a[0] == "pointer":
+                write_pointer(POINTER_FILE, a[1])
+                d.bridge.pointer.emit(a[1])
+                d.sounds.play("MODE")
+                _log.info("souris pilotee par : %s", a[1])
+            elif a[0] == "mouse":
+                d.sounds.play("SOURIS" if a[1] else "REPOS")
+                _log.info("souris %s", "allumee" if a[1] else "eteinte")
+            elif a[0] == "scroll":
+                _log.info("scroll %s", a[1])
+            elif a[0] == "hotkey":
+                _log.info("touches %s", "+".join(a[1]))
+            elif a[0] in ("key", "click"):
+                _log.info("%s %s (%s)", a[0], a[1], d.core.last_gesture[0] if d.core.last_gesture else "")
+
+    # --- 5. affichage ---
+    def publish(self, view, t):
+        d, core, cam = self.d, self.d.core, self.d.cam
+        if self.pts is not None or self.frame_seen:
+            self.last_view = view.copy()
+        status = cam.status if t - self.last_frame_t <= STALE_S else (cam.status if cam.status != OK else "perdue")
+        # fenêtre d'aperçu réduite : on ne dessine plus l'image (20 fois par seconde pour rien)
+        if d.view_win.visible_flag or d.args.screenshot:
+            self.shown = render(view, core, d.tracker.tracks if self.pts is not None else [], self.fps,
+                                d.args.simulation, status, d.tracker.active_id, voice_on=d.listener is not None)
+            d.show(self.shown)
+        prog = core.progress()
+        # île : la dernière chose comprise (ou refusée), la plus récente des deux
+        toast = core.last_gesture
+        rej = d.listener.last_rejected if d.listener is not None else None
+        if rej and (not toast or rej[1] > toast[1]):
+            toast = rej
+        d.bridge.state.emit({
+            "show_cursor": core.mouse and not core.scrolling(t),  # défile : curseur dans la jauge
+            "mouse": core.mouse,
+            "cursor": core.cursor,
+            "progress": prog[1] if prog else 0.0,
+            # perdu = ce qui pilote : le visage à la tête (la main n'y est jamais suivie)
+            "lost": self.face_lost if core.pointer == "tete" else self.pts is None,
+            "pointer": core.pointer,
+            "arming": core.mouse and not core.armed,
+            # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
+            "ghost": core.ghost() if self.pts is not None else None,
+            # « défile » : jauge au bord droit, la main monte / descend dedans
+            "scroll_gauge": core.scroll_gauge(t),
+            "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
+            "mode": core.mode,
+            "dictating": core.dictating,
+            "typing": core.typing or core.opening,
+            "confirming": core.confirming(t),
+            "listening": core.listening(t),
+            "toast": toast[0] if toast else None,
+            # main verte 0,5 s : une commande vocale vient d'être comprise (pas « iris » seul)
+            "ok_flash": bool(core.last_word and core.last_word[2] and core.last_word[0] != "iris"
+                             and t - core.last_word[1] < 0.5),
+            "toast_age": t - toast[1] if toast else 1e9,
+            "qa": d.asker.snapshot() if d.listener is not None else None,
+            "discord": (d.discord_voice["mute"], d.discord_voice["deaf"]),
+            "reminders": d.desk.state(t, calendar_open=t < core.calendar_until),
+            "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
+        })
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="motionzero")
     ap.add_argument("--simulation", action="store_true", help="n'envoie rien a Windows")
@@ -201,7 +477,6 @@ def main(argv=None):
     bot = BotLink(launch=not args.simulation and not args.duration).start()
     speaker = Speaker()                        # voix Windows : messages Discord et rappels
     # rappels et alarmes (issue #20) : « iris rappel » -> Whisper -> Haiku -> « envoie »
-    import datetime
     from .ask import ask_claude
     from .reminders import PARSE_SYSTEM, Desk, Reminders
     desk = Desk(Reminders(os.path.join(ROOT, "reminders.json")).load(datetime.datetime.now()),
@@ -309,231 +584,20 @@ def main(argv=None):
     def show(img):
         bridge.frame.emit(img)
 
+    engine = Engine(SimpleNamespace(
+        cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
+        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, launcher=launcher,
+        app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
+        speaker=speaker, desk=desk, discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
+        bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
+
     def run_engine():
         try:
-            _loop()
+            engine.run()
         except Exception:
             log.exception("erreur dans la boucle principale")
         finally:
             bridge.done.emit()
-
-    def _loop():
-        t0 = time.perf_counter()
-        seq, last_ts, fps, frames, fps_t = 0, -1, 0.0, 0, t0
-        last_detect, last_frame_t = 0.0, t0
-        last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
-        pts = None
-        face_lost = True                      # souris à la tête : visage vu à la dernière détection ?
-        last_level_log = 0.0
-        last_rej_seen = last_fail_seen = None
-        chrome_check_t = 0.0
-        last_hand_t = t0
-        errors = deque(maxlen=20)
-        try:
-            while not stop.is_set():
-                try:
-                    t = time.perf_counter()
-                    live["beat"] = t                      # surveillé : voir watch_engine
-                    frame, new_seq = cam.read(seq)
-                    disabled = core.mode == Mode.DISABLED
-                    live["detect_hz"] = 0 if disabled else 1.0 / detect_period(False, last_hand_t, t)
-                    if frame is not None and t - last_detect >= detect_period(disabled, last_hand_t, t):
-                        seq = new_seq
-                        last_detect = last_frame_t = t
-                        view = cv2.flip(frame, 1)
-                        all_hands, world_hands = [], []
-                        if not disabled and core.pointer == "tete":
-                            # souris à la tête : seul le détecteur de visage tourne (pas de double charge)
-                            ts = max(int((t - t0) * 1000), last_ts + 1)
-                            last_ts = ts
-                            rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
-                            try:
-                                fres = face_landmarker().detect_for_video(
-                                    mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                                lms = [(p.x, p.y) for p in fres.face_landmarks[0]] if fres.face_landmarks else None
-                                mats = fres.facial_transformation_matrixes
-                                matrix = mats[0] if lms is not None and mats else None
-                            except Exception:
-                                log.exception("detection du visage")
-                                lms = matrix = None
-                            face_lost = lms is None
-                            if lms is not None:
-                                last_hand_t = t
-                            pts = None
-                            acts = core.step_head(lms, t, matrix)
-                            frames += 1
-                            if t - fps_t >= 1.0:
-                                fps, frames, fps_t = frames / (t - fps_t), 0, t
-                        elif not disabled:   # en pause, la main ne sert à rien : pas de MediaPipe
-                            ts = max(int((t - t0) * 1000), last_ts + 1)
-                            last_ts = ts
-                            rgb = cv2.cvtColor(view, cv2.COLOR_BGR2RGB)
-                            res = landmarker.detect_for_video(mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb), ts)
-                            all_hands = [[(p.x, p.y) for p in h] for h in res.hand_landmarks]
-                            world_hands = res.hand_world_landmarks
-                        if disabled or core.pointer != "tete":
-                            pts = tracker.update(all_hands, t)  # les deux mains suivies ; celle qui bouge agit
-                            if all_hands:
-                                last_hand_t = t
-                            world = None                        # la même main en 3D (index pointé = clic)
-                            for j, h in enumerate(all_hands):
-                                if h is pts and j < len(world_hands):
-                                    world = [(p.x, p.y, p.z) for p in world_hands[j]]
-                            acts = core.step(pts, t, world)
-                            frames += 1
-                            if t - fps_t >= 1.0:
-                                fps, frames, fps_t = frames / (t - fps_t), 0, t
-                    elif t - last_frame_t > STALE_S + detect_period(disabled, last_hand_t, t):
-                        # caméra muette : on traite comme « main absente » (relâche tout, puis repos)
-                        view, pts = last_view.copy() // 3, None
-                        acts = core.step(None, t)
-                    else:
-                        view, acts = None, []
-                        if frame is not None:
-                            # image dispo mais plafond atteint : on dort jusqu'à la prochaine détection
-                            # (au plus 20 ms, pour que la voix reste réactive)
-                            wait = last_detect + detect_period(disabled, last_hand_t, t) - t
-                            time.sleep(min(max(wait, 0.005), 0.02))
-
-                    if listener is not None:
-                        acts = acts + core.dictation_tick(t, listener.last_speech_t)
-                        acts = acts + core.ask_tick(t, listener.last_speech_t)
-                        acts = acts + core.type_tick(t, listener.last_speech_t)
-                        acts = acts + core.open_tick(t, listener.last_speech_t)
-                    while not app_messages.empty():
-                        core.last_gesture = (app_messages.get_nowait(), t)
-                    for _ in drain(pointer_requests):        # bouton « main / tête » de l'accueil (fil Qt)
-                        acts = acts + core.set_pointer_toggle(t)
-                    if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
-                        chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
-                        acts = acts + core.chrome_front(chrome_in_front(), t)
-                    bot_events(bot, core, speaker, discord_voice, t)
-                    desk.events(core, t)
-                    if listener is not None:
-                        listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
-                        if t - listener.iris_heard_t < 0.5:
-                            core.freeze_for_voice(t)   # « iris » en cours de prononciation : curseur figé
-                        for ev in listener.poll():
-                            new = core.voice(ev.word, ev.t_end, t_start=ev.t_start)
-                            acts = acts + new
-                            accepted = core.last_word and core.last_word[2]
-                            log.info("voix %s (%.2f) %s", ev.word, ev.conf, "acceptee" if accepted else "ignoree (ecoute fermee)")
-                            if ev.word == "iris" and accepted:
-                                sounds.play("ECOUTE")
-                            elif accepted and not any(a[0] in ("mode", "mouse") for a in new):
-                                sounds.play("OK")          # commande comprise (un changement de mode a son propre son)
-                        rej = listener.last_rejected
-                        if rej is not None and rej is not last_rej_seen:
-                            last_rej_seen = rej
-                            if core.listening(t):          # après « iris » seulement : la conversation reste muette
-                                sounds.play("NON")
-                    lg = core.last_gesture
-                    if lg is not None and lg is not last_fail_seen:
-                        last_fail_seen = lg
-                        if is_failure(lg[0]):
-                            sounds.play("NON")             # rien entendu, pas compris, réglage impossible…
-                    # le bouton STOP ne s'active QUE par un vrai clic (souris, ou clic de motionzero en mode souris) :
-                    # le survol par la main l'arrêtait sans le vouloir (demande de l'utilisateur, 11/11)
-                    if listener is not None and core.dictating and t - last_level_log >= 1.0:
-                        last_level_log = t
-                        log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
-                                 listener.last_rms, listener.ambient, t - listener.last_speech_t)
-                    if listener is not None:
-                        acts = question_actions(acts, listener, asker)
-                        acts = type_actions(acts, listener, typer, sounds)
-                        acts = open_actions(acts, listener, launcher, asker, bot, app_message, desk)
-                    acts = desk.actions(acts, core, t)
-                    acts = discord_actions(acts, speaker)
-                    acts = power_actions(acts)
-                    acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
-                    ctl.execute(acts, t)
-                    for a in acts:
-                        if a[0] == "mode":
-                            sounds.play(a[1])
-                            log.info("mode %s", a[1])
-                        elif a[0] == "pointer":
-                            write_pointer(POINTER_FILE, a[1])
-                            bridge.pointer.emit(a[1])
-                            sounds.play("MODE")
-                            log.info("souris pilotee par : %s", a[1])
-                        elif a[0] == "mouse":
-                            sounds.play("SOURIS" if a[1] else "REPOS")
-                            log.info("souris %s", "allumee" if a[1] else "eteinte")
-                        elif a[0] == "scroll":
-                            log.info("scroll %s", a[1])
-                        elif a[0] == "hotkey":
-                            log.info("touches %s", "+".join(a[1]))
-                        elif a[0] in ("key", "click"):
-                            log.info("%s %s (%s)", a[0], a[1], core.last_gesture[0] if core.last_gesture else "")
-
-                    if view is not None:
-                        if pts is not None or frame is not None:
-                            last_view = view.copy()
-                        status = cam.status if t - last_frame_t <= STALE_S else (cam.status if cam.status != OK else "perdue")
-                        # fenêtre d'aperçu réduite : on ne dessine plus l'image (20 fois par seconde pour rien)
-                        if view_win.visible_flag or args.screenshot:
-                            shown = render(view, core, tracker.tracks if pts is not None else [], fps,
-                                           args.simulation, status, tracker.active_id, voice_on=listener is not None)
-                            show(shown)
-                        prog = core.progress()
-                        # île : la dernière chose comprise (ou refusée), la plus récente des deux
-                        toast = core.last_gesture
-                        rej = listener.last_rejected if listener is not None else None
-                        if rej and (not toast or rej[1] > toast[1]):
-                            toast = rej
-                        bridge.state.emit({
-                            "show_cursor": core.mouse and not core.scrolling(t),  # défile : curseur dans la jauge
-                            "mouse": core.mouse,
-                            "cursor": core.cursor,
-                            "progress": prog[1] if prog else 0.0,
-                            # perdu = ce qui pilote : le visage à la tête (la main n'y est jamais suivie)
-                            "lost": face_lost if core.pointer == "tete" else pts is None,
-                            "pointer": core.pointer,
-                            "arming": core.mouse and not core.armed,
-                            # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
-                            "ghost": core.ghost() if pts is not None else None,
-                            # « défile » : jauge au bord droit, la main monte / descend dedans
-                            "scroll_gauge": core.scroll_gauge(t),
-                            "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
-                            "mode": core.mode,
-                            "dictating": core.dictating,
-                            "typing": core.typing or core.opening,
-                            "confirming": core.confirming(t),
-                            "listening": core.listening(t),
-                            "toast": toast[0] if toast else None,
-                            # main verte 0,5 s : une commande vocale vient d'être comprise (pas « iris » seul)
-                            "ok_flash": bool(core.last_word and core.last_word[2] and core.last_word[0] != "iris"
-                                             and t - core.last_word[1] < 0.5),
-                            "toast_age": t - toast[1] if toast else 1e9,
-                            "qa": asker.snapshot() if listener is not None else None,
-                            "discord": (discord_voice["mute"], discord_voice["deaf"]),
-                            "reminders": desk.state(t, calendar_open=t < core.calendar_until),
-                            "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
-                        })
-                    else:
-                        time.sleep(0.002)  # rien de neuf : ne pas monopoliser le processeur
-                    if args.duration and t - t0 >= args.duration:
-                        if args.screenshot and "shown" in locals():
-                            cv2.imwrite(args.screenshot, shown)
-                        break
-                except Exception:
-                    # une erreur dans un tour de boucle ne doit jamais arrêter motionzero : on la note,
-                    # on relâche tout ce qui est tenu, et on continue (l'utilisateur en dépend)
-                    errors.append(time.perf_counter())
-                    log.exception("erreur dans la boucle principale (on continue)")
-                    ctl.release_all()
-                    if len(errors) >= 20 and errors[-1] - errors[-20] < 10.0:
-                        raise   # erreur en boucle : inutile d'insister
-                    time.sleep(0.05)
-        finally:
-            ctl.release_all()
-            if listener is not None:
-                listener.stop()
-            cam.stop()
-            landmarker.close()
-            if faces["lm"] is not None:
-                faces["lm"].close()
-            log.info("arret (images rejetees=%d, reconnexions=%d)", cam.rejected, cam.reconnections)
 
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
