@@ -27,6 +27,7 @@ from .config import load_config
 from .core import Core, Mode
 from .power import power_actions
 from .fenetre import window_actions
+from .aide import help_view
 from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
@@ -396,6 +397,7 @@ class Engine:
             "discord": (d.discord_voice["mute"], d.discord_voice["deaf"]),
             "reminders": d.desk.state(t, calendar_open=t < core.calendar_until),
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
+            "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 
 

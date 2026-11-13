@@ -201,7 +201,9 @@ def _feed_box(core, now, width, simulation, height):
     return box
 
 
-VOICE_HELP = [  # (mot à dire, ce qui se passe) — un mot par ligne
+VOICE_HELP = [  # (mot à dire, ce qui se passe) — un mot par ligne ; la liste complète : « iris aide »
+    ("aide", "TOUTES les commandes"),
+    ("guide", "documentation (GitHub)"),
     ("clic", "clic gauche"),
     ("double", "double clic"),
     ("menu", "clic droit"),

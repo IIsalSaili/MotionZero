@@ -61,6 +61,7 @@ ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (dema
            # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
            "muet": "mute", "sourdine": "défun",
            "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
+HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back", "efface")   # après « iris skip / back / efface », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
@@ -113,7 +114,8 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
-            "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause"}
+            "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
+            "aide": "help", "guide": "guide"}
 
 
 class Core:
@@ -179,6 +181,7 @@ class Core:
         self.open_since = None                # instant du clic main ouverte (None : main pas ouverte)
         self.armed = False                    # souris : la paume est passée au centre de l'image
         self.arm_since = None                 # instant d'entrée dans la zone d'armement
+        self.help_until = -1e9                # « iris aide » : affichée jusqu'à cet instant
         self.calendar_until = -1e9            # « iris calendrier » : ouvert jusqu'à cet instant
         self.timer_running = False            # mis à jour par les rappels (même fil) : « iris timer » l'annule
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
@@ -542,7 +545,7 @@ class Core:
         if self.dictating or self.asking or self.typing or self.opening:
             return []  # dictée ou question en cours : tes mots sont du texte, pas des commandes
         acts = []
-        for step in (self._v_confirm, self._v_calendar, self._v_stop, self._v_without_iris, self._v_wake, self._v_resume):
+        for step in (self._v_confirm, self._v_calendar, self._v_help, self._v_stop, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
             if done is not None:
                 return done
@@ -593,6 +596,20 @@ class Core:
         elif word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS):
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
+        return None
+
+    def _v_help(self, word, t, t_start, acts):
+        """Aide affichée : « ferme » / « merci » la ferment sans « iris » ; « stop » aussi (puis le stop habituel)."""
+        if t >= self.help_until:
+            return None
+        if word in ("ferme", "merci"):
+            self.help_until = -1e9
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            self.last_gesture = ("AIDE FERMEE", t)
+            return acts
+        if word == "stop":
+            self.help_until = -1e9
         return None
 
     def _v_stop(self, word, t, t_start, acts):
@@ -793,6 +810,15 @@ class Core:
             acts.append(("timer_cancel",))
             return "TIMER ANNULE"
         return self._start_open("timer", t, acts, "TIMER : combien de temps ?")
+
+    def _cmd_help(self, word, t, acts):
+        # redit pendant qu'elle est affichée : fermée
+        self.help_until = -1e9 if t < self.help_until else t + HELP_S
+        return "AIDE" if self.help_until > t else "AIDE FERMEE"
+
+    def _cmd_guide(self, word, t, acts):
+        acts.append(("guide",))
+        return "GUIDE : ouvert dans le navigateur"
 
     def _cmd_calendar(self, word, t, acts):
         self.calendar_until = t + CAL_IDLE_S

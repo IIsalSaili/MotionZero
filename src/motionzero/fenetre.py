@@ -6,6 +6,7 @@ import logging
 log = logging.getLogger(__name__)
 
 SW_MAXIMIZE = 3
+GUIDE_URL = "https://github.com/IIsalSaili/MotionZero/blob/dev/docs/guide/README.md"   # « iris guide »
 
 
 def maximize_foreground(user32=None):
@@ -22,11 +23,25 @@ def maximize_foreground(user32=None):
         return False
 
 
-def window_actions(acts, maximize=maximize_foreground):
-    """Traite ("window", "max") ; renvoie les autres actions."""
+def open_url(url):
+    """Ouvre dans le navigateur par défaut (sur GitHub, les schémas de la doc s'affichent)."""
+    try:
+        import os
+        os.startfile(url)
+        return True
+    except Exception:
+        log.exception("ouverture de %s", url)
+        return False
+
+
+def window_actions(acts, maximize=maximize_foreground, opener=open_url):
+    """Traite ("window", "max") et ("guide",) ; renvoie les autres actions."""
     rest = []
     for a in acts:
-        if a[0] == "window":
+        if a[0] == "guide":
+            log.info("guide : %s", GUIDE_URL)
+            opener(GUIDE_URL)
+        elif a[0] == "window":
             log.info("fenetre en plein ecran")
             maximize()
         else:

@@ -734,6 +734,8 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 REMINDER_W = 560
 CAL_W = 1060             # calendrier : 7 cartes
 CAL_H = 470
+HELP_W = 1060            # « iris aide »
+HELP_H = 800
 BLUE = QColor(111, 155, 245)
 ORANGE = QColor(245, 165, 36)
 ALARM_RED = (190, 30, 40)
@@ -991,7 +993,7 @@ class _IslandPainter:
 
     def rect(self):
         w = max(ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120, CAL_W + 40)   # + pastille Discord / calendrier
-        h = max(ISLET + ANSWER_MAX_H + 8, ISLET + 14 + 56 + CAL_H + 10)
+        h = max(ISLET + ANSWER_MAX_H + 8, ISLET + 14 + 56 + CAL_H + 10, ISLET + 14 + HELP_H + 10)
         return QRect(int((self.width - w) // 2), ISLAND_TOP - 4, int(w), h)
 
     def update(self, st, now):
@@ -999,6 +1001,7 @@ class _IslandPainter:
         qa = st.get("qa") or {}
         self.qa = qa if qa.get("phase") in ("answer", "error") else None
         self.rem = reminder_view(st)
+        self.help = st.get("help")
         tm = (st.get("reminders") or {}).get("timers") or {}
         self.timer_pills = [("Chrono " + tm["chrono"]["text"] + (" · arrêté" if tm["chrono"]["done"] else ""), False)] \
             if tm.get("chrono") else []
@@ -1020,9 +1023,9 @@ class _IslandPainter:
         self.anim_now = now
         if self.next_rem:
             active = True
-        if self.rem:
+        if self.rem or self.help:
             active = True
-        rem_key = (self.rem[0], str(self.rem[1])) if self.rem else None
+        rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
                    rem_key, self.next_rem, tuple(self.timer_pills))
         if content != self.content:
@@ -1060,6 +1063,9 @@ class _IslandPainter:
         if not self.content:
             return
         mode, msg = self.content[0], self.content[1]
+        if self.help and not (self.rem and self.rem[0] == "current"):   # une alarme qui sonne passe devant
+            self._paint_help(p, self.help)
+            return
         if self.rem and self.rem[0] == "calendar":
             self._paint_calendar(p, self.rem[1])
             return
@@ -1191,6 +1197,77 @@ class _IslandPainter:
         p.setPen(QColor(255, 255, 255, 110))
         p.setFont(self.font_small)
         p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
+        p.restore()
+
+    def _paint_help(self, p, hv):
+        """« iris aide » : en haut ce qui marche maintenant (mode en cours), puis toutes les commandes en 4 colonnes,
+        une commande par ligne (mot en blanc, effet en gris). Le fond prend la hauteur du contenu."""
+        fm = QFontMetrics(self.font_small)
+        bold = QFont(self.font_small)
+        bold.setBold(True)
+        fmb = QFontMetrics(bold)
+        pad, line, chip_h = 24, fm.height() + 6, fm.height() + 10
+        left, top = (self.width - HELP_W) / 2, ISLAND_TOP
+        inner = HELP_W - 2 * pad
+        # 1. mise en place (positions), 2. dessin
+        chips, x, y = [], 0.0, 38 + line + 4
+        for word, what in hv["now"]["rows"]:
+            w = fmb.horizontalAdvance(word) + 10 + fm.horizontalAdvance(what) + 24
+            if x and x + w > inner:
+                x, y = 0.0, y + chip_h + 6
+            chips.append((x, y, w, word, what))
+            x += w + 8
+        y0 = y + chip_h + 22
+        cols, gap = 4, 22
+        colw = (inner - (cols - 1) * gap) / cols
+        heights, cells = [0.0] * cols, []
+        for theme, rows in hv["groups"]:
+            c = heights.index(min(heights))
+            cells.append((c, heights[c], theme, rows))
+            heights[c] += line * (len(rows) + 1) + 16
+        h = min(y0 + max(heights) + pad, HELP_H)
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(left, top, HELP_W, h), 22, 22)
+        L, T = left + pad, top + pad
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_mode)
+        p.drawText(QRectF(L, T, inner, 26), Qt.AlignmentFlag.AlignVCenter, "AIDE · dis « iris » puis un mot")
+        p.setPen(QColor(200, 205, 214))
+        p.setFont(self.font_small)
+        p.drawText(QRectF(L, T, inner, 26), Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                   "« ferme » ou « merci » pour fermer")
+        p.setPen(BLUE)
+        p.setFont(bold)
+        p.drawText(QRectF(L, T + 38, inner, line), Qt.AlignmentFlag.AlignVCenter, hv["now"]["title"])
+        for x, y, w, word, what in chips:
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(111, 155, 245, 60))
+            p.drawRoundedRect(QRectF(L + x, T + y, w, chip_h), chip_h / 2, chip_h / 2)
+            p.setPen(QColor(255, 255, 255))
+            p.setFont(bold)
+            p.drawText(QRectF(L + x + 12, T + y, w, chip_h), Qt.AlignmentFlag.AlignVCenter, word)
+            p.setPen(QColor(200, 205, 214))
+            p.setFont(self.font_small)
+            p.drawText(QRectF(L + x + 22 + fmb.horizontalAdvance(word), T + y, w, chip_h),
+                       Qt.AlignmentFlag.AlignVCenter, what)
+        for c, dy, theme, rows in cells:
+            cx, cy = L + c * (colw + gap), T + y0 + dy
+            p.setPen(ORANGE)
+            p.setFont(bold)
+            p.drawText(QRectF(cx, cy, colw, line), Qt.AlignmentFlag.AlignVCenter, theme.upper())
+            for word, what in rows:
+                cy += line
+                ww = fmb.horizontalAdvance(word)
+                p.setPen(QColor(255, 255, 255))
+                p.setFont(bold)
+                p.drawText(QRectF(cx, cy, colw, line), Qt.AlignmentFlag.AlignVCenter, word)
+                p.setPen(QColor(170, 176, 188))
+                p.setFont(self.font_small)
+                room = int(colw - ww - 10)
+                p.drawText(QRectF(cx + ww + 10, cy, room, line), Qt.AlignmentFlag.AlignVCenter,
+                           fm.elidedText(what, Qt.TextElideMode.ElideRight, room))
         p.restore()
 
     def _paint_calendar(self, p, cal):

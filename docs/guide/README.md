@@ -2,6 +2,8 @@
 
 > **En bref**
 > Iris pilote Windows sans les mains : gestes devant la webcam et commandes vocales « iris + mot ».
+> À la voix : « iris guide » ouvre cette page, « iris aide » affiche toutes les commandes à l'écran.
+>
 > Ce guide a 7 pages : utilisation, commandes, architecture, code, développement, dépannage.
 > Commence par la ligne « je veux… » qui te concerne.
 
