@@ -107,3 +107,20 @@ def test_volume_de_l_accueil(tmp_path, monkeypatch):
     assert volume_button_text(0.7) == "Volume d'Iris : 70 %"
     eng.d = SimpleNamespace()                                       # sans file : rien ne plante
     eng._volume()
+
+
+def test_toutes_les_touches_des_commandes_existent():
+    """« iris undo » ne faisait rien : « z » manquait dans la table des touches (et Ctrl restait enfoncé)."""
+    from motionzero import core
+    from motionzero.output import VK
+    tables = [core.VOICE_HOTKEYS, core.CHROME_KEYS, core.EDITOR_TABS]
+    for table in tables:
+        for word, keys in table.items():
+            assert all(k in VK for k in keys), (word, keys)
+
+
+def test_touche_inconnue_rien_d_enfonce():
+    from motionzero.output import Controller, FakeBackend
+    b = FakeBackend()
+    Controller(b, Config()).execute([("hotkey", ["ctrl", "touche-imaginaire"])], 1.0)
+    assert not any("ctrl" in str(e) for e in getattr(b, "events", []))
