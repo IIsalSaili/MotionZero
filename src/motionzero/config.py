@@ -142,7 +142,7 @@ class Config:
     open_no_speech_s: float = 5.0        # « iris ouvre » sans nom : abandon
     clock_s: float = 5.0                 # « iris heure / date » : durée d'affichage (animation comprise)
     repeat_s: float = 2.0                # après « iris skip / back » : « skip » / « back » seuls marchent pendant 2 s
-    close_no_speech_s: float = 2.5       # « iris ferme » sans nom : seulement la réponse retirée
+    close_no_speech_s: float = 2.5       # « iris ferme » sans nom d appli : abandon
     type_confirm_s: float = 3.0          # « iris type » : temps pour dire « envoie » / « annule » (sinon : rien)
     send_confirm_s: float = 30.0         # temps pour dire « envoie » / « annule »
 

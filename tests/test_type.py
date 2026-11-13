@@ -133,7 +133,7 @@ def test_ouvre_lancement_qui_echoue(monkeypatch):
 def test_ferme_avec_nom():
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("ferme", 1.5) == [("ask_close",), ("open_start",)]
+    assert core.voice("ferme", 1.5) == [("open_start",)]   # ferme une appli ; l'affichage : « merci »
     assert core.voice("clic", 2.0) == []
     assert core.open_tick(4.3, last_speech_t=3.0) == [("close_stop",)]
 

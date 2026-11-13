@@ -93,7 +93,8 @@ def test_ouvrir_naviguer_fermer():
     assert core.voice("dix-huit", 4.0) == [("cal", "dix-huit")]
     core.voice("iris", 5.0)
     assert core.voice("jeudi", 5.5) == [("cal", "jeudi")]               # avec « iris » aussi
-    assert core.voice("ferme", 6.0) == [("cal_close",)]                  # ferme le calendrier, pas une appli
+    assert core.voice("ferme", 6.0) == []                                # « ferme » ne touche plus à l'affichage
+    assert core.voice("merci", 6.2) == [("cal_close",)]                  # « merci » / « ok » le ferment
     assert core.voice("suivant", 7.0) == []                              # fermé : plus rien
 
 

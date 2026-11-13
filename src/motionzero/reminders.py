@@ -504,7 +504,7 @@ class Desk:
             elif k == "rappel_merci":
                 self.list_until = -1e9
                 done = self.r.dismiss()
-                core.last_gesture = ("RAPPEL VALIDE" if done else "AUCUN RAPPEL AFFICHE", t)
+                core.last_gesture = ("RAPPEL VALIDE" if done else "AFFICHAGE RETIRE", t)
             elif k == "rappel_tard":
                 again = self.r.snooze(now)
                 core.last_gesture = (f"RAPPEL A {again.when:%H:%M}" if again else "AUCUN RAPPEL AFFICHE", t)

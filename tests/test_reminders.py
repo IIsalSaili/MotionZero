@@ -259,7 +259,7 @@ def test_mots_de_la_voix():
     assert core.voice("rappel", 1.5) == [("open_start",)] and core.open_kind == "rappel"
     assert core.open_tick(10.0, 4.0) == [("rappel_stop",)]               # parlé à 4 s, silence depuis
     core.voice("iris", 20.0)
-    assert core.voice("merci", 20.5) == [("rappel_merci",)]
+    assert core.voice("merci", 20.5) == [("rappel_merci",), ("ask_close",)]
     core.voice("iris", 30.0)
     assert core.voice("plus tard", 30.5) == [("rappel_tard",)]
     assert ("alarm_stop",) in core.voice("stop", 40.0)                    # « stop » seul : toujours
@@ -367,3 +367,45 @@ def test_rappel_en_attente_affiche_en_haut():
     st = {"confirming": True, "reminders": {"pending": txt}}
     assert island_text(st)[1] == txt + " — dis ENVOIE"
     assert island_text({"confirming": True})[1] == "Dis ENVOIE ou ANNULE"   # dictée Claude : inchangé
+
+
+
+def test_ok_et_okay_comme_merci():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    for mot in ("ok", "okay"):
+        core = Core(Config())
+        core.voice("iris", 1.0)
+        assert core.voice(mot, 1.2) == [("rappel_merci",), ("ask_close",)]
+
+
+def test_merci_retire_l_heure():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("heure", 1.2)
+    assert core.clock_until > 2.0
+    core.voice("iris", 2.0)
+    core.voice("ok", 2.2)
+    assert core.clock_until < 0
+
+
+def test_serie_dans_chrome_ok_ne_ferme_pas_l_onglet():
+    """Le conflit du 13/11 : en mode Chrome, retirer l'affichage ne doit jamais fermer l'onglet."""
+    from motionzero.config import Config
+    from motionzero.core import Core, Mode
+    core = Core(Config())
+    core.mode = Mode.CHROME
+    core.voice("iris", 1.0)
+    acts = core.voice("ok", 1.2)
+    assert ("chrome_keys", ["ctrl", "w"]) not in acts and ("ask_close",) in acts
+    core.voice("iris", 2.0)
+    acts = core.voice("ferme", 2.2)
+    assert ("chrome_keys", ["ctrl", "w"]) in acts and ("ask_close",) not in acts and ("rappel_merci",) not in acts
+
+
+def test_ok_sans_iris_ignore():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    assert Core(Config()).voice("ok", 1.0) == []
