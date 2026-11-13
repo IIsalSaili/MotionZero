@@ -41,7 +41,7 @@ Mode : « tous » sauf mention.
 |---|---|---|---|
 | `iris` | ouvre l'écoute 3,5 s ; en DÉSACTIVÉ, repasse en NEUTRE | — | tous |
 | `stop` | relâche tout, coupe l'alarme ; finit le défilement, sinon éteint la souris, sinon LECTURE / CHROME → NEUTRE ; ferme le calendrier | oui | tous |
-| `pause` | relâche tout, mode DÉSACTIVÉ (« iris » pour reprendre) | non | tous |
+| `pause` | relâche tout, mode DÉSACTIVÉ (« iris reprise » pour revenir ; « iris » seul ne réactive plus) | non | tous |
 | `lecture` | éteint la souris, mode LECTURE | non | tous |
 | `souris` | allume / éteint la souris (le mode reste) | non | tous |
 | `tête` / `main` | la souris suit la tête / la main | non | tous |

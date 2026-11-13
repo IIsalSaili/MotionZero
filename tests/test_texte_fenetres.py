@@ -75,7 +75,7 @@ def test_chaque_mot_ecoute_a_un_traitement():
     from motionzero.calendar_view import WORDS as CAL
     from motionzero.core import ALIASES, CHROME_KEYS, COMMANDS, SIMPLE_ACTIONS, VOICE_HOTKEYS
     from motionzero.voice import WORDS
-    special = {"iris", "stop", "skip", "back"}
+    special = {"iris", "stop", "skip", "back", "reprise"}  # reprise : _v_resume
     handled = set(COMMANDS) | set(SIMPLE_ACTIONS) | set(VOICE_HOTKEYS) | set(CHROME_KEYS) | set(ALIASES) | set(CAL)
     assert [w for w in WORDS if w not in handled | special] == []
     assert all(hasattr(Core, "_cmd_" + m) for m in COMMANDS.values())

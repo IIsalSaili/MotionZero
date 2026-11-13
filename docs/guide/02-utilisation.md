@@ -49,7 +49,7 @@ stateDiagram-v2
     NEUTRE --> DESACTIVE : iris pause
     LECTURE --> DESACTIVE : iris pause
     CHROME --> DESACTIVE : iris pause
-    DESACTIVE --> NEUTRE : iris
+    DESACTIVE --> NEUTRE : iris reprise
     state "Souris (surcouche, garde le mode)" as SOURIS
     NEUTRE --> SOURIS : iris souris
     SOURIS --> NEUTRE : stop ou iris souris
