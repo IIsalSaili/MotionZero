@@ -5,7 +5,7 @@
 > `models/`, `logs/`, `.venv/` et `config.json` ne sont pas versionnés.
 > Le tableau en bas dit, pour chaque module : son rôle, sa taille et ses tests.
 
-## 🌳 Arborescence
+## Arborescence
 
 ```text
 motionzero/
@@ -39,11 +39,11 @@ graph LR
     ROOT --> DOC["docs"]
     ROOT --> DATA["assets, calibration,<br/>recordings"]
     ROOT --> NV["models, logs, .venv,<br/>config.json"]
-    classDef nv fill:#f6e0e0,stroke:#a33
+    classDef nv fill:#f6e0e0,stroke:#a33,color:#111
     class NV nv
 ```
 
-## 🗂️ Modules
+## Modules
 
 | Module | Rôle | Lignes | Tests |
 |---|---|---|---|
@@ -81,7 +81,7 @@ graph LR
 | `replay.py` | lecture des enregistrements `.jsonl` | 28 | test_replay |
 | `__main__.py` | `python -m motionzero` | 3 | — |
 
-## 🧰 Outils (`tools/`)
+## Outils (`tools/`)
 
 | Outil | Usage |
 |---|---|

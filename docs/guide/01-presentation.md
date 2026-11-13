@@ -5,26 +5,26 @@
 > Elle est faite pour quelqu'un qui n'a plus l'usage pratique de ses mains.
 > Une Iris arrêtée bloque l'utilisateur : tout est pensé pour qu'elle reste debout.
 
-## 🎯 Pour qui, pourquoi
+## Pour qui, pourquoi
 
 - L'utilisateur travaille **avec** Iris toute la journée : lecture, navigation, code avec Claude Code, Discord.
 - Le clavier n'est jamais nécessaire. Iris envoie elle-même les touches et les clics à Windows (`SendInput`).
 - Tout tourne sur le PC, sauf les questions et rappels (Claude Haiku via `claude -p`) et le bot Discord.
 
-## 🧩 Ce que fait Iris
+## Ce que fait Iris
 
 | Domaine | Exemples |
 |---|---|
-| 🖐️ Gestes de la main | tourner les pages (paume au bord), défiler, souris type pavé tactile, clic main ouverte |
-| 🙂 Tête | la souris suit l'orientation de la tête (« iris tête ») |
-| 🎙️ Mots-clés | « iris clic », « iris entrée », « iris chrome », « stop »… (Vosk, hors ligne) |
-| ✍️ Phrases libres | dictée « iris type », nom d'appli « iris ouvre », durée « iris timer » (Whisper, carte graphique) |
-| 🤖 Claude | « iris question » (réponse affichée), « iris rappel » (rappels compris par Haiku), « iris claude » (micro de Claude dans VS Code) |
-| 💬 Discord | couper le micro, message, salon vocal, lecture des messages (bot séparé) |
-| 🪟 Fenêtres | plein écran, réduire, ancrer à gauche / droite, Alt+Tab |
-| ⏰ Temps | rappels, alarmes, timer, chronomètre, calendrier, heure |
+| Gestes de la main | tourner les pages (paume au bord), défiler, souris type pavé tactile, clic main ouverte |
+| Tête | la souris suit l'orientation de la tête (« iris tête ») |
+| Mots-clés | « iris clic », « iris entrée », « iris chrome », « stop »… (Vosk, hors ligne) |
+| Phrases libres | dictée « iris type », nom d'appli « iris ouvre », durée « iris timer » (Whisper, carte graphique) |
+| Claude | « iris question » (réponse affichée), « iris rappel » (rappels compris par Haiku), « iris claude » (micro de Claude dans VS Code) |
+| Discord | couper le micro, message, salon vocal, lecture des messages (bot séparé) |
+| Fenêtres | plein écran, réduire, ancrer à gauche / droite, Alt+Tab |
+| Temps | rappels, alarmes, timer, chronomètre, calendrier, heure |
 
-## 🖼️ Schéma d'ensemble
+## Schéma d'ensemble
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ flowchart LR
     ACT --> SND["Sons"]
 ```
 
-## 👀 Ce que l'on voit à l'écran
+## Ce que l'on voit à l'écran
 
 - **Fenêtre d'accueil** (« iris accueil ») : image de la caméra, aide, consommation du PC, bouton main / tête.
 - **Verre** plein écran transparent aux clics : l'« île » en haut (dernière commande, réponses, rappels), le curseur, la main fantôme, la jauge de défilement, la barre de volume.

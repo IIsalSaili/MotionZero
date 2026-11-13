@@ -5,7 +5,7 @@
 > Les journaux sont dans `logs/` : `motionzero.log` d'abord, `garde.log` si Iris ne revient pas.
 > En dernier recours : raccourci « Iris » du bureau (il arrête et relance tout proprement).
 
-## 🧭 Par où commencer
+## Par où commencer
 
 ```mermaid
 flowchart TD
@@ -19,7 +19,7 @@ flowchart TD
     Q3 -->|"oui"| MODE["Vérifier le mode<br/>et le tableau des commandes"]
 ```
 
-## 🩺 Symptôme → cause → solution
+## Symptôme → cause → solution
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
@@ -39,7 +39,7 @@ flowchart TD
 | Overlay visible dans un partage d'écran | réglage par défaut | bouton **œil** à côté de STOP |
 | Commande Discord sans effet | bot non lancé ou non connecté | « iris activation » ; Iris relance le bot au plus une fois par minute |
 
-## 📂 Les fichiers de `logs/`
+## Les fichiers de `logs/`
 
 | Fichier | Écrit par | Contenu | Quand le lire |
 |---|---|---|---|

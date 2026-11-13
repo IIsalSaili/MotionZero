@@ -5,7 +5,7 @@
 > Tous les autres fils (micro, Whisper, bot, interface Qt) lui parlent par des **files** (`queue`).
 > Règle d'or : **jamais modifier `Core` depuis un autre fil.**
 
-## 🧱 Modules et dépendances
+## Modules et dépendances
 
 ```mermaid
 graph TD
@@ -41,7 +41,7 @@ graph TD
 
 > **Note** `core.py` ne dépend d'aucun service extérieur : il prend des points et des mots, il rend une liste d'**actions** (tuples comme `("click", "left")`). C'est ce qui le rend testable sans caméra.
 
-## 🧵 Fils d'exécution et files
+## Fils d'exécution et files
 
 ```mermaid
 flowchart LR
@@ -75,7 +75,7 @@ flowchart LR
 
 > **Note** Le lancement d'un travail lent (Whisper, Haiku, volume, réparation du son) se fait toujours dans un fil à part. La boucle ne fait jamais d'appel bloquant.
 
-## 🔁 La boucle `Engine` en 5 étapes
+## La boucle `Engine` en 5 étapes
 
 `Engine.tick()` (dans `app.py`) fait un tour : **détecter, fond, écouter, faire, montrer**.
 
@@ -96,7 +96,7 @@ flowchart TD
 - La détection est plafonnée à 20 images/s, ralentie sans main, arrêtée en DÉSACTIVÉ.
 - 20 erreurs en moins de 10 s : la boucle abandonne (le gardien relance).
 
-## 🔄 Cycle de vie
+## Cycle de vie
 
 ```mermaid
 sequenceDiagram

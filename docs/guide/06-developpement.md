@@ -5,7 +5,7 @@
 > Un bug de geste = un enregistrement + un test de replay. Chaque fonction : tester aussi les échecs.
 > Git : une branche temporaire depuis `dev`, fusion après validation de l'utilisateur.
 
-## 🧪 Tests
+## Tests
 
 ```bash
 .venv/Scripts/python -m pytest -q
@@ -16,7 +16,7 @@
 - `tests/synth.py` fabrique des mains de synthèse.
 - Un hook `Stop` relance les tests si du Python a changé : on ne dit pas « terminé » tant qu'ils échouent.
 
-## 🎥 Enregistrer et rejouer un geste
+## Enregistrer et rejouer un geste
 
 ```mermaid
 flowchart LR
@@ -29,7 +29,7 @@ flowchart LR
 
 Un enregistrement contient une ligne par image : `{"t": secondes, "pts": [[x, y] x 21] ou null}`. Aucune image.
 
-## 🌿 Règles Git et du projet
+## Règles Git et du projet
 
 | Règle | Détail |
 |---|---|
@@ -41,7 +41,7 @@ Un enregistrement contient une ligne par image : `{"t": secondes, "pts": [[x, y]
 | Échecs | tester rien entendu, nom inconnu, exception d'un service |
 | Relance | Iris arrêtée (STOP, fin de test) : la relancer tout de suite |
 
-## ➕ Ajouter une commande vocale, pas à pas
+## Ajouter une commande vocale, pas à pas
 
 ```mermaid
 flowchart TD
@@ -76,7 +76,7 @@ flowchart TD
 
 > **Note** Vérifier les conflits : un mot déjà utilisé ailleurs (Chrome, calendrier) ne doit changer que là où il y a conflit. Tester tous les usages du mot.
 
-## ⚠️ Pièges
+## Pièges
 
 | Piège | Ce qu'il faut savoir |
 |---|---|

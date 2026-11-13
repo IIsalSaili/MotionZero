@@ -5,7 +5,7 @@
 > Arrêter : bouton STOP. Le gardien relance Iris après un plantage, jamais après un STOP.
 > Au départ, Iris est en mode NEUTRE : la main ne fait rien, seule la voix agit.
 
-## ▶️ Démarrer
+## Démarrer
 
 | Moyen | Ce qui se passe |
 |---|---|
@@ -14,7 +14,7 @@
 | **Bot Discord** | Il relance Iris si elle se fige ou s'arrête sans dire « bye ». |
 | Ligne de commande | `.venv/Scripts/python -m motionzero --voice` (`--simulation` : rien n'est envoyé à Windows). |
 
-## ⏹️ Arrêter
+## Arrêter
 
 - **Bouton STOP** (en bas à droite) : un vrai clic seulement (souris, ou clic d'Iris en mode souris). Le survol ne l'active pas.
 - STOP relâche tout, prévient le bot (`bye`) et écrit `logs/arret_voulu` : ni le gardien ni le bot ne relancent.
@@ -34,7 +34,7 @@ flowchart TD
     N -->|"raccourci Iris"| A
 ```
 
-## 🔀 Les modes
+## Les modes
 
 Le **mode** dit ce que fait la main. La **souris** n'est pas un mode : c'est un outil qui s'ajoute au mode en cours (on peut avoir Chrome + souris).
 
@@ -64,7 +64,7 @@ stateDiagram-v2
 | **CHROME** | comme NEUTRE | mots de navigation sans « iris » (voir [commandes](03-commandes-vocales.md#mode-chrome)) ; quitté dès que Chrome n'est plus au premier plan (5 s de grâce à l'ouverture) |
 | **DÉSACTIVÉ** | rien, MediaPipe arrêté | « iris » (et « stop ») réveille |
 
-### 🖱️ La souris (surcouche)
+### La souris (surcouche)
 
 - « iris souris » l'allume ou l'éteint. « stop » l'éteint sans changer de mode.
 - Le curseur part du **centre**. Il attend que la main (ou la tête) passe au centre de l'image : c'est l'**armement**. Avant, une **main fantôme** montre où est la main.
@@ -72,12 +72,12 @@ stateDiagram-v2
 - Clic par la main (si calibré, `calibration/poses.json`) : main fermée pour viser, rouverte = clic ; gardée ouverte plus de 2 s = bouton tenu.
 - Pendant la souris : « clic », « double », « menu » marchent **sans « iris »**. Le clic vise là où était le curseur au début de la commande.
 
-### 🙂 Main ou tête
+### Main ou tête
 
 - « iris tête » / « iris main », ou le bouton de l'accueil. Le choix est gardé d'une session à l'autre (`pointeur.txt`).
 - À la tête, seul le visage est détecté. « iris centre » : la tête de face devient le centre.
 
-## 📜 Défilement
+## Défilement
 
 1. « iris défile ».
 2. Amène la main au **centre** (bande horizontale) : la jauge à droite s'arme.
@@ -86,7 +86,7 @@ stateDiagram-v2
 
 En LECTURE, la main en haut / bas de l'image défile aussi, sans voix.
 
-## ✍️ Dictée
+## Dictée
 
 | Commande | Où va le texte | Fin | Ensuite |
 |---|---|---|---|

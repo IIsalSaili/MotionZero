@@ -1,11 +1,11 @@
-# 📘 Guide d'Iris (motionzero)
+# Guide d'Iris (motionzero)
 
 > **En bref**
 > Iris pilote Windows sans les mains : gestes devant la webcam et commandes vocales « iris + mot ».
 > Ce guide a 7 pages : utilisation, commandes, architecture, code, développement, dépannage.
 > Commence par la ligne « je veux… » qui te concerne.
 
-## 🗺️ Carte des pages
+## Carte des pages
 
 ```mermaid
 flowchart LR
@@ -20,15 +20,15 @@ flowchart LR
     P4 --> P5 --> P6
     P7 -.-> P2
     P7 -.-> P4
-    classDef user fill:#dff3e4,stroke:#2e7d32
-    classDef dev fill:#e3ecfa,stroke:#1e4fa3
+    classDef user fill:#dff3e4,stroke:#2e7d32,color:#111
+    classDef dev fill:#e3ecfa,stroke:#1e4fa3,color:#111
     class P1,P2,P3,P7 user
     class P4,P5,P6 dev
 ```
 
 Vert : pour l'utilisateur. Bleu : pour le développeur.
 
-## 🧭 Je veux…
+## Je veux…
 
 | Je veux… | Va à… |
 |---|---|
@@ -42,7 +42,7 @@ Vert : pour l'utilisateur. Bleu : pour le développeur.
 | lancer les tests, ajouter une commande vocale | [06 Développement](06-developpement.md) |
 | réparer : micro figé, caméra perdue, Iris arrêtée | [07 Dépannage](07-depannage.md) |
 
-## 📄 Les pages
+## Les pages
 
 1. [Présentation](01-presentation.md) : à quoi sert Iris, schéma d'ensemble.
 2. [Utilisation](02-utilisation.md) : démarrer, arrêter, modes, défilement, dictée.
