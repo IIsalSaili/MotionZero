@@ -182,6 +182,9 @@ class PreviewWindow(QWidget):
         self.pointer_btn.setStyleSheet("QPushButton { background: #000; color: #fff; border: 1px solid #555;"
                                        " border-radius: 28px; font: bold 13pt 'Atkinson Hyperlegible'; }"
                                        "QPushButton:hover { border-color: #fff; }")
+        # jamais au clavier : avec le focus, une touche Espace (envoyée par Iris, la dictée, un réveil…)
+        # « cliquait » le bouton sans que personne ne l'ait touché
+        self.pointer_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.pointer_btn.clicked.connect(self._toggle_pointer)
         side = QVBoxLayout()
         side.setContentsMargins(8, 8, 8, 8)

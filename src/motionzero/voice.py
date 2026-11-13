@@ -70,6 +70,8 @@ WORDS = {
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
     "merci": "merci",     # « iris merci » : le rappel affiché disparaît
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
+    "réveil": "réveil",   # « iris réveil » / « iris wake (up) » : rallume l'écran éteint
+    "wake": "wake",
     "chronomètre": "chronomètre",   # « iris chronomètre » : démarre / arrête le chrono
     "timer": "timer",     # « iris timer » puis la durée : compte à rebours qui sonne à zéro
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
