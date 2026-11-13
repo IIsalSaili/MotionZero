@@ -7,7 +7,7 @@ __pycache__/
 
 # données locales
 logs/
-config.json
+config.json*
 
 # modèles téléchargés (73 Mo), non versionnés : hand_landmarker.task et vosk-model-small-fr-0.22
 models/

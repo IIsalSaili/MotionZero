@@ -37,6 +37,14 @@ WORDS = {
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
     "colle": "colle",
+    "sélection": "sélection",  # « iris sélection » : tout sélectionner (Ctrl+A)
+    "coupe": "coupe",     # « iris coupe » : Ctrl+X
+    "efface": "efface",   # « iris efface » : efface le mot d'avant ; « efface, efface » sans « iris »
+    "agrandis": "agrandis",  # « iris agrandis » : plein écran / « réduis » : fenêtre réduite (en mode Chrome : zoom)
+    "plein écran": "plein écran",  # « iris plein écran » : plein écran partout, Chrome compris
+    "réduis": "réduis",
+    "gauche": "gauche",   # « iris gauche / droite » : fenêtre ancrée sur la moitié de l'écran
+    "droite": "droite",
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
@@ -93,6 +101,7 @@ LONE_MIN_CONF = 0.8
 SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
          ("des", "fun"): "défun", ("dis", "fun"): "défun",
          ("plus", "tard"): "plus tard",
+         ("plein", "écran"): "plein écran",
          ("double", "clic"): "double"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
 SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement à « démute », absent du modèle)
 def grammar(extra=()):

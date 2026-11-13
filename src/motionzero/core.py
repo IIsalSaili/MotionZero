@@ -35,7 +35,11 @@ class Mode:
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "SOURIS ETEINTE"}
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
-                 "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
+                 "skip": ["right"], "back": ["left"],   # flèches : ±10 s sur YouTube
+                 # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
+                 "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
+                 "réduis": ["win", "down"],
+                 "gauche": ["win", "left"], "droite": ["win", "right"]}
 from .calendar_view import WORDS as CAL_WORDS
 
 # mode CHROME : mot dit (après « iris ») -> touches envoyées à Chrome, seulement s'il est au premier plan
@@ -58,7 +62,7 @@ ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (dema
            "muet": "mute", "sourdine": "défun",
            "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
-REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
+REPEATABLE = ("skip", "back", "efface")   # après « iris skip / back / efface », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -72,6 +76,9 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
+                "sélection": "TOUT SELECTIONNE (Ctrl+A)", "coupe": "COUPER (Ctrl+X)", "efface": "MOT EFFACE",
+"réduis": "FENETRE REDUITE",
+                "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
                 "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
@@ -82,6 +89,31 @@ OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherc
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
              "rappel": "RAPPEL : Haiku reflechit…", "timer": "TIMER : je lis la duree…",
              "volume": "VOLUME : je regle…"}
+
+
+# « iris + mot » sans état : une action, et un libellé (None = celui de VOICE_LABELS)
+SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partout, Chrome compris
+                  "agrandis": (("window", "max"), "PLEIN ECRAN"),      # hors mode Chrome (là : zoom)
+                  "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
+                  "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
+                  "tab": (("alt_tab",), None),
+                  "réveil": (("wake",), "ECRAN RALLUME"), "wake": (("wake",), "ECRAN RALLUME"),
+                  "chronomètre": (("chrono",), "CHRONOMETRE"),
+                  "plus tard": (("rappel_tard",), None),
+                  "activation": (("bot_activate",), "BOT VOCAL : ACTIVATION"),   # lance le bot, charge Whisper
+                  "viens": (("bot_join",), "IRIS : J'ARRIVE EN VOCAL"),
+                  "pars": (("bot_leave",), "IRIS QUITTE LE VOCAL"),
+                  "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
+                  "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
+                  "défun": (("discord_deafen",), None)}
+# « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
+COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag", "lâche": "release",
+            "défile": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
+            "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
+            "heure": "clock", "date": "clock", "merci": "thanks",
+            "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
+            "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
+            "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause"}
 
 
 class Core:
@@ -504,31 +536,46 @@ class Core:
                                                or self.menu.is_open)
 
     def voice(self, word, t, t_start=None):
-        """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions."""
+        """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions.
+        Ordre des étapes = ordre de priorité : chacune traite le mot (et renvoie les actions) ou passe (None)."""
         word = ALIASES.get(word, word)
-        c = self.cfg
-        acts = []
         if self.dictating or self.asking or self.typing or self.opening:
-            return acts  # dictée ou question en cours : tes mots sont du texte, pas des commandes
-        if self.confirming(t) and self.confirm_kind == "type" and word != WAKE_WORD:
-            # après « iris type » : envoie (Entrée) ou annule (efface le texte écrit) ; tout autre mot :
-            # le texte reste tel quel et le mot est traité normalement
+            return []  # dictée ou question en cours : tes mots sont du texte, pas des commandes
+        acts = []
+        for step in (self._v_confirm, self._v_calendar, self._v_stop, self._v_without_iris, self._v_wake):
+            done = step(word, t, t_start, acts)
+            if done is not None:
+                return done
+        if not self.listening(t):
+            self.last_word = (word, t, False)  # entendu mais écoute fermée : ignoré
+            self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
+            return acts
+        return self._v_command(word, t, acts)
+
+    # --- étapes de voice() : chacune renvoie la liste d'actions si elle traite le mot, sinon None ---
+    def _v_confirm(self, word, t, t_start, acts):
+        """Juste après « iris type / claude / rappel » : envoie / annule (et claude) marchent sans « iris »."""
+        if not self.confirming(t):
+            return None
+        if self.confirm_kind == "type" and word != WAKE_WORD:
+            # tout autre mot : le texte reste tel quel et le mot est traité normalement
             self.confirm_until = -1e9
             if word in ("envoie", "annule"):
                 self.last_word = (word, t, True)
                 self.last_gesture = ("TEXTE ENVOYE" if word == "envoie" else "TEXTE EFFACE", t)
                 return [("type_send",)] if word == "envoie" else [("type_erase",)]
-        if self.confirming(t) and self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
-            # juste après la dictée : envoie / annule / claude marchent aussi sans « iris ».
-            # Aucun verrou : toutes les autres commandes « iris + … » restent utilisables.
+        elif self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
+            # aucun verrou : toutes les autres commandes « iris + … » restent utilisables
             return self._confirm(word, t)
-        if self.confirming(t) and self.confirm_kind == "rappel" and word in ("envoie", "annule"):
-            # « iris rappel » : Iris a répété ce qu'elle a compris ; envoie / annule sans « iris »
+        elif self.confirm_kind == "rappel" and word in ("envoie", "annule"):
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
             return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
+        return None
+
+    def _v_calendar(self, word, t, t_start, acts):
+        """Calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / ok / stop le ferment."""
         if t < self.calendar_until:
-            # calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / ok / stop le ferment
             if word in CAL_WORDS:
                 self.calendar_until = t + CAL_IDLE_S
                 self.last_word = (word, t, True)
@@ -542,15 +589,17 @@ class Core:
                 return [("cal_close",)]
             if word == "stop":
                 self.calendar_until = -1e9
-                acts.append(("cal_close",))
+                acts.append(("cal_close",))       # puis le « stop » habituel
         elif word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS):
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
-        if word == "stop":  # toujours écouté, prioritaire
-            acts.append(("release_all",))
-            acts.append(("alarm_stop",))      # une alarme qui sonne se tait aussi
-            self.menu.close()
-            self.bubble = None
+        return None
+
+    def _v_stop(self, word, t, t_start, acts):
+        """« stop » : toujours écouté, prioritaire. « lâche » : un bouton tenu doit toujours pouvoir être relâché."""
+        if word == "stop":
+            acts += [("release_all",), ("alarm_stop",)]   # une alarme qui sonne se tait aussi
+            self._quiet()
             scrolling = t < self.voice_scroll_until
             self.voice_scroll_until = self.listen_until = -1e9
             if scrolling:                     # « stop » pendant le défilement : fin du défilement seulement
@@ -562,236 +611,220 @@ class Core:
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
-        if word == "lâche" and self.dragging:  # bouton tenu : on doit toujours pouvoir le relâcher
+        if word == "lâche" and self.dragging:
             self.dragging = False
             self.last_word = (word, t, True)
             self.last_gesture = (VOICE_LABELS["lâche"], t)
             return [("release", "mouse", "left")]
+        return None
+
+    def _heard_alone(self, word, t, label):
+        """Mot accepté sans « iris » : l'écoute se ferme et le curseur est libéré."""
+        self.last_word = (word, t, True)
+        self.listen_until = -1e9
+        self.freeze_until = -1e9
+        self.last_gesture = (label, t)
+
+    def _v_without_iris(self, word, t, t_start, acts):
+        """Mots acceptés sans « iris » selon le contexte : répétition (skip, efface…), mode Chrome, souris allumée."""
         if t < self.repeat_until:
             if word in REPEATABLE:            # « skip, skip, skip » : chaque mot relance la fenêtre de 2 s
-                self.repeat_until = t + c.repeat_s
+                self.repeat_until = t + self.cfg.repeat_s
                 self.last_word = (word, t, True)
                 self.last_gesture = (VOICE_LABELS[word], t)
                 return [("hotkey", VOICE_HOTKEYS[word])]
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
-        if self.mode == Mode.CHROME and word in ("skip", "back", "espace", "space"):
+        chrome = self.mode == Mode.CHROME
+        if chrome and word in ("skip", "back", "espace", "space"):
             # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
-            self.last_word = (word, t, True)
-            self.listen_until = -1e9
-            self.freeze_until = -1e9
-            self.last_gesture = (VOICE_LABELS[word], t)
+            self._heard_alone(word, t, VOICE_LABELS[word])
             return [("hotkey", VOICE_HOTKEYS[word])]
-        if (self.mode == Mode.CHROME and word in ("clic", "double")) or (self.mouse and word in ("clic", "double", "menu")):
-            # mode Chrome ou souris allumée : clic, double clic (et clic droit en souris) sans « iris »
-            # (demandes de l'utilisateur, 12/11)
+        if (chrome and word in ("clic", "double")) or (self.mouse and word in ("clic", "double", "menu")):
+            # mode Chrome ou souris allumée : clic, double clic (et clic droit en souris) sans « iris » (12/11)
             # « iris clic » : on vise le début de « iris » ; « clic » seul : le début du mot
             ref = self.wake_t if self.listening(t) else (t_start if t_start is not None else t)
-            self.last_word = (word, t, True)
-            self.listen_until = -1e9
-            self.freeze_until = -1e9
-            self.menu.close()
-            self.last_click_t = t
-            self.travel = 0.0
-            self.last_gesture = (VOICE_LABELS[word], t)
+            self._heard_alone(word, t, VOICE_LABELS[word])
             self._aim(ref, acts)
-            if word == "menu":
-                return acts + [("click", "right")]
-            return acts + [("click", "left")] * (2 if word == "double" else 1)
-        if self.mode == Mode.CHROME and word in CHROME_KEYS:
-            # mode Chrome : ses mots marchent sans « iris » (demande de l'utilisateur, 12/11). Ils ne sont
-            # écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs.
-            self.last_word = (word, t, True)
-            self.listen_until = -1e9
-            self.freeze_until = -1e9
+            self._click(word, t, acts)
+            return acts
+        if chrome and word in CHROME_KEYS:
+            # ses mots ne sont écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs
+            self._heard_alone(word, t, CHROME_LABELS[word])
             acts.append(("chrome_keys", CHROME_KEYS[word]))
             if word == "recherche":
                 self.typing = True
                 self.type_t0 = t
                 acts.append(("type_start",))
-            self.last_gesture = (CHROME_LABELS[word], t)
             return acts
-        if word == WAKE_WORD:
-            self.wake_t = t_start if t_start is not None else t
-            if self.mode == Mode.DISABLED:
-                self.set_mode(Mode.NEUTRAL, t, acts)
-            self.listen_until = t + c.listen_s
-            self.last_word = (word, t, True)
-            self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
-            return acts
-        if not self.listening(t):
-            self.last_word = (word, t, False)  # entendu mais écoute fermée : ignoré
-            self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
-            return acts
+        return None
+
+    def _v_wake(self, word, t, t_start, acts):
+        if word != WAKE_WORD:
+            return None
+        self.wake_t = t_start if t_start is not None else t
+        if self.mode == Mode.DISABLED:
+            self.set_mode(Mode.NEUTRAL, t, acts)
+        self.listen_until = t + self.cfg.listen_s
+        self.last_word = (word, t, True)
+        self.last_gesture = ("IRIS : ECOUTE OUVERTE", t)
+        return acts
+
+    def _v_command(self, word, t, acts):
+        """« iris » + un mot : une seule commande par « iris » (avant, la fenêtre restait ouverte 8 s et un mot de
+        la conversation qui suivait — « colle », « chrome » — était exécuté)."""
         self.last_word = (word, t, True)
         self.freeze_until = -1e9              # commande reçue : le curseur est libéré après elle
-        # une seule commande par « iris » : la fenêtre se ferme (avant, 8 s prolongées à chaque commande :
-        # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
         self.listen_until = -1e9
-        label = VOICE_LABELS.get(word, word.upper())
-        if word in CHROME_KEYS and word != "ferme":   # hors mode Chrome (« ferme » garde son sens habituel)
+        if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
+            # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
         if word != "défile" and self.scrolling(t):
             self._end_scroll(t)               # toute autre commande sort du défilement d'abord
-        if word in ("clic", "double", "menu", "glisse"):
-            self._aim(self.wake_t, acts)      # là où l'on visait en disant « iris »
-        if word in ("clic", "double", "menu"):
-            if word == "menu":
-                acts.append(("click", "right"))
-            else:
-                acts += [("click", "left")] * (2 if word == "double" else 1)
-            self.menu.close()
-            self.last_click_t = t
-            self.travel = 0.0
-        elif word == "glisse":
-            acts.append(("press", "mouse", "left"))
-            self.dragging = True
-        elif word == "lâche":
-            acts.append(("release", "mouse", "left"))
-        elif word == "défile" and self.scrolling(t):  # « iris défile » une 2e fois : on en sort
-            self._end_scroll(t)
-            label = "DEFILEMENT FINI"
-        elif word == "défile":
-            self.voice_scroll_until = math.inf    # actif jusqu'à « iris défile », « stop » ou une autre commande
-            self.voice_scroll_armed = False
-            self.voice_scroll_since = None
-            self._scroll_acc = 0.0
-            self.menu.close()
-            self.bubble = None
-            label = "DEFILE : amene la main au centre"
+        label = VOICE_LABELS.get(word, word.upper())
+        if word in SIMPLE_ACTIONS:
+            action, simple_label = SIMPLE_ACTIONS[word]
+            acts.append(action)
+            label = simple_label or label
         elif word in VOICE_HOTKEYS:
             acts.append(("hotkey", VOICE_HOTKEYS[word]))
             if word in REPEATABLE:
-                self.repeat_until = t + c.repeat_s
-        elif word == "claude":
-            self.dictating = True
-            self.dictation_t0 = t
-            self.listen_until = -1e9
-            self.menu.close()
-            self.bubble = None
-            acts.append(("vscode_dictation",))
-        elif word == "envoie":
-            # touche Entrée dans la fenêtre active (avant : toujours vers VS Code, demande de l'utilisateur).
-            # Juste après « iris claude », « envoie » passe par _confirm et vise toujours Claude.
-            acts.append(("hotkey", ["enter"]))
-            label = "TOUCHE ENTREE"
-        elif word == "annule":
-            acts.append(("annule",))       # vide le message de Claude si VS Code est devant, sinon Échap
-            label = "ANNULE"
-        elif word == "tab":
-            acts.append(("alt_tab",))
-        elif word == "souris":
-            # « iris souris » allume ou éteint la souris ; le mode en cours (Chrome…) ne change pas
-            self.set_mouse(not self.mouse, t, acts)
-            label = "SOURIS" if self.mouse else "SOURIS ETEINTE"
-        elif word == "question":
-            self.asking = True
-            self.ask_t0 = t
-            acts.append(("ask_start",))
-            label = "POSE TA QUESTION"
-        elif word == "ouvre":
-            self.opening = True
-            self.open_t0 = t
-            self.open_kind = "open"
-            acts.append(("open_start",))
-            label = "OUVRE : dis le nom de l'appli"
-        elif word == "type":
-            self.typing = True
-            self.type_t0 = t
-            self.menu.close()
-            self.bubble = None
-            acts.append(("type_start",))
-        elif word == "ferme":
-            # retire la réponse affichée ET écoute un éventuel nom d'appli à fermer (en mode Chrome, « ferme »
-            # ferme l'onglet : pour l'affichage du haut, « merci » / « ok » marchent partout)
-            acts += [("ask_close",), ("open_start",)]
-            self.opening = True
-            self.open_t0 = t
-            self.open_kind = "close"
-            label = "FERME : dis le nom de l'appli"
-            label = "FERME"
-        elif word in ("réveil", "wake"):
-            acts.append(("wake",))
-            label = "ECRAN RALLUME"
-        elif word == "chronomètre":
-            acts.append(("chrono",))
-            label = "CHRONOMETRE"
-        elif word == "timer":
-            if self.timer_running:
-                acts.append(("timer_cancel",))
-                label = "TIMER ANNULE"
-            else:
-                self.opening = True
-                self.open_t0 = t
-                self.open_kind = "timer"
-                acts.append(("open_start",))
-                label = "TIMER : combien de temps ?"
-        elif word == "calendrier":
-            self.calendar_until = t + CAL_IDLE_S
-            acts.append(("cal_open",))
-        elif word in ("heure", "date"):
-            self.clock_until = t + c.clock_s
-        elif word == "merci":
-            # « vu » : tout ce qui est affiché en haut disparaît (rappel validé, réponse, liste, heure)
-            acts += [("rappel_merci",), ("ask_close",)]
-            self.clock_until = -1e9
-        elif word == "plus tard":
-            acts.append(("rappel_tard",))
-        elif word in ("message", "salon", "rappel", "volume"):   # volume : « iris volume » puis « 40 », « plus fort »…
-            self.opening = True
-            self.open_t0 = t
-            self.open_kind = word
-            self.menu.close()
-            self.bubble = None
-            acts.append(("open_start",))
-            if word == "volume":
-                acts.append(("volume_show",))   # barre de volume à droite, avec le niveau actuel
-        elif word in ("tête", "main"):
-            self.set_pointer("tete" if word == "tête" else "main", t, acts)
-            label = "SOURIS A LA " + ("TETE" if word == "tête" else "MAIN")
-        elif word == "centre":
-            self.head.reset()                 # tête de face maintenant = centre
-            if self.mouse:
-                self._center(acts)
-            label = "CURSEUR AU CENTRE"
-        elif word == "activation":
-            acts.append(("bot_activate",))    # lance le bot vocal et charge Whisper : « viens » sera immédiat
-            label = "BOT VOCAL : ACTIVATION"
-        elif word == "viens":
-            acts.append(("bot_join",))        # le bot vocal rejoint ton salon : on lui parle en disant « Iris »
-            label = "IRIS : J'ARRIVE EN VOCAL"
-        elif word == "pars":
-            acts.append(("bot_leave",))
-            label = "IRIS QUITTE LE VOCAL"
-        elif word == "silence":
-            acts.append(("discord_hush",))
-        elif word == "lis":
-            acts.append(("discord_read",))
-        elif word == "lecture":
-            self.set_mouse(False, t, acts)    # la main sert aux pages, plus au curseur
-            if self.mode != Mode.READING:
-                self.set_mode(Mode.READING, t, acts)
-            label = "LECTURE"
-        elif word in ("discord", "chrome", "studio", "accueil"):
-            acts.append(("open_app", word))
-            if word == "chrome":
-                self.set_mode(Mode.CHROME, t, acts)
-            elif self.mode == Mode.CHROME:
-                self.set_mode(Mode.NEUTRAL, t, acts)
-        elif word == "mute":
-            acts.append(("discord_mute",))
-        elif word == "démute":
-            acts.append(("discord_unmute",))
-        elif word == "défun":
-            acts.append(("discord_deafen",))
-        elif word == "pause":
-            acts += [("release_all",)]
-            self.set_mode(Mode.DISABLED, t, acts)
-            self.listen_until = -1e9
-            label = "PAUSE (dis IRIS pour reprendre)"
+                self.repeat_until = t + self.cfg.repeat_s
+        elif word in COMMANDS:
+            label = getattr(self, "_cmd_" + COMMANDS[word])(word, t, acts) or label
         self.last_gesture = (label, t)
         return acts
+
+    # --- petites aides des commandes ---
+    def _click(self, word, t, acts):
+        acts += [("click", "right")] if word == "menu" else [("click", "left")] * (2 if word == "double" else 1)
+        self.menu.close()
+        self.last_click_t = t
+        self.travel = 0.0
+
+    def _quiet(self):
+        """Ferme le menu et la bulle de la main (avant une dictée, une écoute, ou sur « stop »)."""
+        self.menu.close()
+        self.bubble = None
+
+    def _start_open(self, kind, t, acts, label=None):
+        """Écoute d'une phrase libre (Whisper) : nom d'appli, durée, message, rappel, volume…"""
+        self.opening = True
+        self.open_t0 = t
+        self.open_kind = kind
+        acts.append(("open_start",))
+        return label
+
+    # --- commandes « iris + mot » (table COMMANDS) : ajoutent leurs actions, renvoient un libellé ou None ---
+    def _cmd_click(self, word, t, acts):
+        self._aim(self.wake_t, acts)          # là où l'on visait en disant « iris »
+        self._click(word, t, acts)
+
+    def _cmd_drag(self, word, t, acts):
+        self._aim(self.wake_t, acts)
+        acts.append(("press", "mouse", "left"))
+        self.dragging = True
+
+    def _cmd_release(self, word, t, acts):
+        acts.append(("release", "mouse", "left"))
+
+    def _cmd_scroll(self, word, t, acts):
+        if self.scrolling(t):                 # « iris défile » une 2e fois : on en sort
+            self._end_scroll(t)
+            return "DEFILEMENT FINI"
+        self.voice_scroll_until = math.inf    # actif jusqu'à « iris défile », « stop » ou une autre commande
+        self.voice_scroll_armed = False
+        self.voice_scroll_since = None
+        self._scroll_acc = 0.0
+        self._quiet()
+        return "DEFILE : amene la main au centre"
+
+    def _cmd_claude(self, word, t, acts):
+        self.dictating = True
+        self.dictation_t0 = t
+        self._quiet()
+        acts.append(("vscode_dictation",))
+
+    def _cmd_mouse(self, word, t, acts):
+        # allume ou éteint la souris ; le mode en cours (Chrome…) ne change pas
+        self.set_mouse(not self.mouse, t, acts)
+        return "SOURIS" if self.mouse else "SOURIS ETEINTE"
+
+    def _cmd_question(self, word, t, acts):
+        self.asking = True
+        self.ask_t0 = t
+        acts.append(("ask_start",))
+        return "POSE TA QUESTION"
+
+    def _cmd_open(self, word, t, acts):
+        return self._start_open("open", t, acts, "OUVRE : dis le nom de l'appli")
+
+    def _cmd_type(self, word, t, acts):
+        self.typing = True
+        self.type_t0 = t
+        self._quiet()
+        acts.append(("type_start",))
+
+    def _cmd_close(self, word, t, acts):
+        # retire la réponse affichée ET écoute un éventuel nom d'appli à fermer (en mode Chrome, « ferme »
+        # ferme l'onglet : pour l'affichage du haut, « merci » / « ok » marchent partout)
+        acts.append(("ask_close",))
+        return self._start_open("close", t, acts, "FERME : dis le nom de l'appli")
+
+    def _cmd_timer(self, word, t, acts):
+        if self.timer_running:
+            acts.append(("timer_cancel",))
+            return "TIMER ANNULE"
+        return self._start_open("timer", t, acts, "TIMER : combien de temps ?")
+
+    def _cmd_calendar(self, word, t, acts):
+        self.calendar_until = t + CAL_IDLE_S
+        acts.append(("cal_open",))
+
+    def _cmd_clock(self, word, t, acts):
+        self.clock_until = t + self.cfg.clock_s
+
+    def _cmd_thanks(self, word, t, acts):
+        # « vu » : tout ce qui est affiché en haut disparaît (rappel validé, réponse, liste, heure)
+        acts += [("rappel_merci",), ("ask_close",)]
+        self.clock_until = -1e9
+
+    def _cmd_listen(self, word, t, acts):
+        # message, salon, rappel, volume : la suite est une phrase libre (« iris volume » puis « 40 »…)
+        self._quiet()
+        self._start_open(word, t, acts)
+        if word == "volume":
+            acts.append(("volume_show",))     # barre de volume à droite, avec le niveau actuel
+
+    def _cmd_pointer(self, word, t, acts):
+        self.set_pointer("tete" if word == "tête" else "main", t, acts)
+        return "SOURIS A LA " + ("TETE" if word == "tête" else "MAIN")
+
+    def _cmd_center(self, word, t, acts):
+        self.head.reset()                     # tête de face maintenant = centre
+        if self.mouse:
+            self._center(acts)
+        return "CURSEUR AU CENTRE"
+
+    def _cmd_reading(self, word, t, acts):
+        self.set_mouse(False, t, acts)        # la main sert aux pages, plus au curseur
+        if self.mode != Mode.READING:
+            self.set_mode(Mode.READING, t, acts)
+        return "LECTURE"
+
+    def _cmd_app(self, word, t, acts):
+        acts.append(("open_app", word))
+        if word == "chrome":
+            self.set_mode(Mode.CHROME, t, acts)
+        elif self.mode == Mode.CHROME:
+            self.set_mode(Mode.NEUTRAL, t, acts)
+
+    def _cmd_pause(self, word, t, acts):
+        acts.append(("release_all",))
+        self.set_mode(Mode.DISABLED, t, acts)
+        self.listen_until = -1e9
+        return "PAUSE (dis IRIS pour reprendre)"
 
     def scroll_gauge(self, t):
         """Jauge du défilement vocal : (hauteur de la main 0..1, armé ?, demi-bande d'armement, demi-zone neutre),
@@ -812,7 +845,16 @@ class Core:
 
     def ghost(self):
         """Main fantôme (souris pas encore armée) : où est la paume, à l'écran, par rapport au centre visé.
-        Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier."""
+        Renvoie (x, y, rayon de la zone du centre) en pixels, ou None. L'image entière = l'écran entier.
+        « défile » pas encore armé (main) : (x, y, demi-bande, y du centre) — seule la hauteur compte."""
+        sx, sy, sw, sh = self.screen
+        if (self.palm is not None and self.pointer != "tete" and self.voice_scroll_until > (self.prev_t or 0.0)
+                and not self.voice_scroll_armed):
+            arm = self._scroll_params()[0]
+            cy = sy + sh / 2
+            x = min(max(sx + self.palm[0] * sw, sx), sx + sw - 1)
+            y = min(max(cy + (self.palm[1] - 0.5) * sh, sy), sy + sh - 1)
+            return (x, y, arm * sh, cy)
         if not self.mouse or self.armed or self.palm is None or self.voice_scroll_until > (self.prev_t or 0.0):
             return None
         sx, sy, sw, sh = self.screen

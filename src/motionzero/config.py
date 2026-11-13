@@ -1,7 +1,10 @@
 """Réglages. Tout est modifiable via config.json (mêmes noms de clés)."""
 import json
+import logging
 import os
 from dataclasses import asdict, dataclass, fields
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -152,14 +155,28 @@ class Config:
     sound_volume: float = 0.5          # volume des sons d'Iris (0 à 1) ; 1 jugé trop fort (12/11)
 
 
+def _read_json(path):
+    with open(path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    if not isinstance(data, dict):
+        raise ValueError("config : un objet JSON est attendu")
+    return data
+
+
 def load_config(path=None) -> Config:
     cfg = Config()
-    if path and os.path.exists(path):
+    if path and (os.path.exists(path) or os.path.exists(path + ".bak")):
         try:
-            with open(path, encoding="utf-8") as fh:
-                data = json.load(fh)
+            data = _read_json(path)
         except (OSError, ValueError):
-            return cfg  # fichier illisible : valeurs par défaut
+            # fichier coupé (plantage pendant l'écriture) ou absent : on reprend la sauvegarde
+            log.warning("config illisible : %s, essai de la sauvegarde", path, exc_info=True)
+            try:
+                data = _read_json(path + ".bak")
+                log.warning("config reprise depuis %s.bak", path)
+            except (OSError, ValueError):
+                log.warning("sauvegarde illisible aussi : valeurs par défaut")
+                return cfg
         known = {f.name for f in fields(Config)}
         for key, value in data.items():
             if key in known:
@@ -168,5 +185,16 @@ def load_config(path=None) -> Config:
 
 
 def save_config(cfg: Config, path) -> None:
-    with open(path, "w", encoding="utf-8") as fh:
+    """Écriture sûre : fichier temporaire puis remplacement d'un coup ; l'ancienne version reste en .bak."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
         json.dump(asdict(cfg), fh, indent=2, ensure_ascii=False)
+        fh.flush()
+        os.fsync(fh.fileno())
+    if os.path.exists(path):
+        try:
+            _read_json(path)          # ne sauvegarder que la version précédente si elle est saine
+            os.replace(path, path + ".bak")
+        except (OSError, ValueError):
+            pass
+    os.replace(tmp, path)

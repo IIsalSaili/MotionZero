@@ -13,8 +13,8 @@ VK = {"right": 0x27, "left": 0x25, "up": 0x26, "down": 0x28,
       "enter": 0x0D, "escape": 0x1B, "ctrl": 0x11, "alt": 0x12, "shift": 0x10,
       "c": 0x43, "v": 0x56, "a": 0x41, "esc": 0x1B, "f9": 0x78, "backspace": 0x08,
       "tab": 0x09, "t": 0x54, "w": 0x57, "d": 0x44, "l": 0x4C, "f5": 0x74,
-      "home": 0x24, "end": 0x23, "plus": 0xBB, "minus": 0xBD}
-EXTENDED = {"right", "left", "up", "down", "pagedown", "pageup", "home", "end"}
+      "home": 0x24, "end": 0x23, "plus": 0xBB, "minus": 0xBD, "x": 0x58, "win": 0x5B}
+EXTENDED = {"right", "left", "up", "down", "pagedown", "pageup", "home", "end", "win"}
 
 
 class MOUSEINPUT(ctypes.Structure):

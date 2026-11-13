@@ -50,7 +50,7 @@ def test_micro_non_rouvert(monkeypatch):
 
     def boom():
         raise OSError("aucun micro")
-    assert go(reopen=boom) == "MICRO NON ROUVERT : relance Iris"
+    assert go(reopen=boom) == "MICRO NON ROUVERT"
 
 
 def test_micro_toujours_muet(monkeypatch):

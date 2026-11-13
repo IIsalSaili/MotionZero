@@ -43,7 +43,8 @@ def test_rien_hors_souris_ou_sans_main():
 def test_geometrie_ecran():
     from motionzero.ui import ghost_geometry
     st = {"ghost": (300, 200, 80), "arming": True, "cursor": (500, 400)}
-    hand, ctr, r = ghost_geometry(st, 2.0)
+    hand, ctr, r, band = ghost_geometry(st, 2.0)
+    assert not band
     assert (hand.x(), hand.y(), ctr.x(), ctr.y(), r) == (150, 100, 250, 200, 40)
     assert ghost_geometry({**st, "arming": False}, 1.0) is None
     assert ghost_geometry({**st, "ghost": None}, 1.0) is None
@@ -73,3 +74,41 @@ def test_jauge_dessinee_sans_erreur():
         p = QPainter(img)
         w._paint_gauge(p)
         p.end()
+
+
+def _defile(palm, pointer="main"):
+    core = Core(Config())
+    core.screen = (0, 0, 1000, 800)
+    core.pointer = pointer
+    core.voice("iris", 1.0)
+    core.voice("défile", 1.5)
+    core.prev_t = 2.0
+    core.palm = palm
+    return core
+
+
+def test_defile_bande_du_centre_visible_avant_armement():
+    core = _defile((0.3, 0.75))
+    x, y, half, cy = core.ghost()
+    assert (x, y, cy) == (300, 600, 400)
+    assert half == core._scroll_params()[0] * 800
+
+
+def test_defile_plus_de_repere_une_fois_arme():
+    core = _defile((0.5, 0.5))
+    core.voice_scroll_armed = True
+    assert core.ghost() is None
+
+
+def test_defile_sans_main_ou_a_la_tete_pas_de_repere():
+    assert _defile(None).ghost() is None
+    assert _defile((0.5, 0.5), pointer="tete").ghost() is None     # à la tête : la jauge suffit
+
+
+def test_defile_geometrie_en_bande():
+    from motionzero.ui import ghost_geometry, _ghost_box
+    g = ghost_geometry({"ghost": (300, 600, 40, 400), "arming": False}, 2.0)
+    hand, ctr, r, band = g
+    assert band and (hand.x(), hand.y(), ctr.y(), r) == (150, 300, 200, 20)
+    box = _ghost_box(g)
+    assert box.contains(150, 300) and box.top() <= 180 and box.bottom() >= 220
