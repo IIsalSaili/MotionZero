@@ -13,3 +13,4 @@ config.json*
 models/
 reminders.json*
 pointeur.txt
+voix_basse.txt
