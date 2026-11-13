@@ -39,6 +39,7 @@ VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], 
                  # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
                  "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
                  "réduis": ["win", "down"],
+                 "undo": ["ctrl", "z"], "redo": ["ctrl", "y"],   # annuler / rétablir (#36) ; Ctrl+Y : Windows, VS Code
                  "gauche": ["win", "left"], "droite": ["win", "right"]}
 from .calendar_view import WORDS as CAL_WORDS
 
@@ -65,7 +66,7 @@ EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"
                           # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
-REPEATABLE = ("skip", "back", "efface")   # après « iris skip / back / efface », redits seuls sans « iris »
+REPEATABLE = ("skip", "back", "efface", "undo", "redo")   # après « iris skip / undo… », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -80,6 +81,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
                 "sélection": "TOUT SELECTIONNE (Ctrl+A)", "coupe": "COUPER (Ctrl+X)", "efface": "MOT EFFACE",
+                "undo": "ANNULE (Ctrl+Z)", "redo": "RETABLI (Ctrl+Y)",
 "réduis": "FENETRE REDUITE",
                 "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
@@ -90,7 +92,7 @@ OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_sto
              "volume": "volume_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
-             "rappel": "RAPPEL : Haiku reflechit…", "timer": "TIMER : je lis la duree…",
+             "rappel": "RAPPEL : Iris reflechit…", "timer": "TIMER : je lis la duree…",
              "volume": "VOLUME : je regle…"}
 
 
@@ -199,6 +201,7 @@ class Core:
         self.voice_scroll_since = None        # entrée dans cette bande
         self._scroll_acc = 0.0
         self.last_word = None       # (mot, t, accepté ?)
+        self.top_shown = False      # réponse / rappel / liste affichés en haut : écrit par la boucle principale
         # dictée Claude dans VS Code : micro allumé, puis texte dicté en attente de « envoie » / « annule »
         self.dictating = False
         self.dictation_t0 = -1e9
@@ -667,6 +670,12 @@ class Core:
             self._aim(ref, acts)
             self._click(word, t, acts)
             return acts
+        if chrome and word == "ferme" and (self.top_shown or t < self.clock_until):
+            # quelque chose est affiché en haut (réponse, rappel, liste, heure) : il part d'abord (#34)
+            self._heard_alone(word, t, "AFFICHAGE RETIRE (redis FERME pour l'onglet)")
+            acts += [("rappel_merci",), ("ask_close",)]
+            self.clock_until = -1e9
+            return acts
         if chrome and word in CHROME_KEYS:
             # ses mots ne sont écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs
             self._heard_alone(word, t, CHROME_LABELS[word])
@@ -985,7 +994,7 @@ class Core:
         spoke = last_speech_t > self.ask_t0 + c.dictation_echo_s
         if spoke and t - last_speech_t >= c.dictation_silence_s:
             self.asking = False
-            self.last_gesture = ("QUESTION ENVOYEE A CLAUDE", t)
+            self.last_gesture = ("QUESTION POSEE A IRIS", t)
             return [("ask_stop",)]
         if not spoke and t - self.ask_t0 >= c.dictation_no_speech_s:
             self.asking = False

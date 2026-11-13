@@ -31,10 +31,10 @@ def test_cercle_du_logo_selon_le_mode():
     assert islet_ring({"mode": "NEUTRE"}, 0)[0] == RING_DEFAULT
     assert islet_ring({"mode": "SOURIS"}, 0)[0] == ORANGE
     assert islet_ring({"mode": "CHROME"}, 0)[0] == BLUE
-    # commande comprise : vert, puis la couleur du mode, puis vert (clignote)
+    # commande comprise : vert, puis la couleur du mode, puis vert (clignote, moins de 3 fois par seconde)
     assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.0)[0] == GREEN
     assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.2)[0] == BLUE
-    assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.3)[0] == GREEN
+    assert islet_ring({"mode": "CHROME", "ok_flash": True}, 0.36)[0] == GREEN
 
 
 def test_mode_tete_parle_du_visage():

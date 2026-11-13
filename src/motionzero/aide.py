@@ -27,6 +27,7 @@ GROUPS = [
         ("sélection", "tout sélectionner"),
         ("coupe", "couper"),
         ("efface", "le mot d'avant"),
+        ("undo / redo", "annuler / rétablir"),
         ("skip / back", "flèches"),
     ]),
     ("Fenêtres et applis", [
