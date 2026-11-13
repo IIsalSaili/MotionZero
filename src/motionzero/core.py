@@ -710,7 +710,6 @@ class Core:
             self.open_t0 = t
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
-            label = "FERME"
         elif word in ("réveil", "wake"):
             acts.append(("wake",))
             label = "ECRAN RALLUME"
