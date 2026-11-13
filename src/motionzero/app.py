@@ -23,6 +23,7 @@ from mediapipe.tasks.python import BaseOptions, vision
 from .camera import OK, Camera
 from .config import load_config
 from .core import Core, Mode
+from .power import power_actions
 from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
@@ -51,6 +52,46 @@ def lower_priority():
             raise OSError(ctypes.GetLastError())
     except Exception:
         logging.getLogger("motionzero").warning("priorite du processus non changee")
+
+
+_log = logging.getLogger("motionzero")
+
+
+def watch_engine(live, stop, path, limit_s=10.0, period_s=2.0, clock=time.perf_counter, wait=None):
+    """Boucle principale muette depuis plus de limit_s : la pile de tous les fils est écrite dans path (une
+    fois par blocage) et signalée au journal. Sert à trouver ce qui la bloque, sans outil extérieur."""
+    import faulthandler
+    wait = wait or stop.wait
+    reported = None
+    while not wait(period_s):
+        beat = live.get("beat")
+        if beat is None:
+            continue
+        if clock() - beat < limit_s:
+            reported = None
+            continue
+        if reported == beat:
+            continue
+        reported = beat
+        try:
+            with open(path, "a", encoding="utf-8") as f:
+                f.write(f"\n=== boucle principale bloquee depuis {clock() - beat:.0f} s ({time.ctime()}) ===\n")
+                f.flush()
+                faulthandler.dump_traceback(file=f, all_threads=True)
+            _log.error("boucle principale bloquee depuis %.0f s : piles dans %s", clock() - beat, path)
+        except Exception:
+            _log.exception("surveillance de la boucle")
+
+
+def drain(q):
+    """Vide une file sans jamais bloquer. (13/11 : « while not q.empty() » sans get() tournait à l'infini
+    après un clic sur « main / tête » : caméra figée, voix sans effet, mémoire qui gonfle.)"""
+    items = []
+    while True:
+        try:
+            items.append(q.get_nowait())
+        except queue.Empty:
+            return items
 
 
 POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
@@ -178,7 +219,10 @@ def main(argv=None):
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
     qt = QApplication.instance() or QApplication([])
     view_win = PreviewWindow(pointer=cfg.pointer)
-    view_win.pointer_clicked.connect(lambda: pointer_requests.put(1))
+    def _pointer_clicked():
+        log.info("bouton main / tete de l'accueil")
+        pointer_requests.put(1)
+    view_win.pointer_clicked.connect(_pointer_clicked)
     stop = threading.Event()
     bridge = Bridge()
     bridge.pointer.connect(view_win.set_pointer)          # choix fait à la voix : le bouton suit
@@ -276,6 +320,7 @@ def main(argv=None):
             while not stop.is_set():
                 try:
                     t = time.perf_counter()
+                    live["beat"] = t                      # surveillé : voir watch_engine
                     frame, new_seq = cam.read(seq)
                     disabled = core.mode == Mode.DISABLED
                     live["detect_hz"] = 0 if disabled else 1.0 / detect_period(False, last_hand_t, t)
@@ -343,7 +388,7 @@ def main(argv=None):
                         acts = acts + core.open_tick(t, listener.last_speech_t)
                     while not app_messages.empty():
                         core.last_gesture = (app_messages.get_nowait(), t)
-                    while not pointer_requests.empty():     # bouton « main / tête » de l'accueil (fil Qt)
+                    for _ in drain(pointer_requests):        # bouton « main / tête » de l'accueil (fil Qt)
                         acts = acts + core.set_pointer_toggle(t)
                     if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
                         chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
@@ -385,6 +430,7 @@ def main(argv=None):
                         acts = open_actions(acts, listener, launcher, asker, bot, app_message, desk)
                     acts = desk.actions(acts, core, t)
                     acts = discord_actions(acts, speaker)
+                    acts = power_actions(acts)
                     acts = vscode_actions(acts, core, vscode_ctl, sounds, t, discord_voice)
                     ctl.execute(acts, t)
                     for a in acts:
@@ -475,6 +521,8 @@ def main(argv=None):
 
     worker = threading.Thread(target=run_engine, name="moteur", daemon=True)
     worker.start()
+    threading.Thread(target=watch_engine, args=(live, stop, os.path.join(ROOT, "logs", "blocage.txt")),
+                     name="surveillance", daemon=True).start()
     view_win.show()
     glass.show()
     cursor_glass.show()

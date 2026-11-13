@@ -709,6 +709,9 @@ class Core:
             self.open_kind = "close"
             label = "FERME : dis le nom de l'appli"
             label = "FERME"
+        elif word in ("réveil", "wake"):
+            acts.append(("wake",))
+            label = "ECRAN RALLUME"
         elif word == "chronomètre":
             acts.append(("chrono",))
             label = "CHRONOMETRE"
