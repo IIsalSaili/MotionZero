@@ -837,6 +837,13 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
             else:
                 core.last_gesture = ("CHROME PAS DEVANT : rien envoye", t)
             continue
+        if a[0] == "editor_tab":
+            code = find_window()
+            if code and ctypes.windll.user32.GetForegroundWindow() == code:
+                rest.append(("hotkey", a[1]))
+            else:
+                core.last_gesture = ("VS CODE PAS DEVANT : rien envoye", t)
+            continue
         if a[0] == "annule":
             code = find_window()
             if code and ctypes.windll.user32.GetForegroundWindow() == code:

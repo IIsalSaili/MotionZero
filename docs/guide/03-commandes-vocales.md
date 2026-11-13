@@ -84,6 +84,7 @@ Mode : « tous » sauf mention.
 | `réduis` | fenêtre réduite (Win+Bas) | non | hors Chrome (en Chrome : zoom −) |
 | `gauche` / `droite` | fenêtre ancrée à gauche / droite (Win+flèche) | non | tous |
 | `tab` | fenêtre suivante (Alt+Tab) | non | tous |
+| `suivant` / `précédent` | VS Code devant : onglet suivant / précédent (Ctrl+Page suivante / précédente), par exemple les onglets Claude ; ailleurs, rien n'est envoyé | non | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris ; quitte le mode CHROME | non | tous |
 | `ouvre` | puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
