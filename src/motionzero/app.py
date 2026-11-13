@@ -53,6 +53,17 @@ def lower_priority():
         logging.getLogger("motionzero").warning("priorite du processus non changee")
 
 
+def drain(q):
+    """Vide une file sans jamais bloquer. (13/11 : « while not q.empty() » sans get() tournait à l'infini
+    après un clic sur « main / tête » : caméra figée, voix sans effet, mémoire qui gonfle.)"""
+    items = []
+    while True:
+        try:
+            items.append(q.get_nowait())
+        except queue.Empty:
+            return items
+
+
 POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
 
 
@@ -343,7 +354,7 @@ def main(argv=None):
                         acts = acts + core.open_tick(t, listener.last_speech_t)
                     while not app_messages.empty():
                         core.last_gesture = (app_messages.get_nowait(), t)
-                    while not pointer_requests.empty():     # bouton « main / tête » de l'accueil (fil Qt)
+                    for _ in drain(pointer_requests):        # bouton « main / tête » de l'accueil (fil Qt)
                         acts = acts + core.set_pointer_toggle(t)
                     if core.mode == Mode.CHROME and t - chrome_check_t >= 0.3:
                         chrome_check_t = t        # mode Chrome : quitté dès que Chrome n'est plus devant
