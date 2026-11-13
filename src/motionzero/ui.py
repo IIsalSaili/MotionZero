@@ -923,10 +923,11 @@ def island_text(st):
         return mode, "Dis ENVOIE ou ANNULE", True
     if st.get("listening"):
         return mode, "Iris écoute…", True
+    head = st.get("pointer") == "tete"
     if st.get("lost") and st.get("mouse"):
-        return mode, "Main non détectée", True
+        return mode, "Visage non détecté" if head else "Main non détectée", True
     if st.get("arming"):
-        return mode, "Main au centre pour démarrer", True
+        return mode, "Tête de face pour démarrer" if head else "Main au centre pour démarrer", True
     toast, age = st.get("toast"), st.get("toast_age", 1e9)
     if toast and age <= TOAST_S:
         return mode, toast, True

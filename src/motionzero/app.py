@@ -311,6 +311,7 @@ def main(argv=None):
         last_detect, last_frame_t = 0.0, t0
         last_view = np.zeros((cfg.height, cfg.width, 3), np.uint8)
         pts = None
+        face_lost = True                      # souris à la tête : visage vu à la dernière détection ?
         last_level_log = 0.0
         last_rej_seen = last_fail_seen = None
         chrome_check_t = 0.0
@@ -343,6 +344,7 @@ def main(argv=None):
                             except Exception:
                                 log.exception("detection du visage")
                                 lms = matrix = None
+                            face_lost = lms is None
                             if lms is not None:
                                 last_hand_t = t
                             pts = None
@@ -472,7 +474,9 @@ def main(argv=None):
                             "mouse": core.mouse,
                             "cursor": core.cursor,
                             "progress": prog[1] if prog else 0.0,
-                            "lost": pts is None,
+                            # perdu = ce qui pilote : le visage à la tête (la main n'y est jamais suivie)
+                            "lost": face_lost if core.pointer == "tete" else pts is None,
+                            "pointer": core.pointer,
                             "arming": core.mouse and not core.armed,
                             # main fantôme : où est la main tant que le curseur attend qu'elle vienne au centre
                             "ghost": core.ghost() if pts is not None else None,
