@@ -39,13 +39,15 @@ Mode : « tous » sauf mention.
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `iris` | ouvre l'écoute 3,5 s ; en DÉSACTIVÉ, repasse en NEUTRE | — | tous |
+| `iris` | ouvre l'écoute 3,5 s (en pause, il faut ensuite « reprise ») | — | tous |
 | `stop` | relâche tout, coupe l'alarme ; finit le défilement, sinon éteint la souris, sinon LECTURE / CHROME → NEUTRE ; ferme le calendrier | oui | tous |
 | `pause` | relâche tout, mode DÉSACTIVÉ (« iris reprise » pour revenir ; « iris » seul ne réactive plus) | non | tous |
 | `lecture` | éteint la souris, mode LECTURE | non | tous |
 | `souris` | allume / éteint la souris (le mode reste) | non | tous |
 | `tête` / `main` | la souris suit la tête / la main | non | tous |
 | `centre` | curseur au centre ; tête de face = nouvelle référence | non | tous |
+| `aide` | toutes les commandes à l'écran, celles du mode en cours en tête ; « ferme », « merci » ou « stop » la ferment (sans « iris »), sinon seule après 90 s ; redit : fermée | « ferme » / « merci » quand elle est ouverte | tous |
+| `guide` | ouvre cette documentation sur GitHub dans le navigateur | non | tous |
 
 ## Souris et clics
 
@@ -180,7 +182,7 @@ Rien entendu, Haiku indisponible ou pas compris : l'île l'affiche et un son « 
 
 Calendrier fermé, ces mots ne font rien (sans bruit).
 
-## <a id="mode-chrome"></a>Chrome Mode Chrome
+## <a id="mode-chrome"></a>Mode Chrome
 
 Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et marchent **sans « iris »**. Ailleurs, « iris haut » répond « seulement en mode Chrome ».
 
@@ -200,7 +202,7 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 
 Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `double`.
 
-## <a id="mots-sans-iris"></a>oui Récapitulatif : mots sans « iris »
+## <a id="mots-sans-iris"></a>Récapitulatif : mots sans « iris »
 
 | Contexte | Mots |
 |---|---|

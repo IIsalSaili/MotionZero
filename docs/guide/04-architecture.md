@@ -23,7 +23,7 @@ graph TD
     APP --> OVL["overlay.py<br/>dessin aperçu"]
     APP --> OUT["output.py<br/>SendInput"]
     APP --> GARDE["garde.py<br/>battement"]
-    APP --> SMALL["power.py, fenetre.py,<br/>volume.py, sounds.py,<br/>speech.py, vscode.py,<br/>audio_repair.py, stats.py"]
+    APP --> SMALL["power.py, fenetre.py, aide.py,<br/>volume.py, sounds.py,<br/>speech.py, vscode.py,<br/>audio_repair.py, stats.py"]
     CORE --> GEST["gestures.py"]
     CORE --> HEAD["head.py"]
     CORE --> POSES["poses.py"]

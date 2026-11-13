@@ -72,7 +72,8 @@ graph LR
 | `speech.py` | lecture à voix haute (SAPI) | 78 | test_discord_link |
 | `sounds.py` | sons d'Iris | 193 | test_sounds |
 | `volume.py` | volume Windows à la voix | 157 | test_volume |
-| `fenetre.py` | plein écran par l'API Windows | 34 | test_texte_fenetres |
+| `fenetre.py` | plein écran par l'API Windows ; « iris guide » (cette doc dans le navigateur) | 50 | test_texte_fenetres, test_aide |
+| `aide.py` | contenu de « iris aide » : commandes par thème, bloc du mode en cours | 110 | test_aide |
 | `power.py` | rallumer l'écran | 35 | test_power |
 | `audio_repair.py` | redémarrer les services audio (bouton) | 61 | test_audio_repair |
 | `garde.py` | battement, `arret_voulu`, gardien | 194 | test_garde |

@@ -49,6 +49,8 @@ WORDS = {
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
     "pause": "pause",
+    "aide": "aide",       # « iris aide » : toutes les commandes, celles du mode en cours en tête
+    "guide": "guide",     # « iris guide » : la documentation sur GitHub
     "reprise": "reprise", # « iris reprise » : sort de la pause (« iris » seul ne suffit plus)
     "tab": "tab",         # « iris tab » : comme Alt+Tab
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
