@@ -179,10 +179,11 @@ ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérif
 
 
 IRIS_SURE_CONF = 0.9        # « iris » entendu net par la grammaire, dans une phrase courte : pas de 2e avis
+AFTER_IRIS_S = 4.0          # mot dit seul juste après un « iris » accepté : c'est la commande attendue
 SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
 
 
-def confirmed(words, free_text, n_heard=None):
+def confirmed(words, free_text, n_heard=None, after_iris=False):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
@@ -190,9 +191,14 @@ def confirmed(words, free_text, n_heard=None):
       10/11 : dit vite, la reconnaissance libre entend « la france » au lieu de « iris claude » ;
     - commande avec « iris » collée à d'autres paroles : « iris » vraiment prononcé ;
     - mot seul : phrase courte (mesuré : 8 mots de conversation bloqués en 30 min, ex. « d'accord » -> discord).
-    n_heard : nombre de mots de la phrase entendue par la grammaire."""
+    n_heard : nombre de mots de la phrase entendue par la grammaire.
+    after_iris : un « iris » vient d'être accepté. Le mot suivant est accepté sans 2e vérification : avec du
+    bruit autour, la reconnaissance libre colle tout en une longue phrase (mesuré le 13/11 : « iris » puis
+    « pause » refusé 5 fois de suite, « ...les couilles pose l s »). Il n'agit de toute façon qu'après « iris »."""
     names = [w["word"] for w in words]
     if not names or set(names) & ALWAYS_HEARD:
+        return True
+    if after_iris and names[0] != WAKE_WORD and len(names) == 1:
         return True
     tokens = free_text.lower().split()
     if names[0] == WAKE_WORD:
@@ -240,6 +246,7 @@ class VoiceListener:
         self._partial = ""          # dernier texte provisoire de la reconnaissance
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
+        self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
         # liste de mots voulue (« base » / « chrome ») : écrite par la boucle, appliquée par le fil voix
@@ -359,7 +366,8 @@ class VoiceListener:
         words = accepted_words(res, self.min_conf)
         if not words:
             return
-        if free_text is not None and not confirmed(words, free_text, len(res.get("result", []))):
+        after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
+        if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())
@@ -372,6 +380,8 @@ class VoiceListener:
         last_end = max(w["end"] for w in words)
         for w in words:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
+            if w["word"] == WAKE_WORD:
+                self._iris_ok_t = time.perf_counter()
             self.events.put(ev)   # noté au journal par la boucle (avec « acceptée / ignorée »)
 
     def reopen(self):

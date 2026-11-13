@@ -313,6 +313,11 @@ def test_deuxieme_verification():
     assert not confirmed(w("iris", "colle"), "il colle")            # pas de « iris » prononcé
     assert confirmed(w("stop"), "arrête stop tout de suite là")    # sécurité : jamais bloqué
     assert confirmed(w("lâche"), "")
+    # juste après un « iris » accepté : le mot seul passe malgré le bruit (13/11, « pause » refusé en boucle)
+    bruit = "à cambridge iris elle seule chose son album de ce côté les couilles pose"
+    assert not confirmed(w("pause"), bruit)
+    assert confirmed(w("pause"), bruit, after_iris=True)
+    assert not confirmed(w("pause", "clic"), bruit, after_iris=True)   # plusieurs mots : vérifiés comme avant
 
 
 def test_phrase_vide_ne_fait_pas_planter_l_ecoute():
