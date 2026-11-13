@@ -68,7 +68,9 @@ WORDS = {
     "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
-    "merci": "merci",     # « iris merci » : le rappel affiché disparaît
+    "merci": "merci",     # « iris merci » / « iris ok » : retire ce qui est affiché en haut (rappel, réponse…)
+    "ok": "ok",
+    "okay": "okay",
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
     "réveil": "réveil",   # « iris réveil » / « iris wake (up) » : rallume l'écran éteint
     "wake": "wake",

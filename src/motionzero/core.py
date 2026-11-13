@@ -55,7 +55,8 @@ CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avan
 
 ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
            # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
-           "muet": "mute", "sourdine": "défun"}
+           "muet": "mute", "sourdine": "défun",
+           "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
@@ -527,7 +528,7 @@ class Core:
             self.last_word = (word, t, True)
             return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
         if t < self.calendar_until:
-            # calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / stop le ferment
+            # calendrier ouvert : ses mots marchent sans « iris » ; ferme / merci / ok / stop le ferment
             if word in CAL_WORDS:
                 self.calendar_until = t + CAL_IDLE_S
                 self.last_word = (word, t, True)
@@ -702,7 +703,8 @@ class Core:
             self.bubble = None
             acts.append(("type_start",))
         elif word == "ferme":
-            # retire la réponse affichée (comme avant) ET écoute un éventuel nom d'appli à fermer
+            # retire la réponse affichée ET écoute un éventuel nom d'appli à fermer (en mode Chrome, « ferme »
+            # ferme l'onglet : pour l'affichage du haut, « merci » / « ok » marchent partout)
             acts += [("ask_close",), ("open_start",)]
             self.opening = True
             self.open_t0 = t
@@ -731,7 +733,9 @@ class Core:
         elif word in ("heure", "date"):
             self.clock_until = t + c.clock_s
         elif word == "merci":
-            acts.append(("rappel_merci",))
+            # « vu » : tout ce qui est affiché en haut disparaît (rappel validé, réponse, liste, heure)
+            acts += [("rappel_merci",), ("ask_close",)]
+            self.clock_until = -1e9
         elif word == "plus tard":
             acts.append(("rappel_tard",))
         elif word in ("message", "salon", "rappel", "volume"):   # volume : « iris volume » puis « 40 », « plus fort »…
