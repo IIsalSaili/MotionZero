@@ -17,7 +17,8 @@ FILES = {"ECOUTE": "ecoute", "OK": "ok", "NON": "non", "MODE": "mode", "PARLE": 
 ALIASES = {"LECTURE": "MODE", "CHROME": "MODE", "NEUTRE": "MODE", "REPOS": "MODE", "SOURIS": "MODE",
            "DESACTIVE": "MODE"}
 RAMP_S = 5.0                  # alarme : de léger au volume normal en 5 s (60 s : inaudible pendant que la voix lit)
-RAMP_FROM_DB, RAMP_TO_DB = -30.0, -4.0
+RAMP_FROM_DB, RAMP_TO_DB = -18.0, -2.0   # 13/11 : partait de -30 dB, sous le volume général divisé par 2 :
+                                         # inaudible par-dessus une vidéo (rappel de 18 h non entendu)
 STOP_FADE_S = 0.03            # « stop » : fondu très court, pas de clic
 CUT_FADE_S = 0.02             # un nouveau son coupe le précédent (« iris stop » dit d'un trait : 2 sons au même
                               # instant qui s'additionnaient, mesuré le 12/11)
@@ -90,6 +91,7 @@ class Mixer:
                 if v[1] < len(data) and (v[2] is None or v[2] > 0):
                     keep.append(v)
             self.voices = keep
+            out *= self.volume                # le volume général (réglé bas) ne s'applique pas à l'alarme
             if self.alarm is not None:
                 data = self.alarm
                 idx = (self.alarm_pos + np.arange(n)) % len(data)
@@ -106,7 +108,6 @@ class Mixer:
                 out += block
                 self.alarm_pos = (self.alarm_pos + n) % len(data)
                 self.alarm_t += n
-            out *= self.volume
         np.clip(out, -1.0, 1.0, out=out)
         return out
 

@@ -17,14 +17,14 @@ def test_son_fini_retire():
 
 
 def test_alarme_part_tout_bas_puis_monte():
-    assert ramp_gain(0) < 0.04 and ramp_gain(2) < ramp_gain(5) and ramp_gain(30) == ramp_gain(5)
+    assert 0.1 < ramp_gain(0) < 0.2 and ramp_gain(2) < ramp_gain(5) and ramp_gain(30) == ramp_gain(5)
     m = Mixer()
     m.start_alarm(np.ones(RATE, np.float32))
     debut = m.fill(RATE // 10).max()                     # 1re seconde : léger, mais audible tout de suite
     for _ in range(59):
         m.fill(RATE)                                     # la boucle continue au-delà de la durée du fichier
     fin = m.fill(RATE).max()
-    assert 0.02 < debut < 0.06 and fin > 0.5 and m.ringing
+    assert 0.1 < debut < 0.2 and fin > 0.7 and m.ringing
 
 
 def test_rejouer_l_alarme_ne_la_relance_pas():
@@ -113,3 +113,12 @@ def test_volume_general():
     assert abs(m.fill(10)[0] - 0.4) < 1e-6
     from motionzero.config import Config
     assert Config().sound_volume == 0.5
+
+
+def test_alarme_ignore_le_volume_general():
+    """13/11 : l'alarme passait sous le volume réduit et ne s'entendait plus par-dessus une vidéo."""
+    m = Mixer()
+    m.volume = 0.2
+    m.start_alarm(np.full(RATE * 6, 0.5, np.float32))
+    m.fill(RATE * 5)
+    assert m.fill(10).max() > 0.35
