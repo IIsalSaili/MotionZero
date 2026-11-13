@@ -381,7 +381,7 @@ class Desk:
             result = validate(extract_json(reply), now, {r.id for r in items})
         except Exception as e:
             log.warning("rappel incompris (%s) : %s", e.__class__.__name__, phrase)
-            result = ("error", "Haiku indisponible" if isinstance(e, RuntimeError) else "pas compris")
+            result = ("error", "Iris indisponible" if isinstance(e, RuntimeError) else "pas compris")
         log.info("rappel : %s -> %s", phrase, result[0])
         self._q.put(result)
 

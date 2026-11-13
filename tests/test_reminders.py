@@ -192,7 +192,7 @@ def test_creer_puis_annule(tmp_path):
 
 @pytest.mark.parametrize("kw, expected", [
     ({"text": ""}, "RIEN ENTENDU"),
-    ({"exc": RuntimeError("Claude Code introuvable")}, "HAIKU INDISPONIBLE"),
+    ({"exc": RuntimeError("Claude Code introuvable")}, "IRIS INDISPONIBLE"),
     ({"reply": "pas un objet"}, "PAS COMPRIS"),
     ({"reply": {"action": "error", "reason": "pas de moment"}}, "PAS DE MOMENT"),
 ])

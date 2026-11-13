@@ -102,6 +102,38 @@ POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (
 QUIET_FILE = os.path.join(ROOT, "voix_basse.txt")   # « auto », « oui » ou « non » (non versionné)
 
 
+def top_shown(d, t):
+    """Quelque chose est affiché en haut (réponse, rappel, liste) ? Pour « ferme » en mode Chrome (#34)."""
+    try:
+        qa = d.asker.snapshot() if d.asker is not None else None
+        desk = getattr(d, "desk", None)
+        rem = desk is not None and (bool(desk.r.active) or t < desk.list_until)
+        return bool(qa) or bool(rem)
+    except Exception:
+        return False
+
+
+VOLUME_FILE = os.path.join(ROOT, "volume_iris.txt")   # volume des sons d'Iris, choisi dans l'accueil (#28)
+VOLUME_STEPS = (0.3, 0.5, 0.7, 1.0)
+
+
+def read_volume(path, default):
+    try:
+        with open(path, encoding="utf-8") as f:
+            value = float(f.read().strip())
+    except (OSError, ValueError):
+        return default
+    return value if 0.0 <= value <= 1.0 else default
+
+
+def next_volume(v):
+    """Bouton de l'accueil : 30 -> 50 -> 70 -> 100 -> 30 %."""
+    for s in VOLUME_STEPS:
+        if s > v + 1e-6:
+            return s
+    return VOLUME_STEPS[0]
+
+
 def read_quiet(path):
     from .voice import QUIET_CHOICES
     try:
@@ -297,6 +329,7 @@ class Engine:
         for _ in drain(d.pointer_requests):   # bouton « main / tête » de l'accueil (fil Qt)
             acts += core.set_pointer_toggle(t)
         self._quiet(t)
+        self._volume()
         if core.mode == Mode.CHROME and t - self.chrome_check_t >= 0.3:
             self.chrome_check_t = t           # mode Chrome : quitté dès que Chrome n'est plus devant
             acts += core.chrome_front(chrome_in_front(), t)
@@ -312,7 +345,10 @@ class Engine:
             listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
             if t - listener.iris_heard_t < 0.5:
                 core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
-            for ev in listener.poll():
+            events = listener.poll()
+            if events:
+                core.top_shown = top_shown(d, t)
+            for ev in events:
                 new = core.voice(ev.word, ev.t_end, t_start=ev.t_start)
                 acts += new
                 accepted = core.last_word and core.last_word[2]
@@ -336,6 +372,17 @@ class Engine:
             if is_failure(lg[0]):
                 d.sounds.play("NON")          # rien entendu, pas compris, réglage impossible…
         return acts
+
+    def _volume(self):
+        """Bouton « volume d'Iris » de l'accueil : appliqué, enregistré, et un son pour l'entendre."""
+        d = self.d
+        for _ in drain(getattr(d, "volume_requests", None) or queue.Queue()):
+            vol = next_volume(d.sounds.mixer.volume)
+            d.sounds.mixer.volume = vol
+            write_pointer(VOLUME_FILE, str(vol))
+            d.bridge.iris_volume.emit(vol)
+            d.sounds.play("OK")
+            _log.info("volume d'Iris : %d %%", round(vol * 100))
 
     def _quiet(self, t):
         """Voix basse : choix de l'accueil (enregistré) et heure ; le micro est prévenu par un simple booléen."""
@@ -476,7 +523,8 @@ def main(argv=None):
     tracker = HandTracker()
     backend = FakeBackend() if args.simulation else SendInputBackend()
     ctl = Controller(backend, cfg)
-    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds, volume=cfg.sound_volume)
+    sounds = Sounds(os.path.join(ROOT, "assets", "sounds"), cfg.sounds,
+                    volume=read_volume(VOLUME_FILE, cfg.sound_volume))
     # les DEUX mains sont détectées (demande de l'utilisateur) ; CPU mesuré ~7 % : marge suffisante
     landmarker = vision.HandLandmarker.create_from_options(vision.HandLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=os.path.join(ROOT, "models", "hand_landmarker.task")),
@@ -537,7 +585,9 @@ def main(argv=None):
 
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
     qt = QApplication.instance() or QApplication([])
-    view_win = PreviewWindow(pointer=cfg.pointer, quiet=quiet_choice)
+    view_win = PreviewWindow(pointer=cfg.pointer, quiet=quiet_choice, volume=sounds.mixer.volume)
+    volume_requests = queue.Queue()            # clics sur « volume d'Iris » (fil Qt) -> boucle principale
+    view_win.volume_clicked.connect(lambda: volume_requests.put(1))
     view_win.quiet_clicked.connect(lambda: quiet_requests.put(1))
     def _pointer_clicked():
         log.info("bouton main / tete de l'accueil")
@@ -546,6 +596,7 @@ def main(argv=None):
     stop = threading.Event()
     bridge = Bridge()
     bridge.quiet.connect(view_win.set_quiet)
+    bridge.iris_volume.connect(view_win.set_volume)
     bridge.pointer.connect(view_win.set_pointer)          # choix fait à la voix : le bouton suit
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
     # panneau « Consommation » de la page d'accueil : mesuré seulement quand la page est visible
@@ -634,7 +685,7 @@ def main(argv=None):
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
         face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
-        quiet_requests=quiet_requests, quiet_choice=quiet_choice,
+        quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
         bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
 

@@ -72,6 +72,7 @@ Mode : « tous » sauf mention.
 | `sélection` | tout sélectionner (Ctrl+A) | non | tous |
 | `coupe` | Ctrl+X | non | tous |
 | `efface` | efface le mot d'avant (Ctrl+Retour arrière) | répétable | tous |
+| `undo` / `redo` | annuler (Ctrl+Z) / rétablir (Ctrl+Y) ; « redo » est écouté comme « re do » | répétable | tous |
 | `skip` / `back` | flèche droite / gauche (YouTube ±10 s) | répétable Chrome | tous |
 | `type` | dictée Whisper écrite au curseur | non | tous |
 
@@ -192,7 +193,7 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `retour` / `avance` | Alt+← / Alt+→ | page précédente / suivante |
 | `suivant` / `précédent` | Ctrl+Tab / Ctrl+Maj+Tab | onglet suivant / précédent |
 | `onglet` | Ctrl+T | nouvel onglet |
-| `ferme` | Ctrl+W | ferme l'onglet |
+| `ferme` | Ctrl+W | ferme l'onglet ; si une réponse, un rappel, une liste ou l'heure est affiché en haut, il est d'abord retiré (redire `ferme` pour l'onglet) |
 | `rouvre` | Ctrl+Maj+T | rouvre l'onglet fermé |
 | `recharge` | F5 | recharge |
 | `favori` | Ctrl+D | favori |
@@ -208,7 +209,7 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 | Contexte | Mots |
 |---|---|
 | Toujours | `stop` ; `lâche` pendant un glisser |
-| 2 s après « iris skip / back / efface » | `skip`, `back`, `efface` (chaque mot relance les 2 s) |
+| 2 s après « iris skip / back / efface / undo / redo » | `skip`, `back`, `efface`, `undo`, `redo` (chaque mot relance les 2 s) |
 | Souris allumée | `clic`, `double`, `menu` |
 | Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |

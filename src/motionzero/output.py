@@ -1,6 +1,7 @@
 """Envoi des entrées à Windows (SendInput) + chien de garde qui relâche tout ce qui est maintenu."""
 import ctypes
 import sys
+import logging
 from ctypes import wintypes
 
 INPUT_MOUSE, INPUT_KEYBOARD = 0, 1
@@ -14,6 +15,8 @@ VK = {"right": 0x27, "left": 0x25, "up": 0x26, "down": 0x28,
       "c": 0x43, "v": 0x56, "a": 0x41, "esc": 0x1B, "f9": 0x78, "backspace": 0x08,
       "tab": 0x09, "t": 0x54, "w": 0x57, "d": 0x44, "l": 0x4C, "f5": 0x74,
       "home": 0x24, "end": 0x23, "plus": 0xBB, "minus": 0xBD, "x": 0x58, "win": 0x5B}
+VK.update({chr(c): c - 32 for c in range(ord("a"), ord("z") + 1)})   # toutes les lettres (« z » manquait : #36)
+VK.update({str(n): 0x30 + n for n in range(10)})
 EXTENDED = {"right", "left", "up", "down", "pagedown", "pageup", "home", "end", "win"}
 
 
@@ -140,6 +143,10 @@ class Controller:
             elif kind == "scroll":
                 self.b.wheel(a[1])
             elif kind == "hotkey":  # ex. ["ctrl", "c"] : appuis dans l'ordre, relâchés à l'envers
+                if any(k not in VK for k in a[1]):
+                    # touche inconnue : rien d'appuyé (avant, Ctrl restait enfoncé après l'erreur)
+                    logging.getLogger("motionzero").warning("touche inconnue, raccourci ignore : %s", a[1])
+                    continue
                 for k in a[1]:
                     self.b.key(k, True)
                 for k in reversed(a[1]):

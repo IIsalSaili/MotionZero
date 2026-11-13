@@ -27,6 +27,7 @@ class Bridge(QObject):
     repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
     pointer = Signal(str)    # souris à la main / à la tête (changé à la voix) -> bouton de l'accueil
     quiet = Signal(str)      # choix « voix basse » enregistré -> bouton de l'accueil
+    iris_volume = Signal(float)  # volume des sons d'Iris choisi -> bouton de l'accueil
 
 
 class ConsoPanel(QWidget):
@@ -173,12 +174,18 @@ def quiet_button_text(choice):
         choice, "Voix basse : le soir (22 h - 7 h)")
 
 
+def volume_button_text(volume):
+    """Texte du bouton « volume d'Iris » de l'accueil. Pur : testable."""
+    return f"Volume d'Iris : {round(volume * 100)} %"
+
+
 class PreviewWindow(QWidget):
     closed = Signal()
     pointer_clicked = Signal()                 # « main / tête » : traité par la boucle principale (jamais ici)
     quiet_clicked = Signal()                   # « voix basse » : idem
+    volume_clicked = Signal()                  # « volume d'Iris » : idem
 
-    def __init__(self, pointer="main", quiet="auto"):
+    def __init__(self, pointer="main", quiet="auto", volume=0.5):
         super().__init__()
         self.setWindowTitle("motionzero")
         self.label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
@@ -200,11 +207,18 @@ class PreviewWindow(QWidget):
         self.quiet_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.quiet_btn.setToolTip("Iris accepte une voix plus faible. Clic : le soir / toujours / jamais")
         self.quiet_btn.clicked.connect(self.quiet_clicked.emit)
+        self.volume_btn = QPushButton(volume_button_text(volume))
+        self.volume_btn.setMinimumHeight(56)
+        self.volume_btn.setStyleSheet(self.pointer_btn.styleSheet())
+        self.volume_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.volume_btn.setToolTip("Sons d'Iris seulement (pas le volume de Windows). Clic : 30 / 50 / 70 / 100 %")
+        self.volume_btn.clicked.connect(self.volume_clicked.emit)
         side = QVBoxLayout()
         side.setContentsMargins(8, 8, 8, 8)
         side.addWidget(self.conso, 1)
         side.addWidget(self.pointer_btn)
         side.addWidget(self.quiet_btn)
+        side.addWidget(self.volume_btn)
         lay = QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
@@ -221,6 +235,9 @@ class PreviewWindow(QWidget):
         """Choix courant (aussi changé à la voix) : le texte du bouton suit."""
         self.pointer = pointer
         self.pointer_btn.setText(pointer_button_text(pointer))
+
+    def set_volume(self, volume):
+        self.volume_btn.setText(volume_button_text(volume))
 
     def set_quiet(self, choice):
         self.quiet_btn.setText(quiet_button_text(choice))
@@ -770,11 +787,13 @@ def _ease(u):
     return 4 * u ** 3 if u < 0.5 else 1 - (-2 * u + 2) ** 3 / 2
 
 
-def clock_anim(now, start, end):
+def clock_anim(now, start, end, motion=True):
     """(agrandissement 0..1, angle en degrés) du logo pendant « iris heure ». Pur : testable.
     Aller : rotation vers la gauche en grossissant ; retour : vers la droite en rapetissant."""
     if start is None:
         return 0.0, 0.0
+    if not motion:                       # effets d'animation coupés dans Windows : changement immédiat
+        return (1.0, 0.0) if end is None else (0.0, 0.0)
     if end is None:
         e = _ease((now - start) / CLOCK_ANIM_S)
         return e, -360.0 * e
@@ -915,14 +934,25 @@ def islet_logo(st, blinking):
 RING_DEFAULT = QColor(0, 0, 0, 200)
 RING_BY_MODE = {"SOURIS": ORANGE, "CHROME": BLUE}
 GREEN = QColor(52, 199, 89)
-RING_BLINK_S = 0.125     # commande comprise : 2 éclats verts pendant les 0,5 s de « ok_flash »
+RING_BLINK_S = 0.17      # commande comprise : 2 éclats verts en 0,5 s (moins de 3 par seconde, WCAG 2.3.1)
 
 
-def islet_ring(st, age):
+def windows_animations():
+    """Réglage Windows « Effets d'animation » (#11). Illisible : on suppose qu'il est allumé."""
+    try:
+        on = ctypes.c_int(1)
+        if ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(on), 0):   # SPI_GETCLIENTAREAANIMATION
+            return bool(on.value)
+    except Exception:
+        pass
+    return True
+
+
+def islet_ring(st, age, motion=True):
     """Couleur et épaisseur du cercle autour de la main. Pur : testable.
     Orange quand la souris est allumée (quel que soit le mode), bleu en Chrome ; une commande comprise le fait
     clignoter en vert."""
-    if st.get("ok_flash") and int(age / RING_BLINK_S) % 2 == 0:
+    if st.get("ok_flash") and (not motion or int(age / RING_BLINK_S) % 2 == 0):   # sans animation : vert fixe
         return GREEN, 3.5
     col = ORANGE if st.get("mouse") else RING_BY_MODE.get(st.get("mode"))
     return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
@@ -943,9 +973,9 @@ def island_text(st):
     if qa.get("phase") == "listening":
         return mode, "Pose ta question…", True
     if qa.get("phase") == "thinking":
-        return mode, "Claude réfléchit…", True
+        return mode, "Iris réfléchit…", True
     if qa.get("phase") == "answer":
-        return mode, "Claude répond", True
+        return mode, "Iris répond", True
     if qa.get("phase") == "error":
         return mode, "Question : échec", True
     if st.get("dictating"):
@@ -1008,6 +1038,7 @@ class _IslandPainter:
         self.discord = []
         self.blink_until = 0.0
         self.next_blink = 0.0
+        self.motion = windows_animations()   # lu au démarrage
 
     def rect(self):
         w = max(ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120, CAL_W + 40)   # + pastille Discord / calendrier
@@ -1032,7 +1063,7 @@ class _IslandPainter:
             self.clk_start, self.clk_end = now, None          # (re)commence l'aller
         elif not clock and self.clk_start is not None and self.clk_end is None:
             self.clk_end = now                                 # le retour commence
-        if self.clk_end is not None and now - self.clk_end >= CLOCK_ANIM_S:
+        if self.clk_end is not None and now - self.clk_end >= (CLOCK_ANIM_S if self.motion else 0.0):
             self.clk_start = self.clk_end = None               # le logo a repris sa place
         if clock:
             self.next_rem = clock
@@ -1051,7 +1082,7 @@ class _IslandPainter:
         if st.get("ok_flash"):
             self.last_change = now
         # clignement : 0,5 s, à intervalle irrégulier
-        if now >= self.next_blink:
+        if self.motion and now >= self.next_blink:
             self.blink_until = now + BLINK_S
             self.next_blink = now + _random.uniform(*BLINK_EVERY)
         logo = islet_logo(st, now < self.blink_until)
@@ -1059,7 +1090,7 @@ class _IslandPainter:
             self.flash_t0 = now if self.flash_t0 is None else self.flash_t0
         else:
             self.flash_t0 = None
-        ring = islet_ring(st, now - self.flash_t0 if self.flash_t0 is not None else 0.0)
+        ring = islet_ring(st, now - self.flash_t0 if self.flash_t0 is not None else 0.0, self.motion)
         discord = discord_icons(st.get("discord"))
         if discord != self.discord:
             self.discord, self.last_change = discord, now
@@ -1073,9 +1104,9 @@ class _IslandPainter:
 
     def animating(self, now):
         """Vrai pendant l'animation du logo ou une alarme qui pulse : redessiner à 60 images/s."""
-        moving = self.clk_start is not None and (self.clk_end is not None or now - self.clk_start < CLOCK_ANIM_S)
+        moving = self.motion and self.clk_start is not None and (self.clk_end is not None or now - self.clk_start < CLOCK_ANIM_S)
         ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
-        return moving or ringing
+        return moving or (ringing and self.motion)
 
     def paint(self, p):
         if not self.content:
@@ -1151,7 +1182,7 @@ class _IslandPainter:
         """Fiche « horloge + jour, date, heure », sous l'île ; apparaît avec l'agrandissement du logo."""
         if not self.next_rem:
             return
-        k, _ = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end)
+        k, _ = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end, getattr(self, "motion", True))
         if k <= 0.01:
             return
         fm = QFontMetrics(self.font_msg)
@@ -1183,7 +1214,7 @@ class _IslandPainter:
         q_text = f"« {qa.get('question')} »" if qa.get("question") else ""
         q_rect = fm_q.boundingRect(QRect(0, 0, inner, 1000), flags, q_text) if q_text else QRect()
         a_rect = fm_a.boundingRect(QRect(0, 0, inner, 1000), flags, qa.get("answer") or "")
-        meta = f"Haiku · disparaît dans {int(qa.get('left', 0))} s · « Iris, ferme » pour la retirer"
+        meta = f"Iris · disparaît dans {int(qa.get('left', 0))} s · « Iris, ferme » pour la retirer"
         h = min(ANSWER_MAX_H, 44 + (q_rect.height() + 8 if q_text else 0) + a_rect.height() + 40)
         p.save()
         self._paint_islet(p, gx, ISLAND_TOP)
@@ -1475,8 +1506,8 @@ class _IslandPainter:
         fm_b, fm_s = QFontMetrics(font_body), QFontMetrics(self.font_small)
         b_rect = fm_b.boundingRect(QRect(0, 0, inner, 1000), flags, body)
         h = min(ANSWER_MAX_H, 46 + b_rect.height() + 44)
-        if ringing:      # pulsation : 1 s, entre rouge sombre et rouge vif
-            k = 0.5 + 0.5 * math.sin(_t.monotonic() * 2 * math.pi)
+        if ringing:      # pulsation : 1 s, entre rouge sombre et rouge vif (rouge vif fixe sans animation)
+            k = 0.5 + 0.5 * math.sin(_t.monotonic() * 2 * math.pi) if getattr(self, "motion", True) else 1.0
             bg = QColor(int(ALARM_RED[0] * (0.6 + 0.4 * k)), ALARM_RED[1], ALARM_RED[2], 245)
         elif alarm:
             bg = QColor(120, 20, 28, 240)
@@ -1531,7 +1562,7 @@ class _IslandPainter:
     def _paint_islet(self, p, x, y):
         """Logo à sa place, ou en cours d'animation (« iris heure ») : il grossit vers la gauche en tournant
         jusqu'à couvrir l'île et la fiche de l'heure, son bord droit restant collé à l'île."""
-        k, angle = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end)
+        k, angle = clock_anim(getattr(self, "anim_now", 0.0), self.clk_start, self.clk_end, getattr(self, "motion", True))
         size = ISLET + (CLOCK_BIG - ISLET) * k
         right = x + ISLET
         bars_top = ISLAND_TOP + (ISLET - ISLAND_H) / 2

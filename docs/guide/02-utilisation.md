@@ -14,6 +14,14 @@
 | **Bot Discord** | Il relance Iris si elle se fige ou s'arrête sans dire « bye ». |
 | Ligne de commande | `.venv/Scripts/python -m motionzero --voice` (`--simulation` : rien n'est envoyé à Windows). |
 
+## Volume d'Iris
+
+Le bouton **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `volume_iris.txt`.
+
+## Effets d'animation
+
+Si les « Effets d'animation » sont coupés dans Windows (Accessibilité > Effets visuels), l'île ne cligne plus, l'heure apparaît sans animation et l'alarme reste rouge sans pulser. Le réglage est lu au démarrage d'Iris.
+
 ## Voix basse
 
 De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. Le bouton **Voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
