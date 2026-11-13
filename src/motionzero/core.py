@@ -35,7 +35,11 @@ class Mode:
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "SOURIS ETEINTE"}
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
-                 "skip": ["right"], "back": ["left"]}   # flèches : ±10 s sur YouTube
+                 "skip": ["right"], "back": ["left"],   # flèches : ±10 s sur YouTube
+                 # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
+                 "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
+                 "agrandis": ["win", "up"], "réduis": ["win", "down"],
+                 "gauche": ["win", "left"], "droite": ["win", "right"]}
 from .calendar_view import WORDS as CAL_WORDS
 
 # mode CHROME : mot dit (après « iris ») -> touches envoyées à Chrome, seulement s'il est au premier plan
@@ -58,7 +62,7 @@ ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (dema
            "muet": "mute", "sourdine": "défun",
            "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
-REPEATABLE = ("skip", "back")   # après « iris skip / back », redits seuls sans « iris »
+REPEATABLE = ("skip", "back", "efface")   # après « iris skip / back / efface », redits seuls sans « iris »
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -72,6 +76,9 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
+                "sélection": "TOUT SELECTIONNE (Ctrl+A)", "coupe": "COUPER (Ctrl+X)", "efface": "MOT EFFACE",
+                "agrandis": "FENETRE AGRANDIE", "réduis": "FENETRE REDUITE",
+                "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
                 "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
@@ -628,7 +635,8 @@ class Core:
         # un mot de la conversation qui suivait — « colle », « chrome » — était exécuté)
         self.listen_until = -1e9
         label = VOICE_LABELS.get(word, word.upper())
-        if word in CHROME_KEYS and word != "ferme":   # hors mode Chrome (« ferme » garde son sens habituel)
+        if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS:
+            # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts

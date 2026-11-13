@@ -116,7 +116,7 @@ def test_mots_chrome_absents_de_la_liste_de_base():
     from motionzero.core import CHROME_KEYS
     from motionzero.voice import GRAMMARS
     base, chrome = json.loads(GRAMMARS["base"]), json.loads(GRAMMARS["chrome"])
-    for w in ("haut", "bas", "retour", "recharge", "agrandis", "descends"):
+    for w in ("haut", "bas", "retour", "recharge", "descends"):
         assert w not in base and w in chrome, w
     assert all(w in chrome for w in CHROME_KEYS)
     assert all(w in chrome for w in base)          # en mode Chrome, les commandes habituelles restent

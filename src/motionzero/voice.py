@@ -37,6 +37,13 @@ WORDS = {
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
     "colle": "colle",
+    "sélection": "sélection",  # « iris sélection » : tout sélectionner (Ctrl+A)
+    "coupe": "coupe",     # « iris coupe » : Ctrl+X
+    "efface": "efface",   # « iris efface » : efface le mot d'avant ; « efface, efface » sans « iris »
+    "agrandis": "agrandis",  # « iris agrandis / réduis » : fenêtre (en mode Chrome : zoom)
+    "réduis": "réduis",
+    "gauche": "gauche",   # « iris gauche / droite » : fenêtre ancrée sur la moitié de l'écran
+    "droite": "droite",
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
