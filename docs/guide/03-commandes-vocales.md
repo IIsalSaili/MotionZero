@@ -86,11 +86,11 @@ Mode : « tous » sauf mention.
 | `réduis` | fenêtre réduite (Win+Bas) | non | hors Chrome (en Chrome : zoom −) |
 | `gauche` / `droite` | fenêtre ancrée à gauche / droite (Win+flèche) | non | tous |
 | `tab` | fenêtre suivante (Alt+Tab) | non | tous |
-| `suivant` / `précédent` | VS Code devant : onglet suivant / précédent (Ctrl+Page suivante / précédente), par exemple les onglets Claude ; ailleurs, rien n'est envoyé | répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
+| `suivant` / `précédent` | VS Code devant : onglet suivant / précédent (Ctrl+Page suivante / précédente), par exemple les onglets Claude ; ailleurs, rien n'est envoyé | oui VS Code devant ; répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris (le mode Chrome s'arrête quand Discord ou VS Code passe devant ; l'accueil ne le quitte pas) | non | tous |
 | `ouvre` | puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
-| `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | non | hors Chrome (en Chrome : ferme l'onglet) |
+| `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | oui si quelque chose est affiché en haut | hors Chrome (en Chrome : ferme l'onglet) |
 | `réveil` | rallume l'écran éteint | non | tous |
 | `volume` | puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
 
@@ -142,8 +142,8 @@ sequenceDiagram
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `rappel` | puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
-| `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui calendrier ouvert | tous |
-| `plus tard` | le rappel affiché revient dans 10 min | non | tous |
+| `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
+| `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
 | `timer` | puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
 | `chronomètre` | démarre ; redit : arrête | non | tous |
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
@@ -212,6 +212,9 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 | Toujours | `stop` ; `lâche` pendant un glisser |
 | 2 s après « iris skip / back / efface / undo / redo / espace / suivant / précédent » | le même mot (et les autres touches répétables) ; chaque mot relance les 2 s |
 | Souris allumée | `clic`, `double`, `menu` (et `glisse`, `lâche` avec « iris ») |
+| VS Code devant (hors Chrome) | `suivant`, `précédent` |
+| Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
+| Rappel affiché | `plus tard` |
 | Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |
 | Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |

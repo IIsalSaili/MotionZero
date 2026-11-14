@@ -113,6 +113,15 @@ def top_shown(d, t):
         return False
 
 
+def reminder_shown(d):
+    """Un rappel est affiché ? Pour « plus tard » sans « iris »."""
+    try:
+        desk = getattr(d, "desk", None)
+        return desk is not None and bool(desk.r.active)
+    except Exception:
+        return False
+
+
 VOLUME_FILE = os.path.join(ROOT, "volume_iris.txt")   # volume des sons d'Iris, choisi dans l'accueil (#28)
 VOLUME_STEPS = (0.3, 0.5, 0.7, 1.0)
 
@@ -362,6 +371,7 @@ class Engine:
             events = listener.poll()
             if events:
                 core.top_shown = top_shown(d, t)
+                core.reminder_shown = reminder_shown(d)
             for ev in events:
                 new = core.voice(ev.word, ev.t_end, t_start=ev.t_start)
                 acts += new

@@ -212,6 +212,8 @@ class Core:
         self._scroll_acc = 0.0
         self.last_word = None       # (mot, t, accepté ?)
         self.top_shown = False      # réponse / rappel / liste affichés en haut : écrit par la boucle principale
+        self.reminder_shown = False # un rappel affiché (pour « plus tard » sans « iris ») : écrit par la boucle
+        self.front_exe = ""         # dernière appli à toi au premier plan (fenêtres d'Iris exclues), via front_app
         # dictée Claude dans VS Code : micro allumé, puis texte dicté en attente de « envoie » / « annule »
         self.dictating = False
         self.dictation_t0 = -1e9
@@ -625,7 +627,7 @@ class Core:
                 self.calendar_until = -1e9
                 acts.append(("cal_close",))       # puis le « stop » habituel
         elif (word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS)
-              and not (word in EDITOR_TABS and (self.listening(t)       # « iris suivant » : onglet de VS Code
+              and not (word in EDITOR_TABS and (self.listening(t) or self._in_vscode()   # onglets de VS Code
                                                 or (t < self.repeat_until and word in self.repeat_acts)))):
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
@@ -685,6 +687,23 @@ class Core:
                 return list(self.repeat_acts[word][0])
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
         chrome = self.mode == Mode.CHROME
+        if word in EDITOR_TABS and self._in_vscode():
+            # VS Code devant : onglet suivant / précédent sans « iris » (ne servent qu'à ça hors Chrome, 14/11)
+            label = "ONGLET " + ("SUIVANT" if word == "suivant" else "PRECEDENT") + " (VS Code)"
+            self._heard_alone(word, t, label)
+            self._arm_repeat(word, t, [("editor_tab", EDITOR_TABS[word])])
+            return [("editor_tab", EDITOR_TABS[word])]
+        if word in ("ferme", "merci") and (self.top_shown or t < self.clock_until):
+            # quelque chose est affiché en haut (réponse, rappel, liste, heure) : il part, sans « iris », partout
+            # (#34 en Chrome ; 14/11 partout). En Chrome, « ferme » redit ensuite ferme l'onglet.
+            self._heard_alone(word, t, "AFFICHAGE RETIRE (redis FERME pour l'onglet)" if chrome and word == "ferme"
+                              else "AFFICHAGE RETIRE")
+            acts += [("rappel_merci",), ("ask_close",)]
+            self.clock_until = -1e9
+            return acts
+        if word == "plus tard" and self.reminder_shown:
+            self._heard_alone(word, t, VOICE_LABELS["plus tard"])     # rappel affiché : « plus tard » sans « iris »
+            return [("rappel_tard",)]
         if chrome and word in ("skip", "back", "espace", "space"):
             # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
             self._heard_alone(word, t, VOICE_LABELS[word])
@@ -696,12 +715,6 @@ class Core:
             self._heard_alone(word, t, VOICE_LABELS[word])
             self._aim(ref, acts)
             self._click(word, t, acts)
-            return acts
-        if chrome and word == "ferme" and (self.top_shown or t < self.clock_until):
-            # quelque chose est affiché en haut (réponse, rappel, liste, heure) : il part d'abord (#34)
-            self._heard_alone(word, t, "AFFICHAGE RETIRE (redis FERME pour l'onglet)")
-            acts += [("rappel_merci",), ("ask_close",)]
-            self.clock_until = -1e9
             return acts
         if chrome and word in CHROME_KEYS:
             # ses mots ne sont écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs
@@ -971,7 +984,10 @@ class Core:
         devant -> mode Chrome (depuis le neutre ; la lecture, choisie à la voix, reste) ; une autre appli devant
         -> neutre. Les fenêtres d'Iris et « rien devant » ne changent rien."""
         acts = []
-        if self.mode == Mode.DISABLED or not exe or exe in IRIS_EXES:
+        if not exe or exe in IRIS_EXES:
+            return acts
+        self.front_exe = exe
+        if self.mode == Mode.DISABLED:
             return acts
         if exe == "chrome.exe":
             if self.mode == Mode.NEUTRAL:
@@ -983,6 +999,10 @@ class Core:
             self.set_mode(Mode.NEUTRAL, t, acts, why=f"{exe} devant", auto=found)
             self.last_gesture = ("MODE CHROME QUITTE" if found else "CHROME INTROUVABLE", t)
         return acts
+
+    def _in_vscode(self):
+        """VS Code est l'appli devant (hors mode Chrome) : suivant / précédent y sont des onglets."""
+        return self.front_exe == "code.exe" and self.mode != Mode.CHROME
 
     def chrome_front(self, front, t):
         """Ancien appel (tests) : Chrome devant ou une autre appli."""
