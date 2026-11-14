@@ -10,6 +10,8 @@ import os
 import time
 from ctypes import wintypes
 
+from .accueil import HOME_TITLE
+
 log = logging.getLogger("motionzero.vscode")
 DICTATION_KEYS = ["ctrl", "alt", "shift", "f9"]
 SW_RESTORE = 9
@@ -239,7 +241,7 @@ def open_home():
     def cb(hwnd, _):
         pid = wintypes.DWORD()
         u.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-        if pid.value == os.getpid() and _title_of(hwnd) == "motionzero":
+        if pid.value == os.getpid() and _title_of(hwnd) == HOME_TITLE:
             found.append(hwnd)
             return False
         return True

@@ -8,6 +8,7 @@ Rien n'est écrit à la main ici qui puisse prendre du retard sur les commandes.
 from .aide import now_block
 from .core import Mode
 
+HOME_TITLE = "Iris"   # titre de la fenêtre d'accueil : « iris accueil » la retrouve par lui (vscode.py)
 OK, OFF, IDLE, FAIL = "ok", "off", "idle", "fail"   # vert, orange (éteint exprès), gris (au repos), rouge (panne)
 
 MODE_LABELS = {Mode.NEUTRAL: "NEUTRE", Mode.READING: "LECTURE", Mode.CHROME: "CHROME", Mode.DISABLED: "PAUSE"}

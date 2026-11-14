@@ -139,3 +139,14 @@ def test_sortie_forcee_relache_tout_meme_en_panne():
         raise RuntimeError("SendInput")
     force_exit(SimpleNamespace(release_all=boom), exit=codes.append)   # relâchement en panne : on sort quand même
     assert codes == [0, 0]
+
+
+def test_iris_accueil_retrouve_la_fenetre():
+    # « iris accueil » cherche la fenêtre par son titre : les deux doivent rester liés (régression du 14/11)
+    from motionzero.ui import PreviewWindow, QApplication
+    import inspect
+    from motionzero import vscode
+    from motionzero.accueil import HOME_TITLE
+    QApplication.instance() or QApplication([])
+    assert PreviewWindow().windowTitle() == HOME_TITLE
+    assert "== HOME_TITLE" in inspect.getsource(vscode)

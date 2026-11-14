@@ -14,7 +14,7 @@ from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiAppli
                            QPainterPath, QPen, QPixmap)
 from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
 
-from .accueil import conso_line
+from .accueil import HOME_TITLE, conso_line
 
 __all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton",
            "set_capture_visible"]
@@ -111,7 +111,7 @@ class PreviewWindow(QWidget):
     def __init__(self, pointer="main", quiet="auto", volume=0.5):
         super().__init__()
         load_fonts()
-        self.setWindowTitle("Iris")
+        self.setWindowTitle(HOME_TITLE)
         self.setStyleSheet(f"PreviewWindow {{ background: {HOME['fond']}; }}"
                            f"QLabel {{ color: {HOME['texte']}; font-family: {_FONT}; }}")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
