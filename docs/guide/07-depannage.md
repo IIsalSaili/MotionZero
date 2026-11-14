@@ -24,6 +24,7 @@ flowchart TD
 | Symptôme | Cause probable | Solution |
 |---|---|---|
 | Mots « ignorés : pas sûr de l'avoir entendu » quand tu parles bas | la 2e vérification n'entend pas une voix faible | bouton **Voix basse** de l'accueil : « le soir » (22 h - 7 h, par défaut), « toujours » ou « jamais ». Choix gardé dans `voix_basse.txt` |
+| « iris » ne fait plus rien, journal muet | flux du micro figé (plus aucun son reçu, même du silence) | automatique : au bout de 3 s Iris rouvre le micro (« micro fige … flux rouvert » dans `motionzero.log`), puis réessaie toutes les 10 s. Le bouton mute du casque n'est pas concerné (il envoie du silence) |
 | « iris » ne fait plus rien, aucun son | micro figé par le moteur audio de Windows (`audiodg.exe`) | bouton **réparation du son** (en bas à gauche) : redémarre les services audio ; Windows demande « Oui / Non » (droits administrateur) |
 | Le mot est affiché « ignore : dis IRIS avant » | mot dit sans « iris » | redire avec « iris » ; voir [mots sans iris](03-commandes-vocales.md#mots-sans-iris) |
 | « HAUT : seulement en mode Chrome » | mot de Chrome hors mode Chrome | « iris chrome » d'abord |

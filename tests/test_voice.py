@@ -439,3 +439,45 @@ def test_defile_pas_de_main_fantome_souris_pendant_le_defilement():
     clk.run(core, 0.2, cx=0.5, cy=0.95)
     g = core.ghost()                                  # pas la main fantôme de la souris : la bande du défilement
     assert g is not None and len(g) == 4
+
+
+def test_micro_fige_rouvert_tout_seul():
+    """14/11 : plus aucun son reçu du micro, Iris sourde jusqu'à sa relance."""
+    from motionzero.voice import VoiceListener
+    v = VoiceListener.__new__(VoiceListener)
+    rouvert = []
+    v.reopen = lambda: rouvert.append(1)
+    v.stream, v.t_stream0, v._stall_try_t = object(), 0.0, -1e9
+    v.last_block_t = 100.0
+    assert not v.check_stalled(now=102.0)          # 2 s sans son : normal
+    assert v.check_stalled(now=103.5) and rouvert == [1]
+    assert not v.check_stalled(now=106.0)          # toujours muet : on attend 10 s avant de réessayer
+    assert v.check_stalled(now=114.0) and len(rouvert) == 2
+
+
+def test_silence_du_casque_mute_pas_fige():
+    """Casque muté par son bouton : le micro envoie du silence, des morceaux arrivent toujours."""
+    from motionzero.voice import VoiceListener
+    v = VoiceListener.__new__(VoiceListener)
+    v.reopen = lambda: (_ for _ in ()).throw(AssertionError("ne doit pas rouvrir"))
+    v.stream, v.t_stream0, v._stall_try_t = object(), 0.0, -1e9
+    for t in range(0, 600):
+        v.last_block_t = t * 0.03
+        assert not v.check_stalled(now=t * 0.03 + 0.2)
+
+
+def test_reouverture_ratee_ne_casse_pas_l_ecoute():
+    from motionzero.voice import VoiceListener
+    v = VoiceListener.__new__(VoiceListener)
+    def boum():
+        raise OSError("micro absent")
+    v.reopen = boum
+    v.stream, v.t_stream0, v._stall_try_t, v.last_block_t = object(), 0.0, -1e9, 0.0
+    assert v.check_stalled(now=5.0)
+
+
+def test_pas_de_flux_pas_de_surveillance():
+    from motionzero.voice import VoiceListener
+    v = VoiceListener.__new__(VoiceListener)
+    v.stream, v.t_stream0 = None, None
+    assert not v.check_stalled(now=1e6)
