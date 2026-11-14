@@ -63,8 +63,7 @@ IRIS_EXES = ("python.exe", "pythonw.exe")
 
 ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
            # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
-           "muet": "mute", "sourdine": "défun",
-           "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
+           "muet": "mute", "sourdine": "défun"}   # « ok / okay » retirés le 14/11 (jamais utilisés)
 EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"]}   # VS Code (pas Ctrl+Tab :
                           # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
@@ -105,7 +104,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
                   "tab": (("alt_tab",), None),
-                  "réveil": (("wake",), "ECRAN RALLUME"), "wake": (("wake",), "ECRAN RALLUME"),
+                  "réveil": (("wake",), "ECRAN RALLUME"),
                   "chronomètre": (("chrono",), "CHRONOMETRE"),
                   "plus tard": (("rappel_tard",), None),
                   "activation": (("bot_activate",), "BOT VOCAL : ACTIVATION"),   # lance le bot, charge Whisper

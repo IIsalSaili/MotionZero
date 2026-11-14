@@ -29,7 +29,7 @@ sequenceDiagram
 - Une seule commande par « iris » : l'écoute se referme après.
 - Un mot seul sans « iris » doit être net (confiance ≥ 0,8) et dit seul dans sa phrase.
 - Mot entendu sans « iris » alors qu'il en faut un : l'île affiche « … ignore : dis IRIS avant ».
-- Mots dits en deux morceaux, recollés : « des mute » / « un mute » = démute ; « des fun » / « dis fun » = défun ; « plus tard » ; « plein écran » ; « double clic » = double.
+- Mots dits en deux morceaux, recollés : « des mute » = démute ; « des fun » / « dis fun » = défun ; « plus tard » ; « plein écran » ; « double clic » = double.
 - Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute ; sourdine = défun ; ok / okay = merci.
 
 **Légende** — colonne « Sans iris ? » : « oui » marche toujours sans « iris » ; « répétable » : redit seul dans les 2 s après « iris + mot » ; « souris » : quand la souris est allumée ; « Chrome » : en mode Chrome ; « non » : il faut dire « iris » avant.
@@ -128,7 +128,7 @@ sequenceDiagram
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `mute` (`muet`) | coupe le micro Discord | non | tous |
-| `démute` (« des mute », « un mute ») | rallume le micro | non | tous |
+| `démute` (« des mute ») | rallume le micro | non | tous |
 | `défun` (« des fun », « dis fun », `sourdine`) | sourdine casque + micro | non | tous |
 | `message` | puis « dans général, … » : envoyé par le bot | non | tous |
 | `salon` | puis le nom d'un salon vocal : le bot t'y déplace | non | tous |

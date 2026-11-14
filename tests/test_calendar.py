@@ -100,7 +100,7 @@ def test_ouvrir_naviguer_fermer():
 def test_calendrier_ferme_aussi_par_merci_ok_et_en_mode_chrome():
     """13/11 : retirer « ferme » au calendrier l'avait rendu infermable à la voix. Tous ses mots de sortie."""
     from motionzero.core import Mode
-    for mot, chrome in (("ferme", False), ("merci", False), ("ok", False), ("ferme", True), ("ok", True)):
+    for mot, chrome in (("ferme", False), ("merci", False), ("ferme", True), ("merci", True)):
         core = Core(Config())
         if chrome:
             core.mode = Mode.CHROME

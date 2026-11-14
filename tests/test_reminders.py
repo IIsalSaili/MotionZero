@@ -370,13 +370,14 @@ def test_rappel_en_attente_affiche_en_haut():
 
 
 
-def test_ok_et_okay_comme_merci():
+def test_merci_et_ok_retire():
     from motionzero.config import Config
     from motionzero.core import Core
-    for mot in ("ok", "okay"):
-        core = Core(Config())
-        core.voice("iris", 1.0)
-        assert core.voice(mot, 1.2) == [("rappel_merci",), ("ask_close",)]
+    from motionzero.voice import WORDS
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("merci", 1.2) == [("rappel_merci",), ("ask_close",)]
+    assert "ok" not in WORDS and "okay" not in WORDS     # retirés le 14/11 : jamais utilisés
 
 
 def test_merci_retire_l_heure():
@@ -387,18 +388,18 @@ def test_merci_retire_l_heure():
     core.voice("heure", 1.2)
     assert core.clock_until > 2.0
     core.voice("iris", 2.0)
-    core.voice("ok", 2.2)
+    core.voice("merci", 2.2)
     assert core.clock_until < 0
 
 
-def test_serie_dans_chrome_ok_ne_ferme_pas_l_onglet():
+def test_serie_dans_chrome_merci_ne_ferme_pas_l_onglet():
     """Le conflit du 13/11 : en mode Chrome, retirer l'affichage ne doit jamais fermer l'onglet."""
     from motionzero.config import Config
     from motionzero.core import Core, Mode
     core = Core(Config())
     core.mode = Mode.CHROME
     core.voice("iris", 1.0)
-    acts = core.voice("ok", 1.2)
+    acts = core.voice("merci", 1.2)
     assert ("chrome_keys", ["ctrl", "w"]) not in acts and ("ask_close",) in acts
     core.voice("iris", 2.0)
     acts = core.voice("ferme", 2.2)

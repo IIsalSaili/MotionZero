@@ -344,8 +344,10 @@ class Engine:
         if listener is not None:
             if t < core.calendar_until:
                 listener.grammar = "calendrier"   # jours, mois, nombres : seulement calendrier ouvert
-            else:
-                listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
+            elif core.mode == Mode.CHROME:
+                listener.grammar = "chrome"
+            else:                             # mots de la souris : seulement souris allumée ou bouton tenu
+                listener.grammar = "souris" if core.mouse or core.dragging else "base"
             if t - listener.iris_heard_t < 0.5:
                 core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
             events = listener.poll()

@@ -394,11 +394,13 @@ def test_des_fun_et_dis_fun_sont_compris_comme_defun():
         assert [w["word"] for w in accepted_words(r)] == ["iris", "défun"]
 
 
-def test_unmute_vaut_demute():
-    r = {"result": [{"word": "iris", "conf": 1.0, "start": 0.0, "end": 0.3},
-                    {"word": "un", "conf": 0.9, "start": 0.4, "end": 0.5},
-                    {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
-    assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
+def test_un_mute_retire_des_mute_reste():
+    """14/11 : « un mute » retiré (« un » seul pris dans la conversation) ; « des mute » reste démute."""
+    import json
+    from motionzero.voice import GRAMMARS
+    for g in GRAMMARS.values():
+        phrases = json.loads(g)
+        assert "un mute" not in phrases and "des mute" in phrases
 
 
 def test_iris_accueil_ouvre_la_page_d_accueil_et_home_n_existe_plus():

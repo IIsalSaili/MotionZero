@@ -93,12 +93,9 @@ WORDS = {
     "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
-    "merci": "merci",     # « iris merci » / « iris ok » : retire ce qui est affiché en haut (rappel, réponse…)
-    "ok": "ok",
-    "okay": "okay",
+    "merci": "merci",     # « iris merci » : retire ce qui est affiché en haut (rappel, réponse…) ; « ok » retiré le 14/11
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
-    "réveil": "réveil",   # « iris réveil » / « iris wake (up) » : rallume l'écran éteint
-    "wake": "wake",
+    "réveil": "réveil",   # « iris réveil » : rallume l'écran éteint (« wake » retiré le 14/11 : jamais utilisé)
     "chronomètre": "chronomètre",   # « iris chronomètre » : démarre / arrête le chrono
     "timer": "timer",     # « iris timer » puis la durée : compte à rebours qui sonne à zéro
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
@@ -115,7 +112,7 @@ WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
-SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
+SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un » seul était pris dans la conversation
          ("des", "fun"): "défun", ("dis", "fun"): "défun",
          ("plus", "tard"): "plus tard",
          ("re", "do"): "redo",
@@ -125,9 +122,15 @@ SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement �
 CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seulement calendrier ouvert
 
 
-def grammar(extra=()):
-    phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in CAL_ONLY]
-    phrases += [f"{a} {b}" for a, b in SPLIT]
+# mots de la souris : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome (14/11 : partout,
+# ils étaient pris dans la conversation : clic 60 fois, menu 38, glisse 23)
+MOUSE_ONLY = {"clic", "double", "menu", "glisse", "lâche", "défile"}
+
+
+def grammar(extra=(), mouse=True):
+    skip = CAL_ONLY | (set() if mouse else MOUSE_ONLY)
+    phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in skip]
+    phrases += [f"{a} {b}" for a, b in SPLIT if mouse or SPLIT[(a, b)] not in MOUSE_ONLY]
     phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
@@ -143,7 +146,7 @@ def _calendar_words():
 
 
 _calendar_words()
-GRAMMAR = grammar()
+GRAMMAR = grammar(mouse=False)
 
 
 def _grammars():
@@ -151,7 +154,8 @@ def _grammars():
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
-    return {"base": GRAMMAR, "chrome": grammar(CHROME_KEYS), "calendrier": grammar(CAL)}
+    return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
+            "calendrier": grammar(CAL, mouse=False)}
 
 
 GRAMMARS = _grammars()
