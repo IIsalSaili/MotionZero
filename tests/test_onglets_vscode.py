@@ -33,20 +33,16 @@ def test_calendrier_garde_ses_semaines():
 
 
 def test_touche_envoyee_seulement_si_vscode_devant(monkeypatch):
+    """Premier plan jugé par le programme (code.exe), plus par le titre (14/11)."""
     import motionzero.app as app
     import motionzero.vscode as vs
     core = Core(Config())
+    devant = {"exe": "code.exe"}
+    monkeypatch.setattr(vs, "vscode_in_front", lambda: devant["exe"] == "code.exe")
+    monkeypatch.setattr(vs, "foreground_exe", lambda: devant["exe"])
     monkeypatch.setattr(vs, "find_window", lambda *a: 42)
-    fore = {"h": 42}
-
-    class U:
-        def GetForegroundWindow(self):
-            return fore["h"]
-    monkeypatch.setattr(app.ctypes, "windll", type("W", (), {"user32": U()})())
     acts = [("editor_tab", ["ctrl", "pagedown"])]
     assert app.vscode_actions(acts, core, None, None, 1.0) == [("hotkey", ["ctrl", "pagedown"])]
-    fore["h"] = 7                                  # Chrome devant : rien n'est envoyé
+    devant["exe"] = "chrome.exe"                   # Chrome devant : rien n'est envoyé
     assert app.vscode_actions(acts, core, None, None, 2.0) == []
     assert "PAS DEVANT" in core.last_gesture[0]
-    monkeypatch.setattr(vs, "find_window", lambda *a: None)   # VS Code fermé
-    assert app.vscode_actions(acts, core, None, None, 3.0) == []

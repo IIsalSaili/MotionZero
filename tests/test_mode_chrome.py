@@ -193,3 +193,46 @@ def test_double_clic_dit_en_entier():
     for g in GRAMMARS.values():
         phrases = json.loads(g)
         assert "double" in phrases and "double clic" in phrases
+
+
+def _fausse_fenetre(monkeypatch, devant, code_trouve=True):
+    from motionzero import vscode
+    monkeypatch.setattr(vscode, "vscode_in_front", lambda: devant == "code.exe")
+    monkeypatch.setattr(vscode, "foreground_exe", lambda: devant)
+    monkeypatch.setattr(vscode, "find_window", lambda: 1 if code_trouve else None)
+    envoyes = []
+    monkeypatch.setattr(vscode, "focus_and_send", lambda send, groupes: envoyes.append(groupes) or None)
+    return envoyes
+
+
+def test_onglet_vscode_devant(monkeypatch):
+    from motionzero import app
+    _fausse_fenetre(monkeypatch, "code.exe")
+    core = type("C", (), {"last_gesture": None})()
+    assert app.vscode_actions([("editor_tab", ["ctrl", "pagedown"])], core, None, None, 0.0) == [("hotkey", ["ctrl", "pagedown"])]
+
+
+def test_onglet_vscode_fenetre_d_iris_devant(monkeypatch):
+    """14/11 : « VS Code pas devant » alors qu'il l'était (une fenêtre d'Iris avait pris le premier plan)."""
+    from motionzero import app
+    envoyes = _fausse_fenetre(monkeypatch, "pythonw.exe")
+    core = type("C", (), {"last_gesture": None})()
+    assert app.vscode_actions([("editor_tab", ["ctrl", "pageup"])], core, None, None, 0.0) == []
+    assert envoyes == [[["ctrl", "pageup"]]]
+    assert core.last_gesture is None
+
+
+def test_onglet_vscode_autre_appli_devant(monkeypatch):
+    from motionzero import app
+    envoyes = _fausse_fenetre(monkeypatch, "chrome.exe")
+    core = type("C", (), {"last_gesture": None})()
+    assert app.vscode_actions([("editor_tab", ["ctrl", "pageup"])], core, None, None, 0.0) == []
+    assert envoyes == [] and "PAS DEVANT" in core.last_gesture[0]
+
+
+def test_onglet_vscode_ferme(monkeypatch):
+    from motionzero import app
+    envoyes = _fausse_fenetre(monkeypatch, "pythonw.exe", code_trouve=False)
+    core = type("C", (), {"last_gesture": None})()
+    app.vscode_actions([("editor_tab", ["ctrl", "pageup"])], core, None, None, 0.0)
+    assert envoyes == [] and "PAS DEVANT" in core.last_gesture[0]

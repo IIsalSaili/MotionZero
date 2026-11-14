@@ -876,7 +876,8 @@ def type_actions(acts, listener, typer, sounds):
 
 def vscode_actions(acts, core, ctl, sounds, t, discord=None):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app, toggle_claude_dictation
+    from .vscode import (alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app,
+                         toggle_claude_dictation, vscode_in_front, foreground_exe, IRIS_EXES)
 
     def send(keys):
         ctl.execute([("hotkey", keys)], time.perf_counter())
@@ -890,15 +891,21 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
                 core.last_gesture = ("CHROME PAS DEVANT : rien envoye", t)
             continue
         if a[0] == "editor_tab":
-            code = find_window()
-            if code and ctypes.windll.user32.GetForegroundWindow() == code:
+            if vscode_in_front():
                 rest.append(("hotkey", a[1]))
+                continue
+            devant = foreground_exe()
+            if devant in IRIS_EXES and find_window() is not None:
+                # une fenêtre d'Iris (aide, accueil…) a pris le premier plan : VS Code reste la cible
+                err = focus_and_send(send, [a[1]])
+                if err:
+                    core.last_gesture = (err, t)
             else:
+                _log.info("onglet VS Code refuse : premier plan = %s", devant or "aucun")
                 core.last_gesture = ("VS CODE PAS DEVANT : rien envoye", t)
             continue
         if a[0] == "annule":
-            code = find_window()
-            if code and ctypes.windll.user32.GetForegroundWindow() == code:
+            if vscode_in_front():
                 err = focus_and_send(send, [["ctrl", "a"], ["backspace"]])   # vide le message de Claude
             else:
                 rest.append(("hotkey", ["escape"]))                         # ailleurs : touche Échap
