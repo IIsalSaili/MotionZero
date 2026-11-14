@@ -342,7 +342,10 @@ class Engine:
         d, core, listener = self.d, self.d.core, self.d.listener
         acts = []
         if listener is not None:
-            listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
+            if t < core.calendar_until:
+                listener.grammar = "calendrier"   # jours, mois, nombres : seulement calendrier ouvert
+            else:
+                listener.grammar = "chrome" if core.mode == Mode.CHROME else "base"
             if t - listener.iris_heard_t < 0.5:
                 core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
             events = listener.poll()

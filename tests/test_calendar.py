@@ -156,9 +156,10 @@ def test_un_rappel_qui_sonne_passe_avant_le_calendrier():
 
 
 def test_mots_dans_la_grammaire():
-    from motionzero.voice import GRAMMAR
-    words = json.loads(GRAMMAR)
-    assert all(w in words for w in WORDS) and "calendrier" in words
+    from motionzero.voice import GRAMMAR, GRAMMARS
+    assert "calendrier" in json.loads(GRAMMAR)                  # « iris calendrier » toujours écouté
+    words = json.loads(GRAMMARS["calendrier"])                 # ses mots : seulement calendrier ouvert (14/11)
+    assert all(w in words for w in WORDS)
 
 
 # ---- mois précisés ----
