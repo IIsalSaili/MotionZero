@@ -32,7 +32,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds, is_failure
-from .vscode import chrome_in_front
+from .vscode import chrome_in_front, foreground_exe
 from .volume import VIEW as VOLUME_VIEW
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
@@ -330,9 +330,9 @@ class Engine:
             acts += core.set_pointer_toggle(t)
         self._quiet(t)
         self._volume()
-        if core.mode == Mode.CHROME and t - self.chrome_check_t >= 0.3:
-            self.chrome_check_t = t           # mode Chrome : quitté dès que Chrome n'est plus devant
-            acts += core.chrome_front(chrome_in_front(), t)
+        if t - self.chrome_check_t >= 0.3:
+            self.chrome_check_t = t           # le mode Chrome suit Chrome au premier plan (14/11)
+            acts += core.front_app(foreground_exe(), t)
         bot_events(d.bot, core, d.speaker, d.discord_voice, t)
         d.desk.events(core, t)
         return acts
@@ -423,8 +423,10 @@ class Engine:
         d = self.d
         for a in acts:
             if a[0] == "mode":
-                d.sounds.play(a[1])
-                _log.info("mode %s", a[1])
+                core = d.core
+                if not core.mode_auto:        # suivi de l'appli devant : pas de son à chaque Alt+Tab
+                    d.sounds.play(a[1])
+                _log.info("mode %s (%s)", a[1], core.mode_why or "?")
             elif a[0] == "pointer":
                 write_pointer(POINTER_FILE, a[1])
                 d.bridge.pointer.emit(a[1])

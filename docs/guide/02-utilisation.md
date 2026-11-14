@@ -54,26 +54,25 @@ Le **mode** dit ce que fait la main. La **souris** n'est pas un mode : c'est un 
 stateDiagram-v2
     [*] --> NEUTRE
     NEUTRE --> LECTURE : iris lecture
-    NEUTRE --> CHROME : iris chrome
-    LECTURE --> CHROME : iris chrome
-    CHROME --> NEUTRE : stop, autre appli, Chrome plus devant
+    NEUTRE --> CHROME : Chrome devant (ou iris chrome)
+    CHROME --> NEUTRE : une autre appli devant
     LECTURE --> NEUTRE : stop
     NEUTRE --> DESACTIVE : iris pause
     LECTURE --> DESACTIVE : iris pause
     CHROME --> DESACTIVE : iris pause
-    DESACTIVE --> NEUTRE : iris reprise
+    DESACTIVE --> NEUTRE : iris reprise (puis CHROME si Chrome est devant)
     state "Souris (surcouche, garde le mode)" as SOURIS
     NEUTRE --> SOURIS : iris souris
     SOURIS --> NEUTRE : stop ou iris souris
 ```
 
-« autre appli » = « iris discord », « iris studio » ou « iris accueil ». La souris peut aussi s'allumer en LECTURE (bulle) ou en CHROME : le mode reste.
+Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans son à chaque Alt+Tab. Les fenêtres d'Iris (accueil, aide, fenêtre invisible des raccourcis Discord) ne comptent pas : « iris mute » ou « iris accueil » ne font plus quitter Chrome. « stop » ne quitte plus Chrome. La lecture, choisie à la voix, n'est pas remplacée par Chrome. Chaque changement de mode est noté dans le journal avec sa cause. La souris peut aussi s'allumer en LECTURE (bulle) ou en CHROME : le mode reste.
 
 | Mode | La main… | Particularités |
 |---|---|---|
 | **NEUTRE** | ne fait rien | mode de départ (`start_mode`) |
 | **LECTURE** | paume au bord droit / gauche = page suivante / précédente ; en haut / bas = défile ; immobile 1,5 s = bulle « SOURIS ? » (petit geste vers le haut pour confirmer) | « iris lecture » éteint la souris |
-| **CHROME** | comme NEUTRE | mots de navigation sans « iris » (voir [commandes](03-commandes-vocales.md#mode-chrome)) ; quitté dès que Chrome n'est plus au premier plan (5 s de grâce à l'ouverture) |
+| **CHROME** | comme NEUTRE | mots de navigation sans « iris » (voir [commandes](03-commandes-vocales.md#mode-chrome)) ; actif tant que Chrome est au premier plan ; « iris chrome » le met devant (5 s pour s'ouvrir, sinon « CHROME INTROUVABLE ») |
 | **DÉSACTIVÉ** | rien, MediaPipe arrêté | « iris » (et « stop ») réveille |
 
 ### La souris (surcouche)

@@ -34,8 +34,8 @@ def test_stop_eteint_la_souris_sans_quitter_chrome():
     core.voice("souris", 2.2)
     core.voice("stop", 3.0)
     assert not core.mouse and core.mode == Mode.CHROME
-    core.voice("stop", 4.0)                          # second « stop » : quitte Chrome comme avant
-    assert core.mode == Mode.NEUTRAL
+    core.voice("stop", 4.0)                          # second « stop » : Chrome reste (il suit Chrome devant, 14/11)
+    assert core.mode == Mode.CHROME
 
 
 def test_chrome_perdu_garde_la_souris():
