@@ -645,6 +645,7 @@ def main(argv=None):
         bridge.repair_done.emit()
 
     def on_repair():
+        log.info("bouton reparer le son appuye%s", " (deja en cours, ignore)" if repair_btn.busy else "")
         if repair_btn.busy:
             return
         repair_btn.set_busy(True)

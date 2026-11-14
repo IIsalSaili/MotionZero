@@ -246,6 +246,10 @@ class VoiceEvent:
     t_end: float
 
 
+STALL_S = 3.0        # plus aucun morceau de son (même silencieux) depuis 3 s : le flux du micro est figé
+STALL_RETRY_S = 10.0 # entre deux réouvertures, si le micro reste muet (débranché…)
+
+
 class VoiceListener:
     """Thread micro + reconnaissance. Les mots reconnus arrivent dans self.events (queue)."""
 
@@ -272,6 +276,7 @@ class VoiceListener:
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
+        self._stall_try_t = -1e9    # dernière réouverture automatique (micro figé)
         # liste de mots voulue (« base » / « chrome ») : écrite par la boucle, appliquée par le fil voix
         self.grammar = "base"
         self._grammar = "base"
@@ -322,6 +327,7 @@ class VoiceListener:
         try:
             block = self.audio.get(timeout=0.2)
         except queue.Empty:
+            self.check_stalled()
             return
         start_samples = self.samples
         self.samples += len(block) // 2
@@ -432,6 +438,23 @@ class VoiceListener:
                                         channels=1, callback=self._callback)
         self.stream.start()
         log.info("micro rouvert : %s", sd.query_devices(kind="input")["name"])
+
+    def check_stalled(self, now=None):
+        """Micro figé (14/11 : plus aucun son reçu, Iris sourde jusqu'à sa relance) : rouvre le flux tout seul.
+        Un casque muté par son bouton envoie encore du silence : ça ne compte pas comme figé."""
+        if self.stream is None or self.t_stream0 is None:
+            return False
+        now = time.perf_counter() if now is None else now
+        last = max(self.last_block_t, self.t_stream0)
+        if now - last < STALL_S or now - self._stall_try_t < STALL_RETRY_S:
+            return False
+        self._stall_try_t = now
+        log.warning("micro fige (aucun son depuis %.1f s) : flux rouvert", now - last)
+        try:
+            self.reopen()
+        except Exception:
+            log.exception("reouverture du micro fige")
+        return True
 
     def heard_since(self, t):
         return self.last_block_t > t
