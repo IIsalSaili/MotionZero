@@ -481,3 +481,15 @@ def test_pas_de_flux_pas_de_surveillance():
     v = VoiceListener.__new__(VoiceListener)
     v.stream, v.t_stream0 = None, None
     assert not v.check_stalled(now=1e6)
+
+
+def test_mots_du_calendrier_seulement_calendrier_ouvert():
+    """14/11 : 45 mots du calendrier toujours écoutés, « iris » moins bien reconnu (pris pour « août », « mai »)."""
+    import json
+    from motionzero.voice import GRAMMARS
+    base, cal, chrome = (json.loads(GRAMMARS[k]) for k in ("base", "calendrier", "chrome"))
+    for w in ("août", "mai", "vingt-six", "lundi", "deuxième", "aujourd'hui"):
+        assert w not in base and w not in chrome and w in cal
+    for w in ("iris", "suivant", "précédent", "stop", "ferme", "merci"):
+        assert w in base and w in cal
+    assert len(base) < 100

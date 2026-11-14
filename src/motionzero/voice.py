@@ -122,8 +122,12 @@ SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute »
          ("plein", "écran"): "plein écran",
          ("double", "clic"): "double"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
 SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement à « démute », absent du modèle)
+CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seulement calendrier ouvert
+
+
 def grammar(extra=()):
-    phrases = [w for w in WORDS if w not in SPLIT.values() or w in SOLO_TOO] + [f"{a} {b}" for a, b in SPLIT]
+    phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in CAL_ONLY]
+    phrases += [f"{a} {b}" for a, b in SPLIT]
     phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
@@ -133,6 +137,9 @@ def _calendar_words():
     from .calendar_view import WORDS as CAL
     for w in CAL:
         WORDS.setdefault(w, w)
+    # 14/11 : les 45 mots du calendrier toujours écoutés gênaient « iris » (pris pour « août », « mai »…) ;
+    # seuls « suivant / précédent » restent partout (onglets de VS Code)
+    CAL_ONLY.update(w for w in CAL if w not in ("suivant", "précédent"))
 
 
 _calendar_words()
@@ -142,8 +149,9 @@ GRAMMAR = grammar()
 def _grammars():
     """Une liste de mots par mode : les mots de Chrome (« haut », « bas »…) ne sont même pas cherchés ailleurs,
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
+    from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
-    return {"base": GRAMMAR, "chrome": grammar(CHROME_KEYS)}
+    return {"base": GRAMMAR, "chrome": grammar(CHROME_KEYS), "calendrier": grammar(CAL)}
 
 
 GRAMMARS = _grammars()
