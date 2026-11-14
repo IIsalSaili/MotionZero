@@ -1,4 +1,4 @@
-"""Mode CHROME : « iris chrome » l'active, commandes à la voix avec « iris », quitté quand Chrome n'est plus devant."""
+"""Mode CHROME : actif tant que Chrome est devant (ou « iris chrome »), quitté quand une autre appli passe devant."""
 from motionzero.config import Config
 from motionzero.core import Core, Mode
 
@@ -79,14 +79,100 @@ def test_delai_d_ouverture_de_chrome():
     assert core.mode == Mode.NEUTRAL
 
 
-def test_stop_et_autre_appli_quittent_le_mode():
+def test_stop_ne_quitte_plus_chrome():
+    """14/11 : « stop » pour faire taire un rappel faisait aussi quitter Chrome. Chrome devant = mode Chrome."""
     core = _chrome()
-    core.voice("stop", 2.0)
-    assert core.mode == Mode.NEUTRAL
+    acts = core.voice("stop", 2.0)
+    assert core.mode == Mode.CHROME and ("alarm_stop",) in acts
+
+
+def test_discord_quitte_quand_sa_fenetre_passe_devant():
     core = _chrome()
+    core.front_app("chrome.exe", 1.8)
     core.voice("iris", 2.0)
-    core.voice("discord", 2.5)
-    assert core.mode == Mode.NEUTRAL
+    acts = core.voice("discord", 2.5)
+    assert ("open_app", "discord") in acts and core.mode == Mode.CHROME   # Discord pas encore devant
+    core.front_app("discord.exe", 2.8)
+    assert core.mode == Mode.NEUTRAL and "discord.exe" in core.mode_why
+
+
+# ---- le mode suit l'appli au premier plan (14/11) ----
+
+def test_chrome_devant_active_le_mode_sans_rien_dire():
+    core = Core(Config())
+    acts = core.front_app("chrome.exe", 1.0)
+    assert ("mode", Mode.CHROME) in acts and core.mode == Mode.CHROME and core.mode_auto
+    core.front_app("code.exe", 2.0)
+    assert core.mode == Mode.NEUTRAL and core.mode_auto       # Alt+Tab : sans son
+    core.front_app("chrome.exe", 3.0)
+    assert core.mode == Mode.CHROME
+
+
+def test_fenetres_d_iris_ne_font_pas_quitter_chrome():
+    """« iris mute » : la fenêtre invisible d'Iris passe devant le temps du raccourci Discord (bug du 14/11)."""
+    core = Core(Config())
+    core.front_app("chrome.exe", 1.0)
+    for exe in ("pythonw.exe", "python.exe", ""):
+        assert core.front_app(exe, 2.0) == [] and core.mode == Mode.CHROME
+
+
+def test_mute_demute_gardent_chrome():
+    core = Core(Config())
+    core.front_app("chrome.exe", 1.0)
+    for i, w in enumerate(("mute", "démute", "défun", "muet", "sourdine")):
+        core.voice("iris", 2.0 + i)
+        core.voice(w, 2.2 + i)
+        core.front_app("pythonw.exe", 2.4 + i)           # fenêtre invisible devant
+        core.front_app("chrome.exe", 2.6 + i)            # main rendue à Chrome
+        assert core.mode == Mode.CHROME, w
+
+
+def test_lecture_n_est_pas_remplacee_par_chrome():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("lecture", 1.2)
+    core.front_app("chrome.exe", 2.0)
+    assert core.mode == Mode.READING
+    core.voice("stop", 3.0)                              # quitte la lecture...
+    core.front_app("chrome.exe", 3.3)                    # ... Chrome devant : mode Chrome
+    assert core.mode == Mode.CHROME
+
+
+def test_pause_garde_le_mode_de_l_appli_devant():
+    core = Core(Config())
+    core.front_app("chrome.exe", 1.0)
+    core.voice("iris", 2.0)
+    core.voice("pause", 2.2)
+    assert core.mode == Mode.DISABLED
+    core.front_app("chrome.exe", 3.0)                    # en pause : rien ne change
+    assert core.mode == Mode.DISABLED
+    core.voice("iris", 4.0)
+    core.voice("reprise", 4.2)
+    core.front_app("chrome.exe", 4.5)
+    assert core.mode == Mode.CHROME
+
+
+def test_pause_ferme_le_calendrier_et_l_aide():
+    core = Core(Config())
+    core.calendar_until = core.help_until = 100.0
+    core.voice("iris", 2.0)
+    acts = core.voice("pause", 2.2)
+    assert ("cal_close",) in acts and core.calendar_until < 0 and core.help_until < 0
+
+
+def test_chrome_introuvable_le_dit():
+    core = _chrome()
+    core.front_app("code.exe", 7.0)
+    assert core.mode == Mode.NEUTRAL and core.last_gesture[0] == "CHROME INTROUVABLE" and not core.mode_auto
+
+
+def test_accueil_ne_quitte_plus_chrome():
+    core = Core(Config())
+    core.front_app("chrome.exe", 1.0)
+    core.voice("iris", 2.0)
+    core.voice("accueil", 2.2)
+    core.front_app("pythonw.exe", 2.5)
+    assert core.mode == Mode.CHROME
 
 
 def test_chrome_front_hors_mode_ne_fait_rien():

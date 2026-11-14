@@ -28,7 +28,7 @@ class Mode:
     NEUTRAL = "NEUTRE"    # par défaut : la main ne déclenche rien, seule la voix agit
     READING = "LECTURE"
     MOUSE = "SOURIS"      # n'est plus un mode : un outil qui s'ajoute au mode en cours (voir Core.mouse)
-    CHROME = "CHROME"     # « iris chrome » : commandes de navigation à la voix ; quitté dès que Chrome n'est plus devant
+    CHROME = "CHROME"     # commandes de navigation à la voix, tant que Chrome est devant (automatique, 14/11)
     IDLE = READING  # compatibilité : l'ancien « repos » est désormais la lecture
 
 
@@ -57,6 +57,9 @@ CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivan
                  "haut": "HAUT DE PAGE", "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
                  "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
+# fenêtres d'Iris (fenêtre invisible des raccourcis Discord, accueil, aide…) : ne comptent jamais comme
+# « une autre appli devant » (14/11 : « iris mute » faisait quitter le mode Chrome, 53 « iris chrome » redits en 4 jours)
+IRIS_EXES = ("python.exe", "pythonw.exe")
 
 ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
            # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
@@ -149,6 +152,8 @@ class Core:
         if self.mode == Mode.MOUSE:
             self.mode, self.mouse = Mode.NEUTRAL, True
         self.mode_since = -1e9
+        self.mode_why = "démarrage"
+        self.mode_auto = False
         self.chrome_seen = False
         self.last_seen = None
         self.released = True
@@ -301,7 +306,8 @@ class Core:
         self.prev_palm, self.prev_t = palm, t
         return acts
 
-    def set_mode(self, mode, t, acts):
+    def set_mode(self, mode, t, acts, why="", auto=False):
+        """why : cause, notée dans le journal ; auto : changement suivi de l'appli devant (sans son)."""
         if mode == Mode.MOUSE:                # ancien appel (enregistrements, tests) : allume la souris
             self.set_mouse(True, t, acts)
             return
@@ -311,6 +317,8 @@ class Core:
             return
         self.mode = mode
         self.mode_since = t
+        self.mode_why = why
+        self.mode_auto = auto
         self.chrome_seen = False
         self._reset()
         acts.append(("mode", mode))
@@ -629,8 +637,8 @@ class Core:
                 self._end_scroll(t)
             elif self.mouse:
                 self.set_mouse(False, t, acts)  # souris allumée : « stop » l'éteint seulement, le mode reste
-            elif self.mode in (Mode.READING, Mode.CHROME):
-                self.set_mode(Mode.NEUTRAL, t, acts)
+            elif self.mode == Mode.READING:     # Chrome : le mode suit Chrome devant, « stop » ne le quitte plus
+                self.set_mode(Mode.NEUTRAL, t, acts, why="stop")
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
@@ -707,7 +715,7 @@ class Core:
             return None
         if word == "reprise" and t < self.listen_until:
             self.listen_until = -1e9
-            self.set_mode(Mode.NEUTRAL, t, acts)
+            self.set_mode(Mode.NEUTRAL, t, acts, why="reprise")   # Chrome devant : retrouvé au contrôle suivant
             self.last_word = (word, t, True)
             self.last_gesture = ("REPRISE", t)
         else:
@@ -870,20 +878,23 @@ class Core:
     def _cmd_reading(self, word, t, acts):
         self.set_mouse(False, t, acts)        # la main sert aux pages, plus au curseur
         if self.mode != Mode.READING:
-            self.set_mode(Mode.READING, t, acts)
+            self.set_mode(Mode.READING, t, acts, why="iris lecture")
         return "LECTURE"
 
     def _cmd_app(self, word, t, acts):
         acts.append(("open_app", word))
-        if word == "chrome":
-            self.set_mode(Mode.CHROME, t, acts)
-        elif self.mode == Mode.CHROME:
-            self.set_mode(Mode.NEUTRAL, t, acts)
+        if word == "chrome" and self.mode in (Mode.NEUTRAL, Mode.CHROME):
+            self.set_mode(Mode.CHROME, t, acts, why="iris chrome")
+        # discord / studio : le mode Chrome s'arrête quand leur fenêtre passe devant (front_app) ;
+        # accueil (fenêtre d'Iris) ne le fait plus quitter
 
     def _cmd_pause(self, word, t, acts):
         acts.append(("release_all",))
-        self.set_mode(Mode.DISABLED, t, acts)
+        self.set_mode(Mode.DISABLED, t, acts, why="pause")
         self.listen_until = -1e9
+        if t < self.calendar_until:           # rien ne reste ouvert pendant la pause
+            acts.append(("cal_close",))
+        self.calendar_until = self.help_until = -1e9
         return "PAUSE (dis IRIS REPRISE pour reprendre)"
 
     def scroll_gauge(self, t):
@@ -924,12 +935,27 @@ class Core:
         y = min(max(cy + (self.palm[1] - ay) * sh, sy), sy + sh - 1)
         return (x, y, self.cfg.arm_radius * sw)
 
-    def chrome_front(self, front, t):
-        """Appelé par la boucle : Chrome est-il au premier plan ? Le mode CHROME s'arrête dès qu'il ne l'est plus
-        (après l'avoir été, ou passé le délai d'ouverture)."""
+    def front_app(self, exe, t):
+        """Appelé par la boucle avec le programme au premier plan (« chrome.exe »…). Le mode Chrome suit Chrome :
+        devant -> mode Chrome (depuis le neutre ; la lecture, choisie à la voix, reste) ; une autre appli devant
+        -> neutre. Les fenêtres d'Iris et « rien devant » ne changent rien."""
         acts = []
-        if self.mode != Mode.CHROME:
+        if self.mode == Mode.DISABLED or not exe or exe in IRIS_EXES:
             return acts
+        if exe == "chrome.exe":
+            if self.mode == Mode.NEUTRAL:
+                self.set_mode(Mode.CHROME, t, acts, why="Chrome devant", auto=True)
+            if self.mode == Mode.CHROME:
+                self.chrome_seen = True
+        elif self.mode == Mode.CHROME and (self.chrome_seen or t - self.mode_since > CHROME_GRACE_S):
+            found = self.chrome_seen
+            self.set_mode(Mode.NEUTRAL, t, acts, why=f"{exe} devant", auto=found)
+            self.last_gesture = ("MODE CHROME QUITTE" if found else "CHROME INTROUVABLE", t)
+        return acts
+
+    def chrome_front(self, front, t):
+        """Ancien appel (tests) : Chrome devant ou une autre appli."""
+        return self.front_app("chrome.exe" if front else "autre.exe", t)
         if front:
             self.chrome_seen = True
         elif self.chrome_seen or t - self.mode_since > CHROME_GRACE_S:

@@ -130,6 +130,7 @@ def send_discord(action):
     keys = combo(action)
     if not keys:
         return False
+    prev = u.GetForegroundWindow()
     if SINK_HWND and not bring_to_front(SINK_HWND):
         log.warning("fenetre invisible pas au premier plan : raccourci Discord non envoye")
         return False
@@ -143,6 +144,10 @@ def send_discord(action):
         key(vk, True)
     time.sleep(0.05)
     log.info("discord : %s (%s)", action, "+".join(hex(k) for k in keys))
+    # la main rendue à la fenêtre d'avant (14/11 : après « mute », Chrome n'avait plus le clavier et le
+    # mode Chrome était quitté). Fenêtre disparue entre-temps : rien à rendre.
+    if prev and prev != SINK_HWND and u.IsWindow(prev) and not bring_to_front(prev):
+        log.warning("premier plan non rendu apres le raccourci Discord")
     return True
 
 
