@@ -41,7 +41,7 @@ WORDS = {
     "menu": "menu",
     "glisse": "glisse",
     "lâche": "lâche",
-    "défile": "défile",
+    "scroll": "scroll",   # « iris scroll » : défilement à la main / tête (ex-« défile », pris pour « défun » le 14/11)
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
     "espace": "espace",   # « iris espace » / « iris space » : touche Espace
@@ -79,13 +79,12 @@ WORDS = {
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
     "muet": "muet",       # « iris muet » : pareil, en français
-    "sourdine": "sourdine",  # « iris sourdine » : comme « défun » (casque + micro)
+    "sourdine": "sourdine",  # « iris sourdine » : sourdine Discord, casque + micro
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",
     "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
     "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
-    "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
     "message": "message", # « iris message » puis « dans général, … » (Whisper) : envoyé par le bot Discord
     "salon": "salon",     # « iris salon » puis le nom d'un salon vocal : le bot t'y déplace
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
@@ -113,7 +112,6 @@ END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la r
 LONE_MIN_CONF = 0.8
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un » seul était pris dans la conversation
-         ("des", "fun"): "défun", ("dis", "fun"): "défun",
          ("plus", "tard"): "plus tard",
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
@@ -124,7 +122,7 @@ CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seule
 
 # mots de la souris : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome (14/11 : partout,
 # ils étaient pris dans la conversation : clic 60 fois, menu 38, glisse 23)
-MOUSE_ONLY = {"clic", "double", "menu", "glisse", "lâche", "défile"}
+MOUSE_ONLY = {"clic", "double", "menu", "glisse", "lâche"}   # « scroll » écouté partout (sans souris)
 
 
 def grammar(extra=(), mouse=True):
@@ -162,7 +160,7 @@ GRAMMARS = _grammars()
 
 
 def _join_demute(words):
-    """Mots absents du modèle, entendus en deux morceaux : « des mute » = démute, « des fun » / « dis fun » = défun."""
+    """Mots absents du modèle, entendus en deux morceaux : « des mute » = démute."""
     out, i = [], 0
     while i < len(words):
         w = words[i]

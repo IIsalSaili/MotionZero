@@ -29,9 +29,9 @@ sequenceDiagram
 - Une seule commande par « iris » : l'écoute se referme après.
 - Un mot seul sans « iris » doit être net (confiance ≥ 0,8) et dit seul dans sa phrase.
 - Mot entendu sans « iris » alors qu'il en faut un : l'île affiche « … ignore : dis IRIS avant ».
-- Mots dits en deux morceaux, recollés : « des mute » = démute ; « des fun » / « dis fun » = défun ; « plus tard » ; « plein écran » ; « double clic » = double.
-- Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute ; sourdine = défun. (« ok », « okay », « wake » et « un mute » retirés le 14/11 : jamais utilisés, pris dans la conversation.)
-- Mots de la souris (`clic`, `double`, `menu`, `glisse`, `lâche`, `défile`) : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome. Ailleurs ils ne sont même pas cherchés : dis « iris souris » d'abord.
+- Mots dits en deux morceaux, recollés : « des mute » = démute ; « plus tard » ; « plein écran » ; « double clic » = double.
+- Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute. (« ok », « okay », « wake » et « un mute » retirés le 14/11 : jamais utilisés, pris dans la conversation. « défun » retiré le 14/11 : « sourdine » seul.)
+- Mots de la souris (`clic`, `double`, `menu`, `glisse`, `lâche`) : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome. Ailleurs ils ne sont même pas cherchés : dis « iris souris » d'abord.
 
 **Légende** — colonne « Sans iris ? » : « oui » marche toujours sans « iris » ; « répétable » : redit seul dans les 2 s après « iris + mot » ; « souris » : quand la souris est allumée ; « Chrome » : en mode Chrome ; « non » : il faut dire « iris » avant.
 Mode : « tous » sauf mention.
@@ -59,7 +59,7 @@ Mode : « tous » sauf mention.
 | `menu` | clic droit | souris | souris allumée, Chrome |
 | `glisse` | enfonce le bouton gauche (glisser) | non | souris allumée, Chrome |
 | `lâche` | relâche le bouton | oui si un glisser est en cours | tous |
-| `défile` | défilement à la main / tête ; redit = fin | non | souris allumée, Chrome |
+| `scroll` | défilement à la main / tête ; redit = fin (ex-« défile », pris pour « défun ») | non | tous |
 
 ## Clavier et texte
 
@@ -130,7 +130,7 @@ sequenceDiagram
 |---|---|---|---|
 | `mute` (`muet`) | coupe le micro Discord | non | tous |
 | `démute` (« des mute ») | rallume le micro | non | tous |
-| `défun` (« des fun », « dis fun », `sourdine`) | sourdine casque + micro | non | tous |
+| `sourdine` | sourdine casque + micro | non | tous |
 | `message` | puis « dans général, … » : envoyé par le bot | non | tous |
 | `salon` | puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
@@ -211,7 +211,7 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 |---|---|
 | Toujours | `stop` ; `lâche` pendant un glisser |
 | 2 s après « iris skip / back / efface / undo / redo / espace / suivant / précédent » | le même mot (et les autres touches répétables) ; chaque mot relance les 2 s |
-| Souris allumée | `clic`, `double`, `menu` (et `glisse`, `lâche`, `défile` avec « iris ») |
+| Souris allumée | `clic`, `double`, `menu` (et `glisse`, `lâche` avec « iris ») |
 | Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |
 | Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |

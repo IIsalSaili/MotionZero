@@ -62,8 +62,8 @@ CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avan
 IRIS_EXES = ("python.exe", "pythonw.exe")
 
 ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
-           # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
-           "muet": "mute", "sourdine": "défun"}   # « ok / okay » retirés le 14/11 (jamais utilisés)
+           # français et anglais font la même chose (12/11) ; « défun » retiré le 14/11 : « sourdine » seul
+           "muet": "mute"}   # « ok / okay » retirés le 14/11 (jamais utilisés)
 EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"]}   # VS Code (pas Ctrl+Tab :
                           # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
@@ -81,7 +81,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "claude": "MICRO CLAUDE : parle",
                 "type": "DICTEE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "sourdine": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
@@ -116,10 +116,10 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "pars": (("bot_leave",), "IRIS QUITTE LE VOCAL"),
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
-                  "défun": (("discord_deafen",), None)}
+                  "sourdine": (("discord_deafen",), None)}
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
 COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag", "lâche": "release",
-            "défile": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
+            "scroll": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
             "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
@@ -761,7 +761,7 @@ class Core:
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
-        if word != "défile" and self.scrolling(t):
+        if word != "scroll" and self.scrolling(t):
             self._end_scroll(t)               # toute autre commande sort du défilement d'abord
         label = VOICE_LABELS.get(word, word.upper())
         if word in SIMPLE_ACTIONS:
