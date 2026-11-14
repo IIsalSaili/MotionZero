@@ -35,7 +35,7 @@ def test_icones_discord():
 
 
 def test_memoire_mute_demute_defun(monkeypatch):
-    """Au lancement : allumé. mute -> coupé (une seule fois), démute -> allumé, défun bascule la sourdine."""
+    """Au lancement : allumé. mute -> coupé (une seule fois), démute -> allumé, sourdine bascule la sourdine."""
     from motionzero import app, vscode
     sent = []
     monkeypatch.setattr(vscode, "discord_mute_toggle", lambda: sent.append("mute") or True)

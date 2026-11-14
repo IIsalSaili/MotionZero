@@ -318,7 +318,7 @@ def test_iris_viens_et_pars():
 def test_francais_et_anglais_font_pareil():
     from motionzero.config import Config
     from motionzero.core import Core
-    for fr, en in (("muet", "mute"), ("sourdine", "défun")):
+    for fr, en in (("muet", "mute"),):
         a, b = Core(Config()), Core(Config())
         a.voice("iris", 1.0)
         b.voice("iris", 1.0)

@@ -119,7 +119,7 @@ def test_fenetres_d_iris_ne_font_pas_quitter_chrome():
 def test_mute_demute_gardent_chrome():
     core = Core(Config())
     core.front_app("chrome.exe", 1.0)
-    for i, w in enumerate(("mute", "démute", "défun", "muet", "sourdine")):
+    for i, w in enumerate(("mute", "démute", "muet", "sourdine")):
         core.voice("iris", 2.0 + i)
         core.voice(w, 2.2 + i)
         core.front_app("pythonw.exe", 2.4 + i)           # fenêtre invisible devant
@@ -276,9 +276,13 @@ def test_double_clic_dit_en_entier():
     assert [w["word"] for w in accepted_words(res)] == ["double"]
     res_iris = {"result": [{"word": "iris", "conf": 1.0, "start": 0, "end": 0.3}] + res["result"]}
     assert [w["word"] for w in accepted_words(res_iris)] == ["iris", "double"]
-    for g in GRAMMARS.values():
-        phrases = json.loads(g)
+    for name in ("souris", "chrome"):                    # mots de la souris : souris allumée ou Chrome (14/11)
+        phrases = json.loads(GRAMMARS[name])
         assert "double" in phrases and "double clic" in phrases
+    for name in ("base", "calendrier"):
+        phrases = json.loads(GRAMMARS[name])
+        assert not {"clic", "double", "double clic", "menu", "glisse", "lâche"} & set(phrases)
+        assert "scroll" in phrases and "défile" not in phrases   # scroll écouté partout (14/11)
 
 
 def _fausse_fenetre(monkeypatch, devant, code_trouve=True):

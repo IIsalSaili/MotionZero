@@ -22,7 +22,7 @@ def test_phrase_avec_mots_inconnus_ignoree():
 
 def test_plusieurs_commandes_d_affilee_ignorees():
     """« arrête de faire défiler » donnait annule + défile + défile : refusé."""
-    assert accepted_words(res(("annule", 0.72), ("défile", 0.97), ("défile", 1.0))) == []
+    assert accepted_words(res(("annule", 0.72), ("scroll", 0.97), ("scroll", 1.0))) == []
 
 
 def test_confiance_faible_ignoree():
@@ -148,7 +148,7 @@ def test_glisse_lache_et_securite():
 # --- mot + geste : « défile » ------------------------------------------------------
 def _defile(core, clk):
     core.voice("iris", clk.t)
-    core.voice("défile", clk.t)
+    core.voice("scroll", clk.t)
 
 
 def _scrolls(acts):
@@ -380,25 +380,34 @@ def test_iris_question_sans_rien_dire_est_annulee():
     assert core.ask_tick(9.5, last_speech_t=0.0) == [("ask_cancel",)] and not core.asking
 
 
-def test_iris_defun_sourdine_discord():
+def test_iris_sourdine_discord():
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("défun", 1.5) == [("discord_deafen",)]
+    assert core.voice("sourdine", 1.5) == [("discord_deafen",)]
 
 
-def test_des_fun_et_dis_fun_sont_compris_comme_defun():
-    for first in ("des", "dis"):
-        r = {"result": [{"word": "iris", "conf": 1.0, "start": 0.0, "end": 0.3},
-                        {"word": first, "conf": 0.9, "start": 0.4, "end": 0.5},
-                        {"word": "fun", "conf": 0.95, "start": 0.5, "end": 0.8}]}
-        assert [w["word"] for w in accepted_words(r)] == ["iris", "défun"]
+def test_defun_retire_scroll_remplace_defile():
+    """14/11 : « défile » dit en VS Code était pris pour « défun » (sourdine). « défun » retiré, « défile » devient
+    « scroll », écouté dans toutes les listes de mots."""
+    import json
+    from motionzero.voice import GRAMMARS, WORDS
+    assert "défun" not in WORDS and "défile" not in WORDS and "scroll" in WORDS
+    for name, g in GRAMMARS.items():
+        phrases = set(json.loads(g))
+        assert "scroll" in phrases, name
+        assert not {"défun", "des fun", "dis fun", "défile"} & phrases, name
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("défun", 1.5) == []
 
 
-def test_unmute_vaut_demute():
-    r = {"result": [{"word": "iris", "conf": 1.0, "start": 0.0, "end": 0.3},
-                    {"word": "un", "conf": 0.9, "start": 0.4, "end": 0.5},
-                    {"word": "mute", "conf": 0.95, "start": 0.5, "end": 0.8}]}
-    assert [w["word"] for w in accepted_words(r)] == ["iris", "démute"]
+def test_un_mute_retire_des_mute_reste():
+    """14/11 : « un mute » retiré (« un » seul pris dans la conversation) ; « des mute » reste démute."""
+    import json
+    from motionzero.voice import GRAMMARS
+    for g in GRAMMARS.values():
+        phrases = json.loads(g)
+        assert "un mute" not in phrases and "des mute" in phrases
 
 
 def test_iris_accueil_ouvre_la_page_d_accueil_et_home_n_existe_plus():
@@ -493,3 +502,38 @@ def test_mots_du_calendrier_seulement_calendrier_ouvert():
     for w in ("iris", "suivant", "précédent", "stop", "ferme", "merci"):
         assert w in base and w in cal
     assert len(base) < 100
+
+
+def test_skip_redit_vite_reste_un_mot_seul():
+    """14/11 : « skip skip skip » -> reconnaissance libre « skype skype skype skype skype » (5 mots) : refusé."""
+    from motionzero.voice import confirmed
+    w = [{"word": "skip", "conf": 1.0}]
+    assert confirmed(w, "skype skype skype skype skype", 1)
+    assert not confirmed(w, "tu as vu la série hier soir", 1)          # vraie phrase : toujours refusée
+
+
+def test_envoie_attendu_apres_une_dictee():
+    """Juste après une dictée : seuil normal (0,6) et texte libre vide accepté, pour envoie / annule seulement."""
+    from motionzero.voice import accepted_words, confirmed
+    res = {"result": [{"word": "envoie", "conf": 0.7, "start": 0, "end": 0.4}]}
+    assert accepted_words(res) == []                                   # hors confirmation : 0,8 exigé
+    relaxed = frozenset({"envoie", "envoyé", "annule"})
+    assert [w["word"] for w in accepted_words(res, relaxed=relaxed)] == ["envoie"]
+    w = [{"word": "envoie", "conf": 0.7}]
+    assert confirmed(w, "", 1, relaxed=relaxed) and not confirmed(w, "", 1)
+    assert not confirmed(w, "et après on lui envoie le truc demain", 1, relaxed=relaxed)   # conversation
+    assert not confirmed([{"word": "studio", "conf": 0.7}], "", 1, relaxed=relaxed)
+
+
+def test_espace_et_onglet_vs_code_repetables():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("espace", 1.2)
+    assert core.voice("espace", 2.0) == [("hotkey", ["space"])]        # sans « iris », dans les 2 s
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    first = core.voice("suivant", 1.2)
+    assert core.voice("suivant", 2.0) == first and first[0][0] == "editor_tab"
+    assert core.voice("suivant", 5.0) == []                            # 2 s passées : il faut « iris »

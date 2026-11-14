@@ -70,6 +70,7 @@ class Typer:
         self.asker = asker          # pour sa transcription Whisper (modèle déjà chargé)
         self.jobs = queue.Queue()
         self.last_len = 0           # caractères écrits par la dernière dictée (pour « annule »)
+        self.done = queue.Queue()   # True (texte écrit) / False (rien compris, erreur) : lu par la boucle principale
         threading.Thread(target=self._run, name="type", daemon=True).start()
 
     def submit(self, audio):
@@ -86,10 +87,18 @@ class Typer:
             kind, audio = self.jobs.get()
             try:
                 if kind == "type":
-                    text = spoken_symbols(self.asker._transcribe(audio, 16000))
+                    try:
+                        text = spoken_symbols(self.asker._transcribe(audio, 16000))
+                    except Exception:
+                        self.done.put(False)
+                        raise
                     log.info("dictee : %s", text)
+                    if not text:
+                        self.done.put(False)
+                        continue
                     type_text(text)
                     self.last_len = len(_utf16_units(text))
+                    self.done.put(True)       # c'est maintenant que « envoie / annule » ont un sens (14/11)
                 elif kind == "send":
                     press("enter")
                 elif kind == "erase":

@@ -81,7 +81,7 @@ def _defile(palm, pointer="main"):
     core.screen = (0, 0, 1000, 800)
     core.pointer = pointer
     core.voice("iris", 1.0)
-    core.voice("défile", 1.5)
+    core.voice("scroll", 1.5)
     core.prev_t = 2.0
     core.palm = palm
     return core

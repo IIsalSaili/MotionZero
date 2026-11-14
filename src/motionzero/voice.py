@@ -41,7 +41,7 @@ WORDS = {
     "menu": "menu",
     "glisse": "glisse",
     "lâche": "lâche",
-    "défile": "défile",
+    "scroll": "scroll",   # « iris scroll » : défilement à la main / tête (ex-« défile », pris pour « défun » le 14/11)
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
     "espace": "espace",   # « iris espace » / « iris space » : touche Espace
@@ -79,13 +79,12 @@ WORDS = {
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
     "muet": "muet",       # « iris muet » : pareil, en français
-    "sourdine": "sourdine",  # « iris sourdine » : comme « défun » (casque + micro)
+    "sourdine": "sourdine",  # « iris sourdine » : sourdine Discord, casque + micro
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",
     "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
     "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
-    "défun": "défun",     # « iris défun / difun » : sourdine Discord, casque + micro (entendu « des fun » / « dis fun »)
     "message": "message", # « iris message » puis « dans général, … » (Whisper) : envoyé par le bot Discord
     "salon": "salon",     # « iris salon » puis le nom d'un salon vocal : le bot t'y déplace
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
@@ -93,12 +92,9 @@ WORDS = {
     "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
-    "merci": "merci",     # « iris merci » / « iris ok » : retire ce qui est affiché en haut (rappel, réponse…)
-    "ok": "ok",
-    "okay": "okay",
+    "merci": "merci",     # « iris merci » : retire ce qui est affiché en haut (rappel, réponse…) ; « ok » retiré le 14/11
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
-    "réveil": "réveil",   # « iris réveil » / « iris wake (up) » : rallume l'écran éteint
-    "wake": "wake",
+    "réveil": "réveil",   # « iris réveil » : rallume l'écran éteint (« wake » retiré le 14/11 : jamais utilisé)
     "chronomètre": "chronomètre",   # « iris chronomètre » : démarre / arrête le chrono
     "timer": "timer",     # « iris timer » puis la durée : compte à rebours qui sonne à zéro
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
@@ -114,9 +110,11 @@ WORDS = {
 WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
+# « iris » puis la commande, d'un trait : 14/11, « iris m'a mis en sourdine » (dit dans la conversation, voix basse)
+# a été entendu « iris sourdine » et a mis la sourdine. Au-delà de ce blanc, ce n'est pas une commande.
+IRIS_GAP_S = 0.35
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
-SPLIT = {("des", "mute"): "démute", ("un", "mute"): "démute",   # « unmute » = « démute », au choix
-         ("des", "fun"): "défun", ("dis", "fun"): "défun",
+SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un » seul était pris dans la conversation
          ("plus", "tard"): "plus tard",
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
@@ -125,9 +123,15 @@ SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement �
 CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seulement calendrier ouvert
 
 
-def grammar(extra=()):
-    phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in CAL_ONLY]
-    phrases += [f"{a} {b}" for a, b in SPLIT]
+# mots de la souris : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome (14/11 : partout,
+# ils étaient pris dans la conversation : clic 60 fois, menu 38, glisse 23)
+MOUSE_ONLY = {"clic", "double", "menu", "glisse", "lâche"}   # « scroll » écouté partout (sans souris)
+
+
+def grammar(extra=(), mouse=True):
+    skip = CAL_ONLY | (set() if mouse else MOUSE_ONLY)
+    phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in skip]
+    phrases += [f"{a} {b}" for a, b in SPLIT if mouse or SPLIT[(a, b)] not in MOUSE_ONLY]
     phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
@@ -143,7 +147,7 @@ def _calendar_words():
 
 
 _calendar_words()
-GRAMMAR = grammar()
+GRAMMAR = grammar(mouse=False)
 
 
 def _grammars():
@@ -151,14 +155,15 @@ def _grammars():
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
-    return {"base": GRAMMAR, "chrome": grammar(CHROME_KEYS), "calendrier": grammar(CAL)}
+    return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
+            "calendrier": grammar(CAL, mouse=False)}
 
 
 GRAMMARS = _grammars()
 
 
 def _join_demute(words):
-    """Mots absents du modèle, entendus en deux morceaux : « des mute » = démute, « des fun » / « dis fun » = défun."""
+    """Mots absents du modèle, entendus en deux morceaux : « des mute » = démute."""
     out, i = [], 0
     while i < len(words):
         w = words[i]
@@ -173,7 +178,7 @@ def _join_demute(words):
     return out
 
 
-def accepted_words(res, min_conf=0.6, max_words=1):
+def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     """Mots acceptés d'un résultat Vosk.
     - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
       fond (vidéo, Discord), la reconnaissance colle « iris claude » au bruit d'avant (« stop pause stop iris
@@ -190,13 +195,26 @@ def accepted_words(res, min_conf=0.6, max_words=1):
         if nxt is None:
             return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
         if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
+            if _gap(words[i], nxt) > IRIS_GAP_S:
+                return []                              # « iris m'a mis en sourdine » : des mots au milieu
             return [words[i], nxt]
     if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
         return []
     # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
     # « démute » à 0,81 étaient des faux déclenchements
-    need = min_conf if words[0]["word"] == WAKE_WORD else max(min_conf, LONE_MIN_CONF)
+    # relaxed : mots attendus à ce moment précis (« envoie / annule » juste après une dictée) : seuil normal
+    lone = words[0]["word"] != WAKE_WORD and words[0]["word"] not in relaxed
+    need = max(min_conf, LONE_MIN_CONF) if lone else min_conf
     return [w for w in words if w["conf"] >= need]
+
+
+def _gap(a, b):
+    """Blanc entre deux mots de la grammaire (s). La grammaire fermée avale les mots qu'elle ne connaît pas : un
+    long blanc entre « iris » et la commande, c'est qu'on a dit autre chose au milieu."""
+    try:
+        return max(0.0, float(b["start"]) - float(a["end"]))
+    except (KeyError, TypeError, ValueError):
+        return 0.0
 
 
 FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
@@ -209,7 +227,12 @@ AFTER_IRIS_S = 4.0          # mot dit seul juste après un « iris » accepté :
 SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
 
 
-def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False):
+def _dedupe(tokens):
+    """« skype skype skype » -> « skype » : un mot redit vite (« skip skip skip ») n'est pas une phrase."""
+    return [tok for i, tok in enumerate(tokens) if i == 0 or tok != tokens[i - 1]]
+
+
+def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, relaxed=frozenset()):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
@@ -229,7 +252,9 @@ def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False):
         return True
     if after_iris and names[0] != WAKE_WORD and len(names) == 1:
         return True
-    tokens = free_text.lower().split()
+    tokens = _dedupe(free_text.lower().split())
+    if len(names) == 1 and names[0] in relaxed and len(tokens) <= FREE_MAX_WORDS:
+        return True                   # attendu (après une dictée) : un texte libre vide confirme aussi (14/11)
     if names[0] == WAKE_WORD:
         sure = QUIET_IRIS_CONF if quiet else IRIS_SURE_CONF
         if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= sure:
@@ -243,7 +268,8 @@ def rejection(res, min_conf=0.6):
     words = res.get("result", [])
     if not any(w["word"] == WAKE_WORD for w in words) or accepted_words(res, min_conf):
         return None
-    return " ".join(f"{w['word']}({w['conf']:.2f})" for w in words)
+    return " ".join(f"{w['word']}({w['conf']:.2f})" + (f" [blanc {_gap(w, n):.2f} s]" if w["word"] == WAKE_WORD
+                    and _gap(w, n) > IRIS_GAP_S else "") for w, n in zip(words, words[1:] + [words[-1]]))
 
 
 @dataclass
@@ -281,6 +307,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.quiet = False          # voix basse : écrit par la boucle principale (un booléen), lu ici
+        self.relaxed = frozenset()  # mots attendus maintenant (« envoie / annule » après une dictée) : idem
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
@@ -400,12 +427,13 @@ class VoiceListener:
         why = rejection(res, self.min_conf)
         if why:
             log.info("iris rejete : %s", why)
-        words = accepted_words(res, self.min_conf)
+        relaxed = getattr(self, "relaxed", frozenset())   # (écouteurs de test créés sans __init__)
+        words = accepted_words(res, self.min_conf, relaxed=relaxed)
         if not words:
             return
         after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
-                                                   self.quiet):
+                                                   self.quiet, relaxed):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())

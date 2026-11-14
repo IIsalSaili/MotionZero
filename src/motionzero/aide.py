@@ -13,7 +13,7 @@ GROUPS = [
         ("menu", "clic droit"),
         ("glisse", "tenir le bouton"),
         ("lâche", "le relâcher"),
-        ("défile", "monte / descends la main"),
+        ("scroll", "monte / descends la main"),
         ("souris", "allume / éteint"),
         ("tête / main", "qui guide la souris"),
         ("centre", "curseur au centre"),
@@ -50,7 +50,7 @@ GROUPS = [
     ]),
     ("Discord", [
         ("mute / démute", "le micro"),
-        ("défun", "sourdine complète"),
+        ("sourdine", "sourdine complète"),
         ("message", "puis « dans … »"),
         ("salon", "puis son nom"),
         ("silence / lis", "lus / pas lus"),

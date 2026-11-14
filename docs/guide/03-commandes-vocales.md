@@ -29,8 +29,9 @@ sequenceDiagram
 - Une seule commande par « iris » : l'écoute se referme après.
 - Un mot seul sans « iris » doit être net (confiance ≥ 0,8) et dit seul dans sa phrase.
 - Mot entendu sans « iris » alors qu'il en faut un : l'île affiche « … ignore : dis IRIS avant ».
-- Mots dits en deux morceaux, recollés : « des mute » / « un mute » = démute ; « des fun » / « dis fun » = défun ; « plus tard » ; « plein écran » ; « double clic » = double.
-- Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute ; sourdine = défun ; ok / okay = merci.
+- Mots dits en deux morceaux, recollés : « des mute » = démute ; « plus tard » ; « plein écran » ; « double clic » = double.
+- Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute. (« ok », « okay », « wake » et « un mute » retirés le 14/11 : jamais utilisés, pris dans la conversation. « défun » retiré le 14/11 : « sourdine » seul.)
+- Mots de la souris (`clic`, `double`, `menu`, `glisse`, `lâche`) : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome. Ailleurs ils ne sont même pas cherchés : dis « iris souris » d'abord.
 
 **Légende** — colonne « Sans iris ? » : « oui » marche toujours sans « iris » ; « répétable » : redit seul dans les 2 s après « iris + mot » ; « souris » : quand la souris est allumée ; « Chrome » : en mode Chrome ; « non » : il faut dire « iris » avant.
 Mode : « tous » sauf mention.
@@ -53,12 +54,12 @@ Mode : « tous » sauf mention.
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `clic` | clic gauche, là où l'on visait au début de « iris » | souris Chrome | tous |
-| `double` (ou « double clic ») | double clic | souris Chrome | tous |
-| `menu` | clic droit | souris | tous |
-| `glisse` | enfonce le bouton gauche (glisser) | non | tous |
+| `clic` | clic gauche, là où l'on visait au début de « iris » | souris Chrome | souris allumée, Chrome |
+| `double` (ou « double clic ») | double clic | souris Chrome | souris allumée, Chrome |
+| `menu` | clic droit | souris | souris allumée, Chrome |
+| `glisse` | enfonce le bouton gauche (glisser) | non | souris allumée, Chrome |
 | `lâche` | relâche le bouton | oui si un glisser est en cours | tous |
-| `défile` | défilement à la main / tête ; redit = fin | non | tous |
+| `scroll` | défilement à la main / tête ; redit = fin (ex-« défile », pris pour « défun ») | non | tous |
 
 ## Clavier et texte
 
@@ -66,8 +67,8 @@ Mode : « tous » sauf mention.
 |---|---|---|---|
 | `entrée` | touche Entrée | non | tous |
 | `envoie` (`envoyé`) | Entrée ; après une dictée : envoie le texte | oui après dictée / rappel | tous |
-| `annule` | VS Code devant : vide le message de Claude ; sinon Échap. Après dictée : efface | oui après dictée / rappel | tous |
-| `espace` / `space` | touche Espace (pause vidéo) | Chrome | tous |
+| `annule` | VS Code devant : vide le message de Claude ; sinon Échap. Après « iris type » : efface la dictée seule, même avec « iris » dans les 30 s (tant qu'aucune autre commande n'a suivi) | oui après dictée / rappel | tous |
+| `espace` / `space` | touche Espace (pause vidéo) | répétable Chrome | tous |
 | `copie` / `colle` | Ctrl+C / Ctrl+V | non | tous |
 | `sélection` | tout sélectionner (Ctrl+A) | non | tous |
 | `coupe` | Ctrl+X | non | tous |
@@ -85,12 +86,12 @@ Mode : « tous » sauf mention.
 | `réduis` | fenêtre réduite (Win+Bas) | non | hors Chrome (en Chrome : zoom −) |
 | `gauche` / `droite` | fenêtre ancrée à gauche / droite (Win+flèche) | non | tous |
 | `tab` | fenêtre suivante (Alt+Tab) | non | tous |
-| `suivant` / `précédent` | VS Code devant : onglet suivant / précédent (Ctrl+Page suivante / précédente), par exemple les onglets Claude ; ailleurs, rien n'est envoyé | non | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
+| `suivant` / `précédent` | VS Code devant : onglet suivant / précédent (Ctrl+Page suivante / précédente), par exemple les onglets Claude ; ailleurs, rien n'est envoyé | oui VS Code devant ; répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris (le mode Chrome s'arrête quand Discord ou VS Code passe devant ; l'accueil ne le quitte pas) | non | tous |
 | `ouvre` | puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
-| `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | non | hors Chrome (en Chrome : ferme l'onglet) |
-| `réveil` / `wake` | rallume l'écran éteint | non | tous |
+| `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | oui si quelque chose est affiché en haut | hors Chrome (en Chrome : ferme l'onglet) |
+| `réveil` | rallume l'écran éteint | non | tous |
 | `volume` | puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
 
 ## Claude
@@ -128,8 +129,8 @@ sequenceDiagram
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `mute` (`muet`) | coupe le micro Discord | non | tous |
-| `démute` (« des mute », « un mute ») | rallume le micro | non | tous |
-| `défun` (« des fun », « dis fun », `sourdine`) | sourdine casque + micro | non | tous |
+| `démute` (« des mute ») | rallume le micro | non | tous |
+| `sourdine` | sourdine casque + micro | non | tous |
 | `message` | puis « dans général, … » : envoyé par le bot | non | tous |
 | `salon` | puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
@@ -141,8 +142,8 @@ sequenceDiagram
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `rappel` | puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
-| `merci` (`ok`, `okay`) | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui calendrier ouvert | tous |
-| `plus tard` | le rappel affiché revient dans 10 min | non | tous |
+| `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
+| `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
 | `timer` | puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
 | `chronomètre` | démarre ; redit : arrête | non | tous |
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
@@ -209,11 +210,14 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 | Contexte | Mots |
 |---|---|
 | Toujours | `stop` ; `lâche` pendant un glisser |
-| 2 s après « iris skip / back / efface / undo / redo » | `skip`, `back`, `efface`, `undo`, `redo` (chaque mot relance les 2 s) |
-| Souris allumée | `clic`, `double`, `menu` |
+| 2 s après « iris skip / back / efface / undo / redo / espace / suivant / précédent » | le même mot (et les autres touches répétables) ; chaque mot relance les 2 s |
+| Souris allumée | `clic`, `double`, `menu` (et `glisse`, `lâche` avec « iris ») |
+| VS Code devant (hors Chrome) | `suivant`, `précédent` |
+| Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
+| Rappel affiché | `plus tard` |
 | Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |
-| Après « iris type » (3 s) | `envoie`, `annule` |
+| Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |
 | Après la répétition d'un rappel (20 s) | `envoie`, `annule` |
 | Calendrier ouvert | mots du calendrier, `ferme`, `merci`, `stop` |
 | Bulle « SOURIS ? » ou menu de clic affichés | l'écoute est ouverte : tout mot de commande |

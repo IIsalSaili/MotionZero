@@ -62,14 +62,17 @@ CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avan
 IRIS_EXES = ("python.exe", "pythonw.exe")
 
 ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
-           # français et anglais font la même chose (12/11) ; « deafen » n'existe pas dans le modèle : « défun »
-           "muet": "mute", "sourdine": "défun",
-           "ok": "merci", "okay": "merci"}   # « iris ok » = « iris merci » : retire l affichage du haut (13/11)
+           # français et anglais font la même chose (12/11) ; « défun » retiré le 14/11 : « sourdine » seul
+           "muet": "mute"}   # « ok / okay » retirés le 14/11 (jamais utilisés)
 EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"]}   # VS Code (pas Ctrl+Tab :
                           # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
 CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
-REPEATABLE = ("skip", "back", "efface", "undo", "redo")   # après « iris skip / undo… », redits seuls sans « iris »
+# après « iris skip / undo… », redits seuls sans « iris » pendant 2 s. 14/11 : + espace et suivant / précédent
+# (onglets de VS Code), souvent redits avec « iris » (6 fois chacun en 4 jours) ; en Chrome ils sont déjà libres
+TYPE_WAIT_S = 20.0        # « iris type » : attente maximale du texte (Whisper) avant d'abandonner la confirmation
+TYPE_ERASE_S = 30.0       # « iris annule » dit après la confirmation : efface encore la dictée seule (pas tout le champ)
+REPEATABLE = ("skip", "back", "efface", "undo", "redo", "espace", "space", "suivant", "précédent")
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
@@ -78,7 +81,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "claude": "MICRO CLAUDE : parle",
                 "type": "DICTEE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
-                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "défun": "DISCORD SOURDINE", "souris": "SOURIS",
+                "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "sourdine": "DISCORD SOURDINE", "souris": "SOURIS",
                 "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
@@ -105,7 +108,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
                   "tab": (("alt_tab",), None),
-                  "réveil": (("wake",), "ECRAN RALLUME"), "wake": (("wake",), "ECRAN RALLUME"),
+                  "réveil": (("wake",), "ECRAN RALLUME"),
                   "chronomètre": (("chrono",), "CHRONOMETRE"),
                   "plus tard": (("rappel_tard",), None),
                   "activation": (("bot_activate",), "BOT VOCAL : ACTIVATION"),   # lance le bot, charge Whisper
@@ -113,10 +116,10 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "pars": (("bot_leave",), "IRIS QUITTE LE VOCAL"),
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
-                  "défun": (("discord_deafen",), None)}
+                  "sourdine": (("discord_deafen",), None)}
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
 COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag", "lâche": "release",
-            "défile": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
+            "scroll": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
             "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
@@ -195,6 +198,8 @@ class Core:
         self.timer_running = False            # mis à jour par les rappels (même fil) : « iris timer » l'annule
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
+        self.repeat_acts = {}                 # mot répétable -> (actions, libellé affiché)
+        self.type_erase_until = -1e9          # « iris annule » efface la dernière dictée jusque-là (14/11)
         self.asking = False                   # « iris question » : la question est en cours d'enregistrement
         self.ask_t0 = -1e9
         # voix
@@ -207,6 +212,8 @@ class Core:
         self._scroll_acc = 0.0
         self.last_word = None       # (mot, t, accepté ?)
         self.top_shown = False      # réponse / rappel / liste affichés en haut : écrit par la boucle principale
+        self.reminder_shown = False # un rappel affiché (pour « plus tard » sans « iris ») : écrit par la boucle
+        self.front_exe = ""         # dernière appli à toi au premier plan (fenêtres d'Iris exclues), via front_app
         # dictée Claude dans VS Code : micro allumé, puis texte dicté en attente de « envoie » / « annule »
         self.dictating = False
         self.dictation_t0 = -1e9
@@ -556,11 +563,17 @@ class Core:
         Ordre des étapes = ordre de priorité : chacune traite le mot (et renvoie les actions) ou passe (None)."""
         word = ALIASES.get(word, word)
         if self.dictating or self.asking or self.typing or self.opening:
-            return []  # dictée ou question en cours : tes mots sont du texte, pas des commandes
+            # dictée ou question en cours : tes mots sont du texte, pas des commandes. Noté refusé : le journal
+            # disait « acceptee » (d'après le mot d'avant), ce qui faussait les comptes (14/11)
+            self.last_word = (word, t, False)
+            return []
         acts = []
         for step in (self._v_confirm, self._v_calendar, self._v_help, self._v_stop, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
             if done is not None:
+                lw = self.last_word
+                if word not in (WAKE_WORD, "annule") and lw and lw[0] == word and lw[2]:
+                    self.type_erase_until = -1e9   # autre commande faite : « iris annule » reprend son sens habituel
                 return done
         if not self.listening(t):
             self.last_word = (word, t, False)  # entendu mais écoute fermée : ignoré
@@ -572,6 +585,13 @@ class Core:
     def _v_confirm(self, word, t, t_start, acts):
         """Juste après « iris type / claude / rappel » : envoie / annule (et claude) marchent sans « iris »."""
         if not self.confirming(t):
+            if word == "annule" and t < self.type_erase_until and self.listening(t):
+                # « iris annule » juste après une dictée : n'efface que la dictée (dans VS Code, l'« annule »
+                # habituel vide tout le champ : mesuré le 12/11, Ctrl+A puis Retour arrière)
+                self.type_erase_until = self.listen_until = -1e9
+                self.last_word = (word, t, True)
+                self.last_gesture = ("TEXTE EFFACE", t)
+                return [("type_erase",)]
             return None
         if self.confirm_kind == "type" and word != WAKE_WORD:
             # tout autre mot : le texte reste tel quel et le mot est traité normalement
@@ -607,7 +627,8 @@ class Core:
                 self.calendar_until = -1e9
                 acts.append(("cal_close",))       # puis le « stop » habituel
         elif (word in CAL_WORDS and not (self.mode == Mode.CHROME and word in CHROME_KEYS)
-              and not (word in EDITOR_TABS and self.listening(t))):   # « iris suivant » : onglet de VS Code
+              and not (word in EDITOR_TABS and (self.listening(t) or self._in_vscode()   # onglets de VS Code
+                                                or (t < self.repeat_until and word in self.repeat_acts)))):
             self.last_word = (word, t, False)     # calendrier fermé : ces mots ne font rien, sans bruit
             return acts
         return None
@@ -659,13 +680,30 @@ class Core:
     def _v_without_iris(self, word, t, t_start, acts):
         """Mots acceptés sans « iris » selon le contexte : répétition (skip, efface…), mode Chrome, souris allumée."""
         if t < self.repeat_until:
-            if word in REPEATABLE:            # « skip, skip, skip » : chaque mot relance la fenêtre de 2 s
+            if word in self.repeat_acts:      # « skip, skip, skip » : chaque mot relance la fenêtre de 2 s
                 self.repeat_until = t + self.cfg.repeat_s
                 self.last_word = (word, t, True)
-                self.last_gesture = (VOICE_LABELS[word], t)
-                return [("hotkey", VOICE_HOTKEYS[word])]
+                self.last_gesture = self.repeat_acts[word][1]
+                return list(self.repeat_acts[word][0])
             self.repeat_until = -1e9          # autre mot : fin de la répétition, comportement habituel
         chrome = self.mode == Mode.CHROME
+        if word in EDITOR_TABS and self._in_vscode():
+            # VS Code devant : onglet suivant / précédent sans « iris » (ne servent qu'à ça hors Chrome, 14/11)
+            label = "ONGLET " + ("SUIVANT" if word == "suivant" else "PRECEDENT") + " (VS Code)"
+            self._heard_alone(word, t, label)
+            self._arm_repeat(word, t, [("editor_tab", EDITOR_TABS[word])])
+            return [("editor_tab", EDITOR_TABS[word])]
+        if word in ("ferme", "merci") and (self.top_shown or t < self.clock_until):
+            # quelque chose est affiché en haut (réponse, rappel, liste, heure) : il part, sans « iris », partout
+            # (#34 en Chrome ; 14/11 partout). En Chrome, « ferme » redit ensuite ferme l'onglet.
+            self._heard_alone(word, t, "AFFICHAGE RETIRE (redis FERME pour l'onglet)" if chrome and word == "ferme"
+                              else "AFFICHAGE RETIRE")
+            acts += [("rappel_merci",), ("ask_close",)]
+            self.clock_until = -1e9
+            return acts
+        if word == "plus tard" and self.reminder_shown:
+            self._heard_alone(word, t, VOICE_LABELS["plus tard"])     # rappel affiché : « plus tard » sans « iris »
+            return [("rappel_tard",)]
         if chrome and word in ("skip", "back", "espace", "space"):
             # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
             self._heard_alone(word, t, VOICE_LABELS[word])
@@ -677,12 +715,6 @@ class Core:
             self._heard_alone(word, t, VOICE_LABELS[word])
             self._aim(ref, acts)
             self._click(word, t, acts)
-            return acts
-        if chrome and word == "ferme" and (self.top_shown or t < self.clock_until):
-            # quelque chose est affiché en haut (réponse, rappel, liste, heure) : il part d'abord (#34)
-            self._heard_alone(word, t, "AFFICHAGE RETIRE (redis FERME pour l'onglet)")
-            acts += [("rappel_merci",), ("ask_close",)]
-            self.clock_until = -1e9
             return acts
         if chrome and word in CHROME_KEYS:
             # ses mots ne sont écoutés qu'en mode Chrome (voir voice.GRAMMARS), donc jamais pris ailleurs
@@ -725,6 +757,8 @@ class Core:
     def _v_command(self, word, t, acts):
         """« iris » + un mot : une seule commande par « iris » (avant, la fenêtre restait ouverte 8 s et un mot de
         la conversation qui suivait — « colle », « chrome » — était exécuté)."""
+        if word != "annule":
+            self.type_erase_until = -1e9      # autre commande faite : « iris annule » reprend son sens habituel
         self.last_word = (word, t, True)
         self.freeze_until = -1e9              # commande reçue : le curseur est libéré après elle
         self.listen_until = -1e9
@@ -733,13 +767,14 @@ class Core:
             # L'appli vérifie que VS Code est devant avant d'envoyer la touche.
             acts.append(("editor_tab", EDITOR_TABS[word]))
             self.last_gesture = ("ONGLET " + ("SUIVANT" if word == "suivant" else "PRECEDENT") + " (VS Code)", t)
+            self._arm_repeat(word, t, [("editor_tab", EDITOR_TABS[word])])
             return acts
         if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
             # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts
-        if word != "défile" and self.scrolling(t):
+        if word != "scroll" and self.scrolling(t):
             self._end_scroll(t)               # toute autre commande sort du défilement d'abord
         label = VOICE_LABELS.get(word, word.upper())
         if word in SIMPLE_ACTIONS:
@@ -748,12 +783,21 @@ class Core:
             label = simple_label or label
         elif word in VOICE_HOTKEYS:
             acts.append(("hotkey", VOICE_HOTKEYS[word]))
-            if word in REPEATABLE:
-                self.repeat_until = t + self.cfg.repeat_s
+            self._arm_repeat(word, t, [("hotkey", VOICE_HOTKEYS[word])], label)
         elif word in COMMANDS:
             label = getattr(self, "_cmd_" + COMMANDS[word])(word, t, acts) or label
         self.last_gesture = (label, t)
         return acts
+
+    def _arm_repeat(self, word, t, acts, label=None):
+        """Une commande répétable : redite seule (sans « iris ») pendant repeat_s, mêmes actions."""
+        if word not in REPEATABLE:
+            return
+        self.repeat_until = t + self.cfg.repeat_s
+        self.repeat_acts = {word: (list(acts), (label or self.last_gesture[0], t))}
+        for w in REPEATABLE:              # skip puis back, efface puis undo… : comme avant, d'une touche à l'autre
+            if w in VOICE_HOTKEYS and w not in self.repeat_acts:
+                self.repeat_acts[w] = ([("hotkey", VOICE_HOTKEYS[w])], (VOICE_LABELS.get(w, w.upper()), t))
 
     # --- petites aides des commandes ---
     def _click(self, word, t, acts):
@@ -940,7 +984,10 @@ class Core:
         devant -> mode Chrome (depuis le neutre ; la lecture, choisie à la voix, reste) ; une autre appli devant
         -> neutre. Les fenêtres d'Iris et « rien devant » ne changent rien."""
         acts = []
-        if self.mode == Mode.DISABLED or not exe or exe in IRIS_EXES:
+        if not exe or exe in IRIS_EXES:
+            return acts
+        self.front_exe = exe
+        if self.mode == Mode.DISABLED:
             return acts
         if exe == "chrome.exe":
             if self.mode == Mode.NEUTRAL:
@@ -953,15 +1000,13 @@ class Core:
             self.last_gesture = ("MODE CHROME QUITTE" if found else "CHROME INTROUVABLE", t)
         return acts
 
+    def _in_vscode(self):
+        """VS Code est l'appli devant (hors mode Chrome) : suivant / précédent y sont des onglets."""
+        return self.front_exe == "code.exe" and self.mode != Mode.CHROME
+
     def chrome_front(self, front, t):
         """Ancien appel (tests) : Chrome devant ou une autre appli."""
         return self.front_app("chrome.exe" if front else "autre.exe", t)
-        if front:
-            self.chrome_seen = True
-        elif self.chrome_seen or t - self.mode_since > CHROME_GRACE_S:
-            self.set_mode(Mode.NEUTRAL, t, acts)
-            self.last_gesture = ("MODE CHROME QUITTE", t)
-        return acts
 
     # --- dictée Claude (VS Code) ---------------------------------------------
     def ask_confirm(self, kind, t, seconds):
@@ -1029,22 +1074,36 @@ class Core:
         return []
 
     def type_tick(self, t, last_speech_t):
-        """« iris type » : fin de la dictée après 2 s de silence, puis 3 s pour envoie / annule."""
+        """« iris type » : fin de la dictée après 2 s de silence. « envoie / annule » seuls sont acceptés dès la
+        coupure (dits trop tôt, ils attendent le texte dans la file du typer), et encore type_confirm_s après
+        l'apparition du texte (type_written)."""
         if not self.typing:
             return []
         c = self.cfg
         spoke = last_speech_t > self.type_t0 + c.dictation_echo_s
         if spoke and t - last_speech_t >= c.type_silence_s:
             self.typing = False
-            self.confirm_until = t + c.type_confirm_s
+            self.confirm_until = t + TYPE_WAIT_S       # le temps que Whisper écrive le texte
             self.confirm_kind = "type"
-            self.last_gesture = ("TEXTE ECRIT : ENVOIE ou ANNULE ?", t)
+            self.last_gesture = ("ECRITURE DU TEXTE...", t)
             return [("type_stop",)]
         if not spoke and t - self.type_t0 >= c.dictation_no_speech_s:
             self.typing = False
             self.last_gesture = ("RIEN ENTENDU : dictee annulee", t)
             return [("type_cancel",)]
         return []
+
+    def type_written(self, t, ok):
+        """Le typer a fini (lu dans la boucle principale) : texte écrit (ok) ou rien compris."""
+        if self.confirm_kind != "type" or not self.confirming(t):
+            return                            # déjà envoyé ou annulé pendant l'écriture
+        if ok:
+            self.confirm_until = t + self.cfg.type_confirm_s
+            self.type_erase_until = t + TYPE_ERASE_S
+            self.last_gesture = ("TEXTE ECRIT : ENVOIE ou ANNULE ?", t)
+        else:
+            self.confirm_until = -1e9
+            self.last_gesture = ("RIEN COMPRIS : dictee annulee", t)
 
     def open_tick(self, t, last_speech_t):
         """« iris ouvre / ferme » : le nom est court, l'écoute se coupe après un court silence.

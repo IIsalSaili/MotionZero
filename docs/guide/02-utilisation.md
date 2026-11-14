@@ -90,10 +90,10 @@ Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans s
 
 ## Défilement
 
-1. « iris défile ».
+1. « iris scroll ».
 2. Amène la main au **centre** (bande horizontale) : la jauge à droite s'arme.
 3. Monte la main : ça monte. Descends-la : ça descend. Plus loin du centre = plus vite.
-4. Fin : « iris défile » redit, « stop », une autre commande, ou (à la main) main sortie de l'image.
+4. Fin : « iris scroll » redit, « stop », une autre commande, ou (à la main) main sortie de l'image.
 
 En LECTURE, la main en haut / bas de l'image défile aussi, sans voix.
 
@@ -101,7 +101,7 @@ En LECTURE, la main en haut / bas de l'image défile aussi, sans voix.
 
 | Commande | Où va le texte | Fin | Ensuite |
 |---|---|---|---|
-| « iris type » | là où est le curseur, n'importe quelle appli (Whisper) | 2 s de silence | 3 s pour « envoie » (Entrée) ou « annule » (efface) |
+| « iris type » | là où est le curseur, n'importe quelle appli (Whisper) | 2 s de silence | 4 s après l'apparition du texte pour « envoie » (Entrée) ou « annule » (efface) ; ensuite « iris envoie », et « iris annule » efface encore la dictée seule |
 | « iris claude » | micro de Claude dans VS Code | 2,75 s de silence | 30 s pour « envoie », « annule » ou « claude » (redicter) |
 | « recherche » (mode Chrome) | barre d'adresse | comme « type » | idem |
 
