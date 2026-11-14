@@ -416,6 +416,11 @@ class VoiceListener:
         # La phrase vient de finir (Vosk rend le résultat après un court silence) : on recale sur « maintenant ».
         now = time.perf_counter() - END_SILENCE_S
         last_end = max(w["end"] for w in words)
+        # mesure de la lenteur (14/11) : attente du silence par Vosk, et son en retard dans la file
+        stream_t = getattr(self, "samples", 0) / self.sr if getattr(self, "sr", 0) else 0.0
+        audio = getattr(self, "audio", None)
+        log.info("delai : fin du mot -> resultat %.2f s, file %.2f s",
+                 max(0.0, stream_t - last_end), (audio.qsize() * 0.03) if audio is not None else 0.0)
         for w in words:
             ev = VoiceEvent(w["word"], w["conf"], now - (last_end - w["start"]), now - (last_end - w["end"]))
             if w["word"] == WAKE_WORD:
