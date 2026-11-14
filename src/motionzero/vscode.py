@@ -17,7 +17,15 @@ SW_SHOW = 5
 
 
 def find_window(title_part="Visual Studio Code"):
-    """Fenêtre VS Code visible (la plus haute dans l'ordre d'affichage), ou None."""
+    """Fenêtre VS Code visible (la plus haute dans l'ordre d'affichage), ou None. Cherchée d'abord par le
+    programme (Code.exe) : un onglet Chrome ou un autre programme peut avoir « Visual Studio Code » dans son titre."""
+    if title_part == "Visual Studio Code":
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        if hwnd and _exe_of(hwnd) == "code.exe":
+            return hwnd
+        found = find_app_window("code.exe")
+        if found:
+            return found
     u = ctypes.windll.user32
     found = []
 
@@ -150,6 +158,22 @@ APPS = {
     "chrome": ("chrome.exe", [r"C:\Program Files\Google\Chrome\Application\chrome.exe"]),
     "studio": ("code.exe", [os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe")]),
 }
+
+
+def vscode_in_front():
+    """VS Code est-il au premier plan ? Par le programme (Code.exe), pas par le titre : le 14/11, une autre
+    fenêtre contenant « Visual Studio Code » dans son titre faisait dire « VS Code pas devant » à tort."""
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    return bool(hwnd) and _exe_of(hwnd) == "code.exe"
+
+
+IRIS_EXES = ("python.exe", "pythonw.exe")
+
+
+def foreground_exe():
+    """Programme de la fenêtre au premier plan (« code.exe », « pythonw.exe » pour Iris…), ou ""."""
+    hwnd = ctypes.windll.user32.GetForegroundWindow()
+    return _exe_of(hwnd) if hwnd else ""
 
 
 def chrome_in_front():
