@@ -1,4 +1,4 @@
-"""« iris type » : dictée écrite au curseur, coupure au silence, puis 3 s pour « envoie » / « annule »."""
+"""« iris type » : dictée écrite au curseur, coupure au silence, puis 4 s après l'apparition du texte pour « envoie » / « annule »."""
 from motionzero.config import Config
 from motionzero.core import Core
 
@@ -28,10 +28,52 @@ def test_annule():
     assert _typed().voice("annule", 8.0) == [("type_erase",)]
 
 
-def test_apres_3_s_rien():
+def test_la_confirmation_part_quand_le_texte_apparait():
+    """14/11 : les 3 s partaient à la coupure du micro ; le texte (Whisper) arrivait parfois après."""
     core = _typed()
-    assert not core.confirming(10.0)
-    assert core.voice("envoie", 10.0) == []           # mot seul, écoute fermée : ignoré
+    assert core.confirming(12.0)                      # texte pas encore écrit : on l'attend
+    core.type_written(12.0, True)                     # écrit 6 s après la coupure (Whisper froid)
+    assert core.confirming(15.9) and core.voice("envoie", 15.5) == [("type_send",)]
+
+
+def test_rien_dit_apres_le_texte_disparait():
+    core = _typed()
+    core.type_written(7.0, True)
+    assert not core.confirming(11.1)
+    assert core.voice("envoie", 11.2) == []           # mot seul, écoute fermée : ignoré
+    core.voice("iris", 12.0)
+    assert core.voice("envoie", 12.3) == [("enter",)] or core.last_word[2]   # « iris envoie » reste possible
+
+
+def test_iris_annule_tardif_n_efface_que_la_dictee():
+    core = _typed()
+    core.type_written(7.0, True)
+    core.voice("iris", 15.0)                          # fenêtre finie
+    assert core.voice("annule", 15.3) == [("type_erase",)]
+    core.voice("iris", 16.0)
+    assert core.voice("annule", 16.3) != [("type_erase",)]   # une seule fois : ensuite l'annule habituel
+
+
+def test_iris_annule_apres_une_autre_commande_reprend_son_sens():
+    core = _typed()
+    core.type_written(7.0, True)
+    core.voice("iris", 12.0)
+    core.voice("copie", 12.3)
+    core.voice("iris", 13.0)
+    assert core.voice("annule", 13.3) != [("type_erase",)]
+
+
+def test_dictee_incomprise_ferme_la_confirmation():
+    core = _typed()
+    core.type_written(8.0, False)
+    assert not core.confirming(8.1) and "RIEN COMPRIS" in core.last_gesture[0]
+
+
+def test_envoie_pendant_l_ecriture_attend_le_texte():
+    core = _typed()
+    assert core.voice("envoie", 7.5) == [("type_send",)]   # file du typer : envoyé après l'écriture
+    core.type_written(9.0, True)                      # le texte arrive : plus de confirmation ouverte
+    assert not core.confirming(9.1)
 
 
 def test_autre_commande_termine_l_attente():

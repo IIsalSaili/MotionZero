@@ -177,7 +177,7 @@ def _join_demute(words):
     return out
 
 
-def accepted_words(res, min_conf=0.6, max_words=1):
+def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     """Mots acceptés d'un résultat Vosk.
     - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
       fond (vidéo, Discord), la reconnaissance colle « iris claude » au bruit d'avant (« stop pause stop iris
@@ -199,7 +199,9 @@ def accepted_words(res, min_conf=0.6, max_words=1):
         return []
     # un mot seul (sans « iris » dans la même phrase) doit être bien net : mesuré, « tab » à 0,60 et
     # « démute » à 0,81 étaient des faux déclenchements
-    need = min_conf if words[0]["word"] == WAKE_WORD else max(min_conf, LONE_MIN_CONF)
+    # relaxed : mots attendus à ce moment précis (« envoie / annule » juste après une dictée) : seuil normal
+    lone = words[0]["word"] != WAKE_WORD and words[0]["word"] not in relaxed
+    need = max(min_conf, LONE_MIN_CONF) if lone else min_conf
     return [w for w in words if w["conf"] >= need]
 
 
@@ -213,7 +215,12 @@ AFTER_IRIS_S = 4.0          # mot dit seul juste après un « iris » accepté :
 SHORT_PHRASE = 3            # « iris » + commande (+ un bruit au plus)
 
 
-def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False):
+def _dedupe(tokens):
+    """« skype skype skype » -> « skype » : un mot redit vite (« skip skip skip ») n'est pas une phrase."""
+    return [tok for i, tok in enumerate(tokens) if i == 0 or tok != tokens[i - 1]]
+
+
+def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, relaxed=frozenset()):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
@@ -233,7 +240,9 @@ def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False):
         return True
     if after_iris and names[0] != WAKE_WORD and len(names) == 1:
         return True
-    tokens = free_text.lower().split()
+    tokens = _dedupe(free_text.lower().split())
+    if len(names) == 1 and names[0] in relaxed and len(tokens) <= FREE_MAX_WORDS:
+        return True                   # attendu (après une dictée) : un texte libre vide confirme aussi (14/11)
     if names[0] == WAKE_WORD:
         sure = QUIET_IRIS_CONF if quiet else IRIS_SURE_CONF
         if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= sure:
@@ -285,6 +294,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.quiet = False          # voix basse : écrit par la boucle principale (un booléen), lu ici
+        self.relaxed = frozenset()  # mots attendus maintenant (« envoie / annule » après une dictée) : idem
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
         self.last_block_t = -1e9    # dernier morceau de son reçu du micro (même silencieux)
@@ -404,12 +414,13 @@ class VoiceListener:
         why = rejection(res, self.min_conf)
         if why:
             log.info("iris rejete : %s", why)
-        words = accepted_words(res, self.min_conf)
+        relaxed = getattr(self, "relaxed", frozenset())   # (écouteurs de test créés sans __init__)
+        words = accepted_words(res, self.min_conf, relaxed=relaxed)
         if not words:
             return
         after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
-                                                   self.quiet):
+                                                   self.quiet, relaxed):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())

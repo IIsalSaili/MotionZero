@@ -111,6 +111,11 @@ class Asker:
         threading.Thread(target=self._load, name="whisper", daemon=True).start()
         threading.Thread(target=self._reaper, name="whisper-veille", daemon=True).start()
 
+    def warm(self):
+        """Charge Whisper en arrière-plan s'il a été déchargé (début d'une dictée) ; rien s'il est prêt."""
+        if self._whisper is None:
+            threading.Thread(target=self._load, name="whisper", daemon=True).start()
+
     def _load(self):
         # un seul chargement à la fois (plusieurs commandes pouvaient charger deux modèles en même temps)
         with self._model_lock:

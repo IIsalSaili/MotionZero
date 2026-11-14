@@ -495,3 +495,38 @@ def test_mots_du_calendrier_seulement_calendrier_ouvert():
     for w in ("iris", "suivant", "précédent", "stop", "ferme", "merci"):
         assert w in base and w in cal
     assert len(base) < 100
+
+
+def test_skip_redit_vite_reste_un_mot_seul():
+    """14/11 : « skip skip skip » -> reconnaissance libre « skype skype skype skype skype » (5 mots) : refusé."""
+    from motionzero.voice import confirmed
+    w = [{"word": "skip", "conf": 1.0}]
+    assert confirmed(w, "skype skype skype skype skype", 1)
+    assert not confirmed(w, "tu as vu la série hier soir", 1)          # vraie phrase : toujours refusée
+
+
+def test_envoie_attendu_apres_une_dictee():
+    """Juste après une dictée : seuil normal (0,6) et texte libre vide accepté, pour envoie / annule seulement."""
+    from motionzero.voice import accepted_words, confirmed
+    res = {"result": [{"word": "envoie", "conf": 0.7, "start": 0, "end": 0.4}]}
+    assert accepted_words(res) == []                                   # hors confirmation : 0,8 exigé
+    relaxed = frozenset({"envoie", "envoyé", "annule"})
+    assert [w["word"] for w in accepted_words(res, relaxed=relaxed)] == ["envoie"]
+    w = [{"word": "envoie", "conf": 0.7}]
+    assert confirmed(w, "", 1, relaxed=relaxed) and not confirmed(w, "", 1)
+    assert not confirmed(w, "et après on lui envoie le truc demain", 1, relaxed=relaxed)   # conversation
+    assert not confirmed([{"word": "studio", "conf": 0.7}], "", 1, relaxed=relaxed)
+
+
+def test_espace_et_onglet_vs_code_repetables():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("espace", 1.2)
+    assert core.voice("espace", 2.0) == [("hotkey", ["space"])]        # sans « iris », dans les 2 s
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    first = core.voice("suivant", 1.2)
+    assert core.voice("suivant", 2.0) == first and first[0][0] == "editor_tab"
+    assert core.voice("suivant", 5.0) == []                            # 2 s passées : il faut « iris »

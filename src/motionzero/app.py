@@ -174,6 +174,8 @@ def detect_period(disabled, last_hand_t, t):
     return 1.0 / DETECT_MAX_FPS
 
 
+CONFIRM_WORDS = frozenset({"envoie", "envoyé", "annule"})
+
 class Engine:
     """Boucle principale (fil « moteur ») : caméra -> détection -> Core -> actions -> affichage.
     Un tour = tick() : détecter, écouter, faire, montrer. `d` porte les services créés par main()
@@ -324,6 +326,10 @@ class Engine:
             speech = d.listener.last_speech_t
             acts += core.dictation_tick(t, speech) + core.ask_tick(t, speech)
             acts += core.type_tick(t, speech) + core.open_tick(t, speech)
+        if getattr(d, "typer", None) is not None:
+            for ok in drain(d.typer.done):    # texte de « iris type » écrit (fil du typer) : la confirmation part
+                core.type_written(t, ok)
+                _log.info("iris type : %s", "texte ecrit, envoie / annule 4 s" if ok else "rien compris")
         for msg in drain(d.app_messages):
             core.last_gesture = (msg, t)
         for _ in drain(d.pointer_requests):   # bouton « main / tête » de l'accueil (fil Qt)
@@ -348,6 +354,9 @@ class Engine:
                 listener.grammar = "chrome"
             else:                             # mots de la souris : seulement souris allumée ou bouton tenu
                 listener.grammar = "souris" if core.mouse or core.dragging else "base"
+            # juste après une dictée : « envoie / annule » attendus, reconnus plus facilement (seuil normal, et un
+            # texte libre vide les confirme : mesuré, juste après la coupure du micro il est souvent vide)
+            listener.relaxed = CONFIRM_WORDS if core.confirming(t) else frozenset()
             if t - listener.iris_heard_t < 0.5:
                 core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
             events = listener.poll()
@@ -411,6 +420,9 @@ class Engine:
     def resolve(self, acts, t):
         d = self.d
         if d.listener is not None:
+            if d.asker is not None and any(a[0] in ("ask_start", "type_start", "open_start") for a in acts):
+                d.asker.warm()                # Whisper chargé pendant que tu parles (14/11 : 120 rechargements
+                                              # de 1,5 à 3 s attendus APRÈS la dictée, après 10 min sans usage)
             acts = question_actions(acts, d.listener, d.asker)
             acts = type_actions(acts, d.listener, d.typer, d.sounds)
             acts = open_actions(acts, d.listener, d.launcher, d.asker, d.bot, d.app_message, d.desk)
