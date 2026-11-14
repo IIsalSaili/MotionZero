@@ -70,15 +70,3 @@ def test_mesure_en_panne_le_fil_continue(monkeypatch):
     monkeypatch.setattr(stats.time, "sleep", sleep)
     stats.run_sampler(lambda: True, lambda s: None, stop=stop)   # ne lève pas
     assert n["i"] >= 6
-
-
-def test_panneau_se_dessine_avec_et_sans_mesures():
-    from motionzero.ui import ConsoPanel, QApplication
-    QApplication.instance() or QApplication([])
-    w = ConsoPanel()
-    w.resize(340, 640)
-    w.grab()                                   # « mesure en cours… »
-    w.set_stats(stats.Stats(lambda: {"whisper": True, "detect_hz": 20, "voice_on": True}).sample())
-    w.grab()
-    w.set_stats({"ncpu": 12})                  # mesure presque vide : pas de plantage
-    w.grab()

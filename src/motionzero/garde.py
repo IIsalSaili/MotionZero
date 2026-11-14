@@ -150,6 +150,19 @@ def _single_instance():
     return ctypes.get_last_error() != 183           # ERROR_ALREADY_EXISTS
 
 
+def guard_running():
+    """Vrai si un gardien tourne (son verrou « Local\\iris_garde » existe). Affiché sur l'accueil."""
+    if sys.platform != "win32":
+        return False
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenMutexW.restype = ctypes.c_void_p
+    h = k32.OpenMutexW(0x00100000, False, "Local\\iris_garde")   # SYNCHRONIZE
+    if not h:
+        return False
+    k32.CloseHandle(ctypes.c_void_p(h))
+    return True
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="motionzero.garde")
     ap.add_argument("--start", action="store_true", help="lance Iris tout de suite si elle ne tourne pas")

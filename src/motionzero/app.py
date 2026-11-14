@@ -34,6 +34,7 @@ from .output import Controller, FakeBackend, SendInputBackend, primary_screen, s
 from .sounds import Sounds, is_failure
 from .vscode import chrome_in_front, foreground_exe
 from .volume import VIEW as VOLUME_VIEW
+from .accueil import home_view, sensors as home_sensors
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -207,6 +208,8 @@ class Engine:
         self.errors = deque(maxlen=20)
         self.shown = None                     # dernière image dessinée (capture des tests)
         self.frame_seen = False               # une image est arrivée à ce tour
+        self.home_t = self.guard_t = -1e9      # page d'accueil : dernière mise à jour, dernier regard au gardien
+        self.guard_on = False
 
     def run(self):
         d = self.d
@@ -477,6 +480,9 @@ class Engine:
             self.shown = render(view, core, d.tracker.tracks if self.pts is not None else [], self.fps,
                                 d.args.simulation, status, d.tracker.active_id, voice_on=d.listener is not None)
             d.show(self.shown)
+        if d.view_win.visible_flag and t - self.home_t >= HOME_PERIOD_S:
+            self.home_t = t
+            d.bridge.home.emit(self.home(status, t))
         prog = core.progress()
         # île : la dernière chose comprise (ou refusée), la plus récente des deux
         toast = core.last_gesture
@@ -513,6 +519,33 @@ class Engine:
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
+
+
+    def home(self, cam_status, t):
+        """Contenu de la page d'accueil (accueil.home_view). Le gardien est relu toutes les 2 s seulement."""
+        d, core, lis = self.d, self.d.core, self.d.listener
+        if t - self.guard_t >= 2.0:
+            self.guard_t = t
+            from .garde import guard_running
+            try:
+                self.guard_on = guard_running()
+            except OSError:
+                self.guard_on = False
+        muted = bool(lis is not None and lis.muted)
+        stalled = bool(lis is not None and getattr(lis, "t_stream0", None) is not None
+                       and t - max(getattr(lis, "last_block_t", 0.0), lis.t_stream0) > 3.0)
+        sensors = home_sensors(
+            "ok" if cam_status == OK else cam_status, voice_on=lis is not None, mic_muted=muted,
+            mic_stalled=stalled, whisper=d.asker._whisper is not None,
+            bot_enabled=d.bot.enabled, bot_connected=d.bot.connected, guard=self.guard_on)
+        return home_view(
+            core.mode, mouse=core.mouse, pointer=core.pointer, listening=core.listening(t),
+            dictating=core.dictating, confirming=core.confirming(t), calendar_open=t < core.calendar_until,
+            mic_muted=muted, voice_on=lis is not None, sensor_list=sensors, feed=list(core.feed),
+            rejected=lis.last_rejected if lis is not None else None, now=t)
+
+
+HOME_PERIOD_S = 0.25      # page d'accueil : 4 mises à jour par seconde suffisent
 
 
 def main(argv=None):
@@ -636,7 +669,8 @@ def main(argv=None):
                 "voice_on": listener is not None,
                 "free_awake": listener is not None and time.perf_counter() < getattr(listener, "_free_until", 0)}
 
-    bridge.stats.connect(view_win.conso.set_stats)
+    bridge.stats.connect(view_win.set_stats)
+    bridge.home.connect(view_win.set_home)
     from .stats import run_sampler
     threading.Thread(target=run_sampler, args=(lambda: view_win.visible_flag, bridge.stats.emit, model_info, stop),
                      name="mesures", daemon=True).start()
@@ -691,6 +725,23 @@ def main(argv=None):
     eye_btn.toggled.connect(show_in_captures)
     bridge.done.connect(qt.quit)
 
+    def hide_all():
+        """Cache toutes les fenêtres d'Iris (aperçu, verres, boutons). Avant, au STOP, elles restaient figées
+        à l'écran tant que le processus n'était pas sorti (parfois plusieurs minutes)."""
+        for w in (view_win, glass, cursor_glass, stop_btn, eye_btn, repair_btn):
+            try:
+                w.hide()
+            except RuntimeError:               # fenêtre déjà détruite
+                pass
+
+    def start_exit_guard(delay_s=EXIT_GUARD_S):
+        """Sortie forcée si l'arrêt propre n'a pas abouti à temps (fil bloqué, boucle Qt qui ne rend pas la main)."""
+        def guard():
+            time.sleep(delay_s)
+            log.warning("arret non abouti apres %.0f s : sortie forcee", delay_s)
+            force_exit(ctl)
+        threading.Thread(target=guard, name="sortie", daemon=True).start()
+
     def emergency(source):
         """STOP : tout relâcher tout de suite (sans attendre le moteur), puis quitter."""
         if not stop.is_set():
@@ -700,6 +751,8 @@ def main(argv=None):
         bot.bye()                              # arrêt voulu : le bot ne relance pas Iris
         from . import garde
         garde.mark_stop()                      # ni le gardien
+        hide_all()                             # rien ne reste figé à l'écran pendant l'arrêt
+        start_exit_guard()
         qt.quit()
 
     glass.closed.connect(lambda: emergency("verre ferme"))
@@ -745,16 +798,28 @@ def main(argv=None):
     vscode.SINK_HWND = int(sink.winId())
     qt.exec()
     stop.set()
+    hide_all()
+    start_exit_guard()                         # aussi pour une sortie qui ne vient pas du STOP
     if not restart["on"]:
         bot.bye()
     worker.join(timeout=3)
     if worker.is_alive():      # moteur bloqué : tout est déjà relâché, on quitte quand même
-        ctl.release_all()
         log.warning("moteur bloque a l'arret : sortie forcee")
-    # sortie franche : un fil resté ouvert (écoute du micro) gardait le processus en vie,
-    # ce qui laissait se lancer plusieurs motionzero à la fois
+    force_exit(ctl)
+
+
+EXIT_GUARD_S = 5.0
+
+
+def force_exit(ctl, exit=os._exit):
+    """Sortie franche : un fil resté ouvert (écoute du micro, Whisper) gardait le processus en vie, avec
+    l'overlay figé à l'écran et plusieurs motionzero à la fois. Tout est relâché avant."""
+    try:
+        ctl.release_all()
+    except Exception:
+        _log.exception("relachement a l'arret")
     logging.shutdown()
-    os._exit(0)
+    exit(0)
 
 
 def question_actions(acts, listener, asker):
