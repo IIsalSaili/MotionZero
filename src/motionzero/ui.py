@@ -123,12 +123,7 @@ class PreviewWindow(QWidget):
         bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         bar.setStyleSheet("#bar { background: #000; border-radius: 40px; }")
         bar.setFixedHeight(80)
-        self.logo = QLabel()
-        self.logo.setFixedSize(52, 52)
-        logo = QPixmap(_os.path.join(_os.path.dirname(_FONT_DIR), "iris", "neutre.png"))
-        if not logo.isNull():
-            self.logo.setPixmap(logo.scaled(52, 52, Qt.AspectRatioMode.KeepAspectRatio,
-                                            Qt.TransformationMode.SmoothTransformation))
+        self.logo = HomeLogo()                 # le même logo que l'île, disque clair
         self.state_lbl = QLabel("Démarrage…")
         self.state_lbl.setStyleSheet(f"font: bold 24pt {_FONT};")
         self.mode_lbl = QLabel()
@@ -990,6 +985,46 @@ def islet_ring(st, age, motion=True):
     return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
 
 
+def paint_logo(p, x, y, size, pm, ring=None):
+    """Logo d'Iris (île et accueil) : disque clair à fin contour, la main agrandie et centrée sur l'œil,
+    découpée par le cercle (le bout des doigts sort du cadre et n'est pas dessiné)."""
+    circle = QRectF(x + 1, y + 1, size - 2, size - 2)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(245, 245, 240))
+    p.drawEllipse(circle)
+    if pm is not None:
+        pw = size * EYE_IN_ISLET / EYE_W                    # largeur affichée de l'image
+        ph = pw * pm.height() / pm.width()
+        clip = QPainterPath()
+        clip.addEllipse(circle)
+        p.save()
+        p.setClipPath(clip)
+        p.drawPixmap(QRectF(x + size / 2 - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
+        p.restore()
+    col, width = ring or (RING_DEFAULT, 2.0)
+    p.setPen(QPen(col, width))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(circle.adjusted(width / 2 - 1, width / 2 - 1, 1 - width / 2, 1 - width / 2))
+
+
+class HomeLogo(QWidget):
+    """Le logo de l'île, en tête de l'accueil (même dessin, même taille)."""
+
+    def __init__(self, size=None):
+        super().__init__()
+        self.size_px = size or ISLET
+        self.setFixedSize(self.size_px, self.size_px)
+        pm = QPixmap(_os.path.join(_LOGO_DIR, "neutre.png"))
+        self.pm = None if pm.isNull() else pm
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        paint_logo(p, 0, 0, self.size_px, self.pm)
+        p.end()
+
+
 def load_fonts():
     """Atkinson Hyperlegible (licence OFL, dans assets/fonts) : conçue pour la lisibilité."""
     for name in ("AtkinsonHyperlegible-Bold.ttf", "AtkinsonHyperlegible-Regular.ttf"):
@@ -1609,25 +1644,4 @@ class _IslandPainter:
         p.restore()
 
     def _draw_logo(self, p, x, y):
-        """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
-        par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
-        circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
-        # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(245, 245, 240))
-        p.drawEllipse(circle)
-        pm = self.logos.get(self.logo)
-        if pm is not None:
-            pw = ISLET * EYE_IN_ISLET / EYE_W                   # largeur affichée de l'image
-            ph = pw * pm.height() / pm.width()
-            cx = x + ISLET / 2
-            clip = QPainterPath()
-            clip.addEllipse(circle)
-            p.save()
-            p.setClipPath(clip)
-            p.drawPixmap(QRectF(cx - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
-            p.restore()
-        col, width = self.ring
-        p.setPen(QPen(col, width))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(circle.adjusted(width / 2 - 1, width / 2 - 1, 1 - width / 2, 1 - width / 2))
+        paint_logo(p, x, y, ISLET, self.logos.get(self.logo), self.ring)
