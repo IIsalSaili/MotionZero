@@ -89,3 +89,29 @@ def test_plus_tard_sans_iris_seulement_rappel_affiche():
 def test_scroll_garde_iris():
     c = _core("code.exe")
     assert c.voice("scroll", 1.0) == []
+
+
+def _w(word, start, end, conf=1.0):
+    return {"word": word, "conf": conf, "start": start, "end": end}
+
+
+def test_iris_mots_au_milieu_puis_sourdine_rejete():
+    """« iris m'a mis en sourdine » : la grammaire n'entend que « iris sourdine », avec un blanc au milieu."""
+    from motionzero.voice import accepted_words, rejection
+    r = {"result": [_w("iris", 0.0, 0.35, 0.72), _w("sourdine", 0.95, 1.5, 0.86)]}
+    assert accepted_words(r) == []
+    assert "blanc" in rejection(r)
+
+
+def test_iris_sourdine_d_un_trait_accepte():
+    from motionzero.voice import accepted_words
+    for gap in (0.0, 0.1, 0.3):
+        r = {"result": [_w("iris", 0.0, 0.35), _w("sourdine", 0.35 + gap, 0.9)]}
+        assert [w["word"] for w in accepted_words(r)] == ["iris", "sourdine"], gap
+
+
+def test_iris_sans_temps_accepte():
+    """Résultat sans horodatage (anciens tests, simulation) : pas de blanc mesurable, accepté."""
+    from motionzero.voice import accepted_words
+    r = {"result": [{"word": "iris", "conf": 1.0}, {"word": "sourdine", "conf": 1.0}]}
+    assert [w["word"] for w in accepted_words(r)] == ["iris", "sourdine"]

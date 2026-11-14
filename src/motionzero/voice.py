@@ -110,6 +110,9 @@ WORDS = {
 WAKE_WORD = "iris"
 END_SILENCE_S = 0.3   # délai entre la fin de la phrase et le résultat de la reconnaissance (environ)
 LONE_MIN_CONF = 0.8
+# « iris » puis la commande, d'un trait : 14/11, « iris m'a mis en sourdine » (dit dans la conversation, voix basse)
+# a été entendu « iris sourdine » et a mis la sourdine. Au-delà de ce blanc, ce n'est pas une commande.
+IRIS_GAP_S = 0.35
 # « démute » n'existe pas dans le modèle : on l'écoute sous la forme « des mute », recollée ensuite
 SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un » seul était pris dans la conversation
          ("plus", "tard"): "plus tard",
@@ -192,6 +195,8 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
         if nxt is None:
             return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
         if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
+            if _gap(words[i], nxt) > IRIS_GAP_S:
+                return []                              # « iris m'a mis en sourdine » : des mots au milieu
             return [words[i], nxt]
     if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
         return []
@@ -201,6 +206,15 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     lone = words[0]["word"] != WAKE_WORD and words[0]["word"] not in relaxed
     need = max(min_conf, LONE_MIN_CONF) if lone else min_conf
     return [w for w in words if w["conf"] >= need]
+
+
+def _gap(a, b):
+    """Blanc entre deux mots de la grammaire (s). La grammaire fermée avale les mots qu'elle ne connaît pas : un
+    long blanc entre « iris » et la commande, c'est qu'on a dit autre chose au milieu."""
+    try:
+        return max(0.0, float(b["start"]) - float(a["end"]))
+    except (KeyError, TypeError, ValueError):
+        return 0.0
 
 
 FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
@@ -254,7 +268,8 @@ def rejection(res, min_conf=0.6):
     words = res.get("result", [])
     if not any(w["word"] == WAKE_WORD for w in words) or accepted_words(res, min_conf):
         return None
-    return " ".join(f"{w['word']}({w['conf']:.2f})" for w in words)
+    return " ".join(f"{w['word']}({w['conf']:.2f})" + (f" [blanc {_gap(w, n):.2f} s]" if w["word"] == WAKE_WORD
+                    and _gap(w, n) > IRIS_GAP_S else "") for w, n in zip(words, words[1:] + [words[-1]]))
 
 
 @dataclass
