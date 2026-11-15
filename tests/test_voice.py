@@ -256,7 +256,7 @@ def test_iris_et_commande_d_une_traite():
     # ce qui suit la commande (la dictée qui commence, du bruit) ne l'annule plus
     assert [x["word"] for x in accepted_words(w(("iris", 1.0), ("claude", 1.0), ("clic", 1.0)))] == ["iris", "claude"]
     assert accepted_words(w(("iris", 0.2), ("claude", 1.0))) == []   # 0,4 accepté depuis le 15/11
-    assert rejection(w(("iris", 0.4), ("claude", 1.0))) == "iris(0.40) claude(1.00)"
+    assert rejection(w(("iris", 0.2), ("claude", 1.0))) == "iris(0.20) claude(1.00)"
 
 
 def test_iris_claude_d_une_traite_lance_la_dictee():
