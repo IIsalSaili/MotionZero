@@ -13,7 +13,7 @@ OK, OFF, IDLE, FAIL = "ok", "off", "idle", "fail"   # vert, orange (éteint expr
 
 MODE_LABELS = {Mode.NEUTRAL: "NEUTRE", Mode.READING: "LECTURE", Mode.CHROME: "CHROME", Mode.DISABLED: "PAUSE"}
 MOUSE_ROWS = [("iris clic", "clic gauche"), ("iris double", "double clic"), ("iris menu", "clic droit"),
-              ("iris glisse / lâche", "glisser"), ("iris scroll", "faire défiler")]
+              ("iris hold", "glisser (redis hold pour lâcher)"), ("iris scroll", "faire défiler")]
 LAST_N = 3          # dernières commandes affichées
 LAST_MAX_S = 60.0   # au-delà, une commande n'est plus « dernière »
 

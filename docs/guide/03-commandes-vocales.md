@@ -31,7 +31,7 @@ sequenceDiagram
 - Mot entendu sans « iris » alors qu'il en faut un : l'île affiche « … ignore : dis IRIS avant ».
 - Mots dits en deux morceaux, recollés : « des mute » = démute ; « plus tard » ; « plein écran » ; « double clic » = double.
 - Synonymes (`ALIASES`) : envoyé = envoie ; muet = mute. (« ok », « okay », « wake » et « un mute » retirés le 14/11 : jamais utilisés, pris dans la conversation. « défun » retiré le 14/11 : « sourdine » seul.)
-- Mots de la souris (`clic`, `double`, `menu`, `glisse`, `lâche`) : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome. Ailleurs ils ne sont même pas cherchés : dis « iris souris » d'abord.
+- Mots de la souris (`clic`, `double`, `menu`, `hold`) : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome. Ailleurs ils ne sont même pas cherchés : dis « iris souris » d'abord.
 
 **Légende** — colonne « Sans iris ? » : « oui » marche toujours sans « iris » ; « répétable » : redit seul dans les 2 s après « iris + mot » ; « souris » : quand la souris est allumée ; « Chrome » : en mode Chrome ; « non » : il faut dire « iris » avant.
 Mode : « tous » sauf mention.
@@ -57,8 +57,7 @@ Mode : « tous » sauf mention.
 | `clic` | clic gauche, là où l'on visait au début de « iris » | souris Chrome | souris allumée, Chrome |
 | `double` (ou « double clic ») | double clic | souris Chrome | souris allumée, Chrome |
 | `menu` | clic droit | souris | souris allumée, Chrome |
-| `glisse` | enfonce le bouton gauche (glisser) | non | souris allumée, Chrome |
-| `lâche` | relâche le bouton | oui si un glisser est en cours | tous |
+| `hold` (aussi « old », « hole ») | enfonce le bouton gauche (glisser) ; redit, le relâche | oui pour relâcher, et en souris | souris allumée, Chrome |
 | `scroll` | défilement à la main / tête ; redit = fin (ex-« défile », pris pour « défun ») | non | tous |
 
 ## Clavier et texte
@@ -210,9 +209,9 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 
 | Contexte | Mots |
 |---|---|
-| Toujours | `stop` ; `lâche` pendant un glisser |
+| Toujours | `stop` ; `hold` pendant un glisser (relâche) |
 | 2 s après « iris skip / back / efface / undo / redo / espace / suivant / précédent » | le même mot (et les autres touches répétables) ; chaque mot relance les 2 s |
-| Souris allumée ou bouton tenu (« iris glisse ») | `clic`, `double`, `menu`, `glisse`, `lâche`, `scroll` |
+| Souris allumée ou bouton tenu (« iris hold ») | `clic`, `double`, `menu`, `hold`, `scroll` |
 | Mode focus (« iris focus ») | toutes les commandes, dites seules et nettement ; `focus` seul l'éteint, et il s'éteint tout seul après 10 min sans commande. À garder pour les moments sans conversation à côté |
 | VS Code devant (hors Chrome) | `suivant`, `précédent` |
 | Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
