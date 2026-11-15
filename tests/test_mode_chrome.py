@@ -281,7 +281,7 @@ def test_double_clic_dit_en_entier():
         assert "double" in phrases and "double clic" in phrases
     for name in ("base", "calendrier"):
         phrases = json.loads(GRAMMARS[name])
-        assert not {"clic", "double", "double clic", "menu", "hold", "old", "hole"} & set(phrases)
+        assert not {"clic", "double", "double clic", "menu", "glisse", "lâche"} & set(phrases)
         assert "scroll" in phrases and "défile" not in phrases   # scroll écouté partout (14/11)
 
 

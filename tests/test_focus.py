@@ -46,18 +46,3 @@ def test_souris_bouton_tenu_clic_et_scroll_sans_iris():
     c3 = Core(Config())                                             # souris éteinte : scroll seul ignoré
     c3.voice("scroll", 5.0)
     assert not c3.last_word[2]
-
-
-def test_hold_enfonce_puis_relache():
-    from motionzero.voice import WORDS
-    from motionzero.core import ALIASES
-    assert ALIASES["old"] == ALIASES["hole"] == "hold" and "hold" in WORDS
-    assert "glisse" not in WORDS and "lâche" not in WORDS
-    c = Core(Config())
-    c.set_mouse(True, 1.0, [])
-    acts = c.voice("hold", 5.0, t_start=4.8)                        # souris : sans « iris »
-    assert c.dragging and any(a[0] == "press" for a in acts)
-    acts = c.voice("hold", 8.0, t_start=7.8)                        # redit : relâché
-    assert not c.dragging and ("release", "mouse", "left") in acts
-    c2 = Core(Config())                                             # souris éteinte, sans « iris » : rien
-    assert c2.voice("hold", 5.0) == [] and not c2.dragging
