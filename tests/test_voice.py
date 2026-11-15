@@ -255,7 +255,7 @@ def test_iris_et_commande_d_une_traite():
     assert [x["word"] for x in accepted_words(w(("claude", 1.0), ("iris", 1.0)))] == ["iris"]
     # ce qui suit la commande (la dictée qui commence, du bruit) ne l'annule plus
     assert [x["word"] for x in accepted_words(w(("iris", 1.0), ("claude", 1.0), ("clic", 1.0)))] == ["iris", "claude"]
-    assert accepted_words(w(("iris", 0.4), ("claude", 1.0))) == []
+    assert accepted_words(w(("iris", 0.2), ("claude", 1.0))) == []   # 0,4 accepté depuis le 15/11
     assert rejection(w(("iris", 0.4), ("claude", 1.0))) == "iris(0.40) claude(1.00)"
 
 
@@ -537,3 +537,13 @@ def test_espace_et_onglet_vs_code_repetables():
     first = core.voice("suivant", 1.2)
     assert core.voice("suivant", 2.0) == first and first[0][0] == "editor_tab"
     assert core.voice("suivant", 5.0) == []                            # 2 s passées : il faut « iris »
+
+
+def test_iris_peu_sur_suivi_d_une_commande_nette():
+    from motionzero.voice import accepted_words
+    w = lambda word, conf, s: {"word": word, "conf": conf, "start": s, "end": s + 0.3}
+    got = accepted_words({"result": [w("iris", 0.37, 0.0), w("claude", 1.0, 0.35)]})
+    assert [x["word"] for x in got] == ["iris", "claude"]
+    assert accepted_words({"result": [w("iris", 0.2, 0.0), w("claude", 1.0, 0.35)]}) == []     # trop faible
+    assert accepted_words({"result": [w("iris", 0.37, 0.0), w("claude", 0.5, 0.35)]}) == []    # commande floue
+    assert accepted_words({"result": [w("iris", 0.4, 0.0)]}) == []                              # iris seul
