@@ -139,9 +139,9 @@ def test_glisse_lache_et_securite():
     core.voice("iris", 1.0)
     fake = FakeBackend()
     ctl = Controller(fake, Config())
-    ctl.execute(core.voice("glisse", 1.2), 1.2)
+    ctl.execute(core.voice("agrippe", 1.2), 1.2)
     assert ("button", "left", True) in fake.events
-    ctl.execute(core.voice("lâche", 9.0), 9.0)               # longtemps après, sans « iris » : relâché quand même
+    ctl.execute(core.voice("agrippe", 9.0), 9.0)              # longtemps après, sans « iris » : relâché quand même
     assert fake.events[-1] == ("button", "left", False)
 
 
@@ -312,7 +312,7 @@ def test_deuxieme_verification():
     assert not confirmed(w("envoie"), "tu as vu la série hier soir")
     assert not confirmed(w("iris", "colle"), "il colle")            # pas de « iris » prononcé
     assert confirmed(w("stop"), "arrête stop tout de suite là")    # sécurité : jamais bloqué
-    assert confirmed(w("lâche"), "")
+    assert confirmed(w("agrippe"), "")
     # juste après un « iris » accepté : le mot seul passe malgré le bruit (13/11, « pause » refusé en boucle)
     bruit = "à cambridge iris elle seule chose son album de ce côté les couilles pose"
     assert not confirmed(w("pause"), bruit)

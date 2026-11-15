@@ -39,8 +39,7 @@ WORDS = {
     "clic": "clic",
     "double": "double",
     "menu": "menu",
-    "glisse": "glisse",
-    "lâche": "lâche",
+    "agrippe": "agrippe", # (15/11, remplace glisse / lâche) : enfonce le bouton, redit il le relâche
     "scroll": "scroll",   # « iris scroll » : défilement à la main / tête (ex-« défile », pris pour « défun » le 14/11)
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
@@ -127,7 +126,7 @@ CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seule
 
 # mots de la souris : écoutés seulement souris allumée (ou bouton tenu) et en mode Chrome (14/11 : partout,
 # ils étaient pris dans la conversation : clic 60 fois, menu 38, glisse 23)
-MOUSE_ONLY = {"clic", "double", "menu", "glisse", "lâche"}   # « scroll » écouté partout (sans souris)
+MOUSE_ONLY = {"clic", "double", "menu", "agrippe"}   # « scroll » écouté partout (sans souris)
 
 
 def grammar(extra=(), mouse=True):
@@ -227,7 +226,7 @@ def _gap(a, b):
 
 
 FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
-ALWAYS_HEARD = {"stop", "lâche"}   # sécurité : jamais bloqués par la vérification
+ALWAYS_HEARD = {"stop", "agrippe"}   # sécurité : jamais bloqués par la vérification
 
 
 QUIET_IRIS_CONF = 0.7       # voix basse : « iris » moins net, accepté plus tôt

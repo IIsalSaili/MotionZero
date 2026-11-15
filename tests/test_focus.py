@@ -37,7 +37,7 @@ def test_focus_s_eteint_seul_et_jamais_en_pause():
 
 def test_souris_bouton_tenu_clic_et_scroll_sans_iris():
     c = Core(Config())
-    c.dragging = True                                               # « iris glisse » : bouton tenu, souris éteinte
+    c.dragging = True                                               # « iris agrippe » : bouton tenu, souris éteinte
     assert ("click", "left") in c.voice("clic", 5.0, t_start=4.8)
     c2 = Core(Config())
     c2.set_mouse(True, 1.0, [])
@@ -46,3 +46,15 @@ def test_souris_bouton_tenu_clic_et_scroll_sans_iris():
     c3 = Core(Config())                                             # souris éteinte : scroll seul ignoré
     c3.voice("scroll", 5.0)
     assert not c3.last_word[2]
+
+
+def test_agrippe_enfonce_puis_relache():
+    assert "agrippe" in WORDS and "glisse" not in WORDS and "lâche" not in WORDS
+    c = Core(Config())
+    c.set_mouse(True, 1.0, [])
+    acts = c.voice("agrippe", 5.0, t_start=4.8)                     # souris : sans « iris »
+    assert c.dragging and ("press", "mouse", "left") in acts
+    acts = c.voice("agrippe", 8.0, t_start=7.8)                     # redit : relâché
+    assert not c.dragging and ("release", "mouse", "left") in acts
+    c2 = Core(Config())                                             # souris éteinte, sans « iris » : rien
+    assert c2.voice("agrippe", 5.0) == [] and not c2.dragging

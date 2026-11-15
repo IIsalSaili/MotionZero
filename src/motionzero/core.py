@@ -75,7 +75,7 @@ TYPE_ERASE_S = 30.0       # « iris annule » dit après la confirmation : effac
 REPEATABLE = ("skip", "back", "efface", "undo", "redo", "espace", "space", "suivant", "précédent")
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
-                "glisse": "GLISSER (bouton tenu)", "lâche": "LACHER", "entrée": "TOUCHE ENTREE",
+                "agrippe": "BOUTON TENU (redis AGRIPPE pour lacher)", "entrée": "TOUCHE ENTREE",
                 "espace": "TOUCHE ESPACE", "space": "TOUCHE ESPACE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
@@ -120,7 +120,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
 FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
 
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
-COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag", "lâche": "release",
+COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "grip",
             "scroll": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
             "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
             "heure": "clock", "date": "clock", "merci": "thanks",
@@ -690,10 +690,10 @@ class Core:
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
-        if word == "lâche" and self.dragging:
+        if word == "agrippe" and self.dragging:   # redit : relâche, toujours écouté (bouton tenu)
             self.dragging = False
             self.last_word = (word, t, True)
-            self.last_gesture = (VOICE_LABELS["lâche"], t)
+            self.last_gesture = ("BOUTON LACHE", t)
             return [("release", "mouse", "left")]
         return None
 
@@ -736,7 +736,7 @@ class Core:
             self._heard_alone(word, t, VOICE_LABELS[word])
             return [("hotkey", VOICE_HOTKEYS[word])]
         mouse = self.mouse or self.dragging
-        if mouse and word in ("glisse", "scroll"):
+        if mouse and word in ("agrippe", "scroll"):
             return self._v_command(word, t, acts)   # souris : glisse / scroll sans « iris » (15/11)
         if (chrome and word in ("clic", "double")) or (mouse and word in ("clic", "double", "menu")):
             # mode Chrome ou souris allumée : clic, double clic (et clic droit en souris) sans « iris » (12/11)
@@ -859,13 +859,11 @@ class Core:
         self._aim(self.wake_t, acts)          # là où l'on visait en disant « iris »
         self._click(word, t, acts)
 
-    def _cmd_drag(self, word, t, acts):
+    def _cmd_grip(self, word, t, acts):
+        """« agrippe » : enfonce le bouton gauche (glisser) ; redit, il est relâché (voir _v_stop)."""
         self._aim(self.wake_t, acts)
         acts.append(("press", "mouse", "left"))
         self.dragging = True
-
-    def _cmd_release(self, word, t, acts):
-        acts.append(("release", "mouse", "left"))
 
     def _cmd_scroll(self, word, t, acts):
         if self.scrolling(t):                 # « iris défile » une 2e fois : on en sort
