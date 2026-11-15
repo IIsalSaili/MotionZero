@@ -35,14 +35,66 @@ SYSTEM = (
     "d'Anthropic ou « un modèle de langage ». Si on te demande qui tu es, tu es Iris, l'assistante de l'appli. "
     "L'application sait aussi faire, sans toi : souris et clics, dictée de texte, fenêtres et applis, Chrome, "
     "Discord, rappels, minuteur, calendrier ; « iris aide » affiche toutes les commandes, « iris guide » la "
-    "documentation. Tu n'as pas accès à internet : pour l'actualité ou une information récente, dis-le "
-    "franchement au lieu d'inventer. "
+    "documentation. "
     "Réponds en français, en tutoyant, en trois phrases au maximum, sans mise en forme (pas de listes, de gras "
     "ni de titres). Va droit au but.")
 WHISPER_IDLE_S = 600      # inutilisé 10 min : déchargé (rechargé en ~2-3 s à la commande suivante)
 WHISPER_CPU_THREADS = 4
 ANSWER_S = 15.0          # durée d'affichage de la réponse
 CLAUDE_TIMEOUT_S = 60
+SEARCH = "RECHERCHE:"
+# 1er appel : réponse directe, ou demande de recherche (une ligne) si la question en a besoin
+ASK_OR_SEARCH = (
+    " Nous sommes le {date}. Si la réponse demande une information récente ou que tu ne connais pas avec "
+    "certitude (actualité, météo, prix, horaires, résultats sportifs, sorties, personnes peu connues), ne réponds "
+    "pas : écris seulement une ligne « RECHERCHE: <requête courte pour un moteur de recherche> ».")
+# 2e appel : réponse à partir des pages lues
+WITH_WEB = (
+    " Nous sommes le {date}. Voici ce qu'une recherche internet vient de trouver. Réponds à partir de ces "
+    "extraits, en nommant le site d'où vient l'information. S'ils ne contiennent pas la réponse, dis-le.\n\n{web}")
+WEB_FAILED = (
+    " Nous sommes le {date}. La recherche internet a échoué : dis-le en une phrase, puis réponds avec ce que "
+    "tu sais en précisant que ça peut être dépassé.")
+
+
+def _today():
+    import datetime
+    days = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+    d = datetime.date.today()
+    return f"{days[d.weekday()]} {d:%d/%m/%Y}"
+
+
+def search_query(answer):
+    """Requête demandée par le modèle (« RECHERCHE: … »), ou None si c'est une vraie réponse."""
+    a = answer.strip().strip("«»\"' ")
+    if a.upper().startswith(SEARCH):
+        q = a[len(SEARCH):].strip().strip("«»\"' ")
+        return q or None
+    return None
+
+
+def answer_question(question, ask=None, research=None, on_search=None):
+    """Réponse à une question, avec recherche internet si le modèle la demande (2 appels au plus)."""
+    from . import web
+    ask = ask or ask_claude
+    research = research or web.research
+    date = _today()
+    first = ask(question, system=SYSTEM + ASK_OR_SEARCH.format(date=date))
+    query = search_query(first)
+    if query is None:
+        return first
+    log.info("recherche demandee : %s", query)
+    if on_search:
+        on_search(query)
+    try:
+        found = research(query)
+    except web.WebError as exc:
+        log.warning("recherche echouee : %s", exc)
+        return ask(question, system=SYSTEM + WEB_FAILED.format(date=date))
+    answer = ask(question, system=SYSTEM + WITH_WEB.format(date=date, web=found))
+    if search_query(answer) is not None:          # il redemande : on ne boucle pas
+        return "Je n'ai pas trouvé la réponse sur internet."
+    return answer
 
 
 def find_claude():
@@ -166,7 +218,7 @@ class Asker:
             self._set("thinking", question=question)
             log.info("question : %s", question)
             t0 = time.perf_counter()
-            answer = ask_claude(question)
+            answer = answer_question(question, on_search=lambda q: self._set("searching"))
             log.info("reponse (%.1f s) : %s", time.perf_counter() - t0, answer)
             self._set("answer", answer=answer)
         except Exception as exc:

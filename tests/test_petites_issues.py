@@ -66,7 +66,8 @@ def test_jamais_claude_ni_haiku_pour_le_personnage():
     for phase in ("thinking", "answer"):
         assert "Iris" in island_text({"qa": {"phase": phase}})[1]
     assert "Claude t'écoute" == island_text({"dictating": True})[1]    # micro de Claude dans VS Code : logique
-    assert SYSTEM.startswith("Tu es Iris") and "internet" in SYSTEM
+    from motionzero.ask import ASK_OR_SEARCH, WITH_WEB
+    assert SYSTEM.startswith("Tu es Iris") and "RECHERCHE" in ASK_OR_SEARCH and "internet" in WITH_WEB
 
 
 def test_animations_coupees():

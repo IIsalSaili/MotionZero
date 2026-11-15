@@ -13,6 +13,7 @@
 | **Démarrage de Windows** | Raccourci « Iris (gardien) » du dossier Démarrage : `pythonw -m motionzero.garde --start`. |
 | **Bot Discord** | Il relance Iris si elle se fige ou s'arrête sans dire « bye ». |
 | Ligne de commande | `.venv/Scripts/python -m motionzero --voice` (`--simulation` : rien n'est envoyé à Windows). |
+| Navigateur de « iris question » | une fois après l'installation : `.venv/Scripts/python -m playwright install chromium` (sans lui, Iris répond sans internet et le dit). |
 
 ## Volume d'Iris
 

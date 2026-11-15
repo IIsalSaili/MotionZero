@@ -59,7 +59,8 @@ graph LR
 | `poses.py` | poses par angles 3D des doigts (clic) | 128 | — |
 | `filters.py` | filtre One Euro | 34 | test_engine |
 | `output.py` | `SendInput`, relâchement de sécurité | 155 | test_engine, test_voice |
-| `ask.py` | Whisper (GPU, déchargé après 10 min) + `claude -p` Haiku | 170 | test_perf |
+| `ask.py` | Whisper (GPU, déchargé après 10 min) + `claude -p` Haiku ; demande une recherche si besoin (2 appels au plus) | 230 | test_perf, test_question_web |
+| `web.py` | recherche internet : Chromium headless (Playwright), Startpage puis Bing, texte des 2 premières pages (12 000 car. au plus) | 120 | test_question_web |
 | `typer.py` | « iris type » : écrit le texte dicté | 99 | test_type |
 | `apps.py` | « iris ouvre / ferme » : applis du menu Démarrer | 246 | test_type |
 | `reminders.py` | rappels, alarmes, `Desk` | 554 | test_reminders |
