@@ -1133,8 +1133,9 @@ class _IslandPainter:
         w = max(ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120, CAL_W + 40)   # + pastille Discord / calendrier
         h = max(ISLET + ANSWER_MAX_H + 8, ISLET + 14 + 56 + CAL_H + 10, ISLET + 14 + HELP_H + 10)
         x = int((self.width - w) // 2)
-        if getattr(self, "quota", None):       # pastille du quota, collée au coin haut gauche
+        if getattr(self, "quota", None) or getattr(self, "quota_gone", False):   # pastille du quota (ou à effacer)
             w, x = w + x, 0
+            self.quota_gone = False
         return QRect(x, ISLAND_TOP - 4, int(w), h)
 
     def update(self, st, now):
@@ -1168,6 +1169,8 @@ class _IslandPainter:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
         q = st.get("quota")                    # [(« 5 h », « 40 % · reset 22h59 »), (« Semaine », …)] si allumé
+        if getattr(self, "quota", None) and not q:
+            self.quota_gone = True             # masquée : repeindre le coin gauche une fois pour l'effacer
         self.quota = tuple(q) if q else None
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
                    rem_key, self.next_rem, tuple(self.timer_pills), self.quota)
