@@ -66,6 +66,7 @@ GROUPS = [
         ("calendrier", "la semaine"),
         ("heure / date", "affichées 5 s"),
         ("quota", "quota Claude, oui / non"),
+        ("focus", "sans dire iris, 10 min"),
     ]),
     ("Iris", [
         ("stop", "arrête tout, sans « iris »"),

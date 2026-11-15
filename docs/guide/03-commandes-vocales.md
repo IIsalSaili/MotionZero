@@ -212,7 +212,8 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 |---|---|
 | Toujours | `stop` ; `lâche` pendant un glisser |
 | 2 s après « iris skip / back / efface / undo / redo / espace / suivant / précédent » | le même mot (et les autres touches répétables) ; chaque mot relance les 2 s |
-| Souris allumée | `clic`, `double`, `menu` (et `glisse`, `lâche` avec « iris ») |
+| Souris allumée ou bouton tenu (« iris glisse ») | `clic`, `double`, `menu`, `glisse`, `lâche`, `scroll` |
+| Mode focus (« iris focus ») | toutes les commandes, dites seules et nettement ; `focus` seul l'éteint, et il s'éteint tout seul après 10 min sans commande. À garder pour les moments sans conversation à côté |
 | VS Code devant (hors Chrome) | `suivant`, `précédent` |
 | Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
 | Rappel affiché | `plus tard` |

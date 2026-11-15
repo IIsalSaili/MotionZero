@@ -100,6 +100,7 @@ WORDS = {
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",
+    "focus": "focus",     # « iris focus » : plus besoin de dire « iris » ; « focus » seul l'éteint
     "quota": "quota",     # « iris quota » : affiche / masque le quota Claude (session de 5 h) en haut à droite
     "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
     "pars": "pars",       # « iris pars » : il quitte le vocal

@@ -91,7 +91,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
 "réduis": "FENETRE REDUITE",
                 "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
-                "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE", "quota": "QUOTA CLAUDE"}
+                "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE", "quota": "QUOTA CLAUDE", "focus": "FOCUS"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop", "timer": "timer_stop",
@@ -117,6 +117,8 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
                   "sourdine": (("discord_deafen",), None)}
+FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
+
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
 COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag", "lâche": "release",
             "scroll": "scroll", "claude": "claude", "souris": "mouse", "question": "question", "ouvre": "open",
@@ -125,7 +127,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
-            "aide": "help", "guide": "guide", "quota": "quota"}
+            "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus"}
 
 
 
@@ -214,6 +216,7 @@ class Core:
         self.ask_t0 = -1e9
         # voix
         self.listen_until = -1e9
+        self.focus_until = -1e9          # mode focus : commandes sans « iris » jusqu'à cet instant
         self.voice_scroll_until = -1e9
         self.voice_scroll_armed = False       # la main est passée dans la bande du centre
         self.voice_scroll_y0 = 0.5            # centre du défilement ; à la tête, il suit au-delà de la butée
@@ -578,6 +581,10 @@ class Core:
         return self.mode != Mode.DISABLED and (t < self.listen_until or self.bubble is not None
                                                or self.menu.is_open)
 
+    def focus_on(self, t):
+        """Mode focus : plus besoin de dire « iris » (pas de conversation à côté). Jamais en pause."""
+        return self.mode != Mode.DISABLED and t < self.focus_until
+
     def voice(self, word, t, t_start=None):
         """Un mot reconnu (déjà filtré : dit seul). Renvoie les actions.
         Ordre des étapes = ordre de priorité : chacune traite le mot (et renvoie les actions) ou passe (None)."""
@@ -595,7 +602,7 @@ class Core:
                 if word not in (WAKE_WORD, "annule") and lw and lw[0] == word and lw[2]:
                     self.type_erase_until = -1e9   # autre commande faite : « iris annule » reprend son sens habituel
                 return done
-        if not self.listening(t):
+        if not (self.listening(t) or self.focus_on(t)):
             self.last_word = (word, t, False)  # entendu mais écoute fermée : ignoré
             self.last_gesture = (f'"{word}" ignore : dis IRIS avant', t)
             return acts
@@ -728,7 +735,10 @@ class Core:
             # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
             self._heard_alone(word, t, VOICE_LABELS[word])
             return [("hotkey", VOICE_HOTKEYS[word])]
-        if (chrome and word in ("clic", "double")) or (self.mouse and word in ("clic", "double", "menu")):
+        mouse = self.mouse or self.dragging
+        if mouse and word in ("glisse", "scroll"):
+            return self._v_command(word, t, acts)   # souris : glisse / scroll sans « iris » (15/11)
+        if (chrome and word in ("clic", "double")) or (mouse and word in ("clic", "double", "menu")):
             # mode Chrome ou souris allumée : clic, double clic (et clic droit en souris) sans « iris » (12/11)
             # « iris clic » : on vise le début de « iris » ; « clic » seul : le début du mot
             ref = self.wake_t if self.listening(t) else (t_start if t_start is not None else t)
@@ -775,6 +785,11 @@ class Core:
         return acts
 
     def _v_command(self, word, t, acts):
+        if self.focus_on(t) and word != "focus":
+            self.focus_until = t + FOCUS_IDLE_S   # chaque commande prolonge le mode focus
+        return self._v_command_run(word, t, acts)
+
+    def _v_command_run(self, word, t, acts):
         """« iris » + un mot : une seule commande par « iris » (avant, la fenêtre restait ouverte 8 s et un mot de
         la conversation qui suivait — « colle », « chrome » — était exécuté)."""
         if word != "annule":
@@ -916,6 +931,14 @@ class Core:
 
     def _cmd_clock(self, word, t, acts):
         self.clock_until = t + self.cfg.clock_s
+
+    def _cmd_focus(self, word, t, acts):
+        """« iris focus » : commandes sans « iris » ; « focus » (seul) l'éteint ; seul après 10 min sans commande."""
+        if self.focus_on(t):
+            self.focus_until = -1e9
+            return "FOCUS ETEINT : redis IRIS avant"
+        self.focus_until = t + FOCUS_IDLE_S
+        return "FOCUS : plus besoin de dire IRIS"
 
     def _cmd_quota(self, word, t, acts):
         self.quota_shown = not self.quota_shown
