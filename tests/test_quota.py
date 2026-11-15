@@ -126,3 +126,15 @@ def test_choix_garde(tmp_path):
     quota.write_shown(p, False)
     assert quota.read_shown(p) is False
     quota.write_shown(str(tmp_path / "absent" / "q.txt"), True)   # écriture impossible : pas d'exception
+
+
+def test_quota_masque_efface_toute_la_pastille():
+    """« iris quota » qui masque : le coin gauche est repeint une fois, sinon un bout de pastille reste à l'écran."""
+    from motionzero.ui import QApplication, _IslandPainter
+    QApplication.instance() or QApplication([])
+    p = _IslandPainter(1920)
+    p.update({"mode": "NEUTRE", "quota": [("5 h", "40 % · reset 22h59")]}, 1.0)
+    assert p.rect().left() == 0
+    p.update({"mode": "NEUTRE"}, 2.0)
+    assert p.rect().left() == 0          # repeint du coin pour effacer
+    assert p.rect().left() > 0           # puis zone centrale seulement
