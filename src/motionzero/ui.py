@@ -12,7 +12,9 @@ import time as _time
 from PySide6.QtCore import QObject, QPointF, QRect, QRectF, Qt, QTimer, Signal
 from PySide6.QtGui import (QColor, QFont, QFontDatabase, QFontMetrics, QGuiApplication, QImage, QPainter,
                            QPainterPath, QPen, QPixmap)
-from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QVBoxLayout, QWidget
+
+from .accueil import HOME_TITLE, conso_line
 
 __all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "QApplication", "StopButton",
            "set_capture_visible"]
@@ -23,144 +25,12 @@ class Bridge(QObject):
     state = Signal(object)   # état pour le verre : curseur, progression, main perdue
     stop_hover = Signal(float)  # survol du bouton STOP par la main (0..1)
     done = Signal()          # le moteur s'est arrêté
-    stats = Signal(object)   # mesures de consommation (panneau de la page d'accueil)
+    stats = Signal(object)   # mesures de consommation (ligne du bas de la page d'accueil)
+    home = Signal(object)    # contenu de la page d'accueil (accueil.home_view)
     repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
     pointer = Signal(str)    # souris à la main / à la tête (changé à la voix) -> bouton de l'accueil
     quiet = Signal(str)      # choix « voix basse » enregistré -> bouton de l'accueil
     iris_volume = Signal(float)  # volume des sons d'Iris choisi -> bouton de l'accueil
-
-
-class ConsoPanel(QWidget):
-    """Panneau « Consommation » de la page d'accueil : motionzero face au PC entier (voir stats.py)."""
-    APP, PC, BG, TXT, DIM = QColor(80, 200, 255), QColor(150, 150, 160), QColor(24, 24, 28), QColor(235, 235, 240), \
-        QColor(140, 140, 150)
-
-    def __init__(self):
-        super().__init__()
-        self.setFixedWidth(340)
-        self.setMinimumHeight(560)
-        self.s = None
-
-    def set_stats(self, s):
-        self.s = s
-        self.update()
-
-    def _bar(self, p, x, y, w, h, frac, color, base=None):
-        p.fillRect(x, y, w, h, QColor(50, 50, 58))
-        if base is not None:   # PC entier en gris, motionzero par-dessus en couleur
-            p.fillRect(x, y, int(w * min(max(base, 0), 1)), h, self.PC)
-        p.fillRect(x, y, int(w * min(max(frac, 0), 1)), h, color)
-
-    def _curve(self, p, x, y, w, h, values, color, top=100.0):
-        if len(values) < 2:
-            return
-        pen = QPen(color, 1.5)
-        p.setPen(pen)
-        step = w / (60 - 1)
-        x0 = x + w - step * (len(values) - 1)
-        pts = [QPointF(x0 + i * step, y + h - h * min(v, top) / top) for i, v in enumerate(values)]
-        for a, b in zip(pts, pts[1:]):
-            p.drawLine(a, b)
-
-    def paintEvent(self, event):
-        p = QPainter(self)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.fillRect(self.rect(), self.BG)
-        f = QFont("Segoe UI", 10)
-        p.setFont(f)
-        s, x, w, y = self.s, 14, self.width() - 28, 26
-
-        def text(t, yy, color=None, bold=False, right=None):
-            f.setBold(bold)
-            p.setFont(f)
-            p.setPen(color or self.TXT)
-            if right is not None:
-                p.drawText(QRect(x, yy - 14, w, 18), Qt.AlignmentFlag.AlignRight, right)
-            if t:
-                p.drawText(x, yy, t)
-
-        text("CONSOMMATION", y, bold=True)
-        f.setBold(False)
-        p.setFont(f)
-        fm = QFontMetrics(f)
-        lx = x + w - fm.horizontalAdvance("motionzero") - fm.horizontalAdvance("PC") - 44
-        for label, color in (("motionzero", self.APP), ("PC", self.PC)):
-            p.fillRect(lx, y - 9, 8, 8, color)
-            p.setPen(self.DIM)
-            p.drawText(lx + 12, y, label)
-            lx += 12 + fm.horizontalAdvance(label) + 14
-        if s is None:
-            text("mesure en cours…", y + 30, self.DIM)
-            p.end()
-            return
-        g = lambda k, d=None: s.get(k, d)
-        y += 30
-        # processeur
-        text("Processeur", y, bold=True, right=f"{g('app_cpu', 0):.1f} %  /  PC {g('pc_cpu', 0):.0f} %")
-        y += 8
-        self._bar(p, x, y, w, 10, g("app_cpu", 0) / 100, self.APP, g("pc_cpu", 0) / 100)
-        y += 16
-        text(f"motionzero : {g('app_cpu_core', 0):.0f} % d'un cœur  ·  {g('n_threads', 0)} fils", y + 10, self.DIM)
-        y += 20
-        hist = g("history", {})
-        p.fillRect(x, y, w, 44, QColor(32, 32, 38))
-        self._curve(p, x, y, w, 44, hist.get("pc_cpu", []), self.PC)
-        self._curve(p, x, y, w, 44, hist.get("app_cpu", []), self.APP, top=max(10.0, max(hist.get("app_cpu", [0]) or [0]) * 1.2))
-        y += 58
-        # cœurs
-        cores = g("cores", [])
-        text(f"Cœurs ({len(cores)})", y, bold=True)
-        y += 8
-        if cores:
-            cw = (w - (len(cores) - 1) * 4) / len(cores)
-            for i, c in enumerate(cores):
-                cx = int(x + i * (cw + 4))
-                p.fillRect(cx, y, int(cw), 40, QColor(50, 50, 58))
-                hh = int(40 * min(c, 100) / 100)
-                p.fillRect(cx, y + 40 - hh, int(cw), hh, QColor(255, 120, 80) if c > 85 else self.PC)
-        y += 60
-        # détail par fil
-        text("Par partie de motionzero (% d'un cœur)", y, bold=True)
-        y += 6
-        for label, pct in (g("threads") or [])[:6]:
-            y += 18
-            text(label, y, self.DIM, right=f"{pct:.0f} %")
-        y += 26
-        # mémoire
-        text("Mémoire (RAM)", y, bold=True,
-             right=f"{g('app_private', 0):.0f} Mo  /  PC {g('pc_ram_used', 0):.1f} sur {g('pc_ram_total', 0):.0f} Go")
-        y += 8
-        tot = max(g("pc_ram_total", 1), 1e-6) * 1024
-        self._bar(p, x, y, w, 10, g("app_private", 0) / tot, self.APP, g("pc_ram_used", 0) * 1024 / tot)
-        y += 34
-        # carte graphique
-        if g("pc_vram_total") is None:
-            text("Carte graphique : indisponible", y, bold=True)
-            y += 26
-        else:
-            text("Carte graphique", y, bold=True, right=f"{g('app_gpu', 0):.0f} %  /  PC {g('pc_gpu', 0):.0f} %")
-            y += 8
-            self._bar(p, x, y, w, 10, g("app_gpu", 0) / 100, self.APP, g("pc_gpu", 0) / 100)
-            y += 26
-            text("Mémoire vidéo", y, self.DIM,
-                 right=f"{g('app_vram', 0) / 1024:.1f} Go  /  PC {g('pc_vram_used', 0) / 1024:.1f} sur "
-                       f"{g('pc_vram_total', 0) / 1024:.0f} Go")
-            y += 8
-            vt = max(g("pc_vram_total", 1), 1e-6)
-            self._bar(p, x, y, w, 10, g("app_vram", 0) / vt, self.APP, g("pc_vram_used", 0) / vt)
-            y += 34
-        # état
-        text("État", y, bold=True)
-        rows = [("Whisper", "chargé" if g("whisper") else "déchargé (carte graphique libre)"),
-                ("Détection de la main", f"{g('detect_hz', 0):.0f} fois / s"),
-                ("2e avis vocal", "éveillé" if g("free_awake") else "endormi"),
-                ("Priorité", g("priority", "?"))]
-        if not g("voice_on", True):
-            rows[2] = ("2e avis vocal", "voix coupée")
-        for k, v in rows:
-            y += 18
-            text(k, y, self.DIM, right=v)
-        p.end()
 
 
 def pointer_button_text(pointer):
@@ -179,6 +49,59 @@ def volume_button_text(volume):
     return f"Volume d'Iris : {round(volume * 100)} %"
 
 
+# --- Page d'accueil : mise en page A « Tableau calme », DA Dot Iris (issue #35) ----------------------------------
+# Le contenu vient d'accueil.home_view (calculé dans la boucle) ; ici, seulement le dessin.
+HOME = {"fond": "#0B0B0E", "surface": "#17171C", "bord": "#2A2A32", "texte": "#F2F2F5", "texte2": "#A6A6B0",
+        "off": "#6E6E78", "lecture": "#B48CFF", "souris": "#F5A524", "chrome": "#6F9BF5", "ok": "#34C759",
+        "erreur": "#FF5A5F"}
+MODE_COLORS_HOME = {"CHROME": HOME["chrome"], "LECTURE": HOME["lecture"], "NEUTRE": HOME["off"], "PAUSE": HOME["off"]}
+TONE_COLORS = {"listen": HOME["ok"], "busy": HOME["lecture"], "off": HOME["off"], "idle": HOME["texte"]}
+SENSOR_COLORS = {"ok": HOME["ok"], "off": HOME["souris"], "idle": HOME["off"], "fail": HOME["erreur"]}
+_FONT = "'Atkinson Hyperlegible'"
+
+
+def _esc(s):
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def now_html(title, rows):
+    """Bloc « Ici, maintenant » en texte riche : effet à gauche, mot à dire en vert. Pur : testable."""
+    lines = "".join(
+        f"<tr><td style='padding:3px 12px 3px 0'>{_esc(what)}</td>"
+        f"<td style='padding:3px 0;color:{HOME['ok']};font-weight:bold' align='right'>{_esc(word)}</td></tr>"
+        for word, what in rows)
+    return (f"<div style='color:{HOME['chrome']};font-size:12pt;font-weight:bold;letter-spacing:1px'>"
+            f"{_esc(title.upper())}</div><table width='100%' style='font-size:13pt'>{lines}</table>")
+
+
+def sensors_html(items):
+    """Pastilles des capteurs et services. Pur : testable."""
+    out = []
+    for name, state, detail in items:
+        c = SENSOR_COLORS.get(state, HOME["off"])
+        d = f" <span style='color:{HOME['texte2']}'>{_esc(detail)}</span>" if detail else ""
+        out.append(f"<span style='color:{c}'>●</span> {_esc(name)}{d}")
+    return "&nbsp;&nbsp;&nbsp;".join(out)
+
+
+def last_html(items):
+    """Dernières commandes : vert compris, rouge refusé, avec leur âge. Pur : testable."""
+    if not items:
+        return f"<span style='color:{HOME['off']}'>Aucune commande récente</span>"
+    out = []
+    for label, ok, age in items:
+        c, sign = (HOME["ok"], "✓") if ok else (HOME["erreur"], "✗")
+        out.append(f"<span style='color:{c}'>{sign} {_esc(label)}</span>"
+                   f"<span style='color:{HOME['texte2']}'> · {age:.0f} s</span>")
+    return "&nbsp;&nbsp;&nbsp;&nbsp;".join(out)
+
+
+def _pill_style(bg, fg, border=None, radius=28):
+    return (f"QPushButton {{ background: {bg}; color: {fg}; border: 3px solid {border or bg}; border-radius: {radius}px;"
+            f" font: bold 14pt {_FONT}; padding: 0 16px; }}"
+            f"QPushButton:hover {{ border-color: {HOME['texte']}; }}")
+
+
 class PreviewWindow(QWidget):
     closed = Signal()
     pointer_clicked = Signal()                 # « main / tête » : traité par la boucle principale (jamais ici)
@@ -187,60 +110,163 @@ class PreviewWindow(QWidget):
 
     def __init__(self, pointer="main", quiet="auto", volume=0.5):
         super().__init__()
-        self.setWindowTitle("motionzero")
+        load_fonts()
+        self.setWindowTitle(HOME_TITLE)
+        self.setStyleSheet(f"PreviewWindow {{ background: {HOME['fond']}; }}"
+                           f"QLabel {{ color: {HOME['texte']}; font-family: {_FONT}; }}")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.pointer = pointer
+
+        # bande du haut : logo, état, mode, rappel des mots d'aide
+        bar = QWidget()
+        bar.setObjectName("bar")
+        bar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        bar.setStyleSheet("#bar { background: #000; border-radius: 40px; }")
+        bar.setFixedHeight(80)
+        self.logo = HomeLogo()                 # le même logo que l'île, disque clair
+        self.state_lbl = QLabel("Démarrage…")
+        self.state_lbl.setStyleSheet(f"font: bold 24pt {_FONT};")
+        self.mode_lbl = QLabel()
+        self.mouse_lbl = QLabel("SOURIS")
+        self.mouse_lbl.setStyleSheet(f"background: {HOME['souris']}; color: {HOME['fond']}; border-radius: 14px;"
+                                     f" padding: 4px 14px; font: bold 12pt {_FONT}; letter-spacing: 2px;")
+        self.mouse_lbl.hide()
+        hint = QLabel(f"Toutes les commandes : <b style='color:{HOME['ok']}'>iris aide</b>"
+                      f" &nbsp;·&nbsp; doc : <b style='color:{HOME['ok']}'>iris guide</b>")
+        hint.setStyleSheet(f"color: {HOME['texte2']}; font-size: 12pt;")
+        bl = QHBoxLayout(bar)
+        bl.setContentsMargins(20, 0, 28, 0)
+        bl.setSpacing(18)
+        for w in (self.logo, self.state_lbl, self.mode_lbl, self.mouse_lbl):
+            bl.addWidget(w, 0, Qt.AlignmentFlag.AlignVCenter)
+        bl.addStretch(1)
+        bl.addWidget(hint)
+
+        # gauche : la caméra seule (sans texte dessus), puis les capteurs
         self.label = QLabel(alignment=Qt.AlignmentFlag.AlignCenter)
         self.label.setText("Démarrage de la caméra…")
-        self.conso = ConsoPanel()
-        self.pointer = pointer
-        self.pointer_btn = QPushButton(pointer_button_text(pointer))
-        self.pointer_btn.setMinimumHeight(56)  # grande cible (clic à la main ou à la tête)
-        self.pointer_btn.setStyleSheet("QPushButton { background: #000; color: #fff; border: 1px solid #555;"
-                                       " border-radius: 28px; font: bold 13pt 'Atkinson Hyperlegible'; }"
-                                       "QPushButton:hover { border-color: #fff; }")
-        # jamais au clavier : avec le focus, une touche Espace (envoyée par Iris, la dictée, un réveil…)
-        # « cliquait » le bouton sans que personne ne l'ait touché
-        self.pointer_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        self.pointer_btn.clicked.connect(self._toggle_pointer)
+        self.label.setMinimumSize(480, 360)
+        # l'image suit la taille de la zone, jamais l'inverse (sinon la fenêtre grandit à chaque image)
+        self.label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Ignored)
+        self.label.setStyleSheet(f"background: #060608; border-radius: 16px; color: {HOME['texte2']}; font-size: 14pt;")
+        self.sensors_lbl = QLabel()
+        self.sensors_lbl.setWordWrap(True)
+        self.sensors_lbl.setStyleSheet("font-size: 12pt;")
+        left = QVBoxLayout()
+        left.setSpacing(10)
+        left.addWidget(self.label, 1)
+        left.addWidget(self.sensors_lbl)
+
+        # droite : main / tête, ce qui marche ici, voix basse et volume
+        self.main_btn = QPushButton("MAIN")
+        self.head_btn = QPushButton("TÊTE")
         self.quiet_btn = QPushButton(quiet_button_text(quiet))
-        self.quiet_btn.setMinimumHeight(56)
-        self.quiet_btn.setStyleSheet(self.pointer_btn.styleSheet())
-        self.quiet_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.quiet_btn.setToolTip("Iris accepte une voix plus faible. Clic : le soir / toujours / jamais")
-        self.quiet_btn.clicked.connect(self.quiet_clicked.emit)
         self.volume_btn = QPushButton(volume_button_text(volume))
-        self.volume_btn.setMinimumHeight(56)
-        self.volume_btn.setStyleSheet(self.pointer_btn.styleSheet())
-        self.volume_btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.volume_btn.setToolTip("Sons d'Iris seulement (pas le volume de Windows). Clic : 30 / 50 / 70 / 100 %")
+        for b in (self.main_btn, self.head_btn, self.quiet_btn, self.volume_btn):
+            b.setMinimumHeight(64)             # grande cible (clic à la main ou à la tête)
+            # jamais au clavier : avec le focus, une touche Espace (envoyée par Iris, la dictée, un réveil…)
+            # « cliquait » le bouton sans que personne ne l'ait touché
+            b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        for b in (self.quiet_btn, self.volume_btn):
+            b.setStyleSheet(_pill_style("#000", HOME["texte"], "#555"))
+        self.main_btn.clicked.connect(lambda: self._choose_pointer("main"))
+        self.head_btn.clicked.connect(lambda: self._choose_pointer("tete"))
+        self.quiet_btn.clicked.connect(self.quiet_clicked.emit)
         self.volume_btn.clicked.connect(self.volume_clicked.emit)
-        side = QVBoxLayout()
-        side.setContentsMargins(8, 8, 8, 8)
-        side.addWidget(self.conso, 1)
-        side.addWidget(self.pointer_btn)
-        side.addWidget(self.quiet_btn)
-        side.addWidget(self.volume_btn)
-        lay = QHBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.setSpacing(0)
-        lay.addWidget(self.label, 1)
-        lay.addLayout(side)
-        self._sized = False
+        ptr = QHBoxLayout()
+        ptr.setSpacing(16)
+        ptr.addWidget(self.main_btn)
+        ptr.addWidget(self.head_btn)
+        self.now_lbl = QLabel()
+        self.now_lbl.setWordWrap(True)
+        self.now_lbl.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.now_lbl.setStyleSheet(f"background: {HOME['surface']}; border-radius: 16px; padding: 16px 20px;")
+        right_w = QWidget()
+        right_w.setFixedWidth(400)
+        right = QVBoxLayout(right_w)
+        right.setContentsMargins(0, 0, 0, 0)
+        right.setSpacing(14)
+        right.addLayout(ptr)
+        right.addWidget(self.now_lbl, 1)
+        right.addWidget(self.quiet_btn)
+        right.addWidget(self.volume_btn)
+
+        body = QHBoxLayout()
+        body.setSpacing(20)
+        body.addLayout(left, 1)
+        body.addWidget(right_w)
+
+        # bas : consommation sur une ligne, dernières commandes
+        self.conso_lbl = QLabel(conso_line(None))
+        self.conso_lbl.setStyleSheet(f"color: {HOME['texte2']}; font-size: 11pt;")
+        self.last_lbl = QLabel(last_html([]))
+        self.last_lbl.setStyleSheet("font-size: 12pt;")
+        foot = QHBoxLayout()
+        foot.setContentsMargins(8, 0, 8, 0)
+        foot.addWidget(self.conso_lbl)
+        foot.addStretch(1)
+        foot.addWidget(self.last_lbl)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(24, 24, 24, 16)
+        lay.setSpacing(18)
+        lay.addWidget(bar)
+        lay.addLayout(body, 1)
+        lay.addLayout(foot)
+        self._home = None
+        self.set_pointer(pointer)
+        self.set_home({"state": "Démarrage…", "tone": "idle", "mode": "NEUTRE", "mouse": False,
+                       "now_title": "Maintenant", "now_rows": [], "sensors": [], "last": []})
+        self.resize(1280, 760)
         self.visible_flag = True   # lu par le moteur : réduite, l'aperçu n'est plus dessiné
 
-    def _toggle_pointer(self):
-        self.set_pointer("main" if self.pointer == "tete" else "tete")
+    def _choose_pointer(self, pointer):
+        if pointer == self.pointer:
+            return
+        self.set_pointer(pointer)
         self.pointer_clicked.emit()
 
     def set_pointer(self, pointer):
-        """Choix courant (aussi changé à la voix) : le texte du bouton suit."""
+        """Choix courant (aussi changé à la voix) : la cible choisie est pleine, l'autre en contour."""
         self.pointer = pointer
-        self.pointer_btn.setText(pointer_button_text(pointer))
+        on, off = _pill_style(HOME["souris"], HOME["fond"]), _pill_style(HOME["surface"], HOME["texte"], HOME["bord"])
+        self.main_btn.setStyleSheet(on if pointer != "tete" else off)
+        self.head_btn.setStyleSheet(on if pointer == "tete" else off)
+        self.main_btn.setToolTip("Dire : iris main")
+        self.head_btn.setToolTip("Dire : iris tête")
 
     def set_volume(self, volume):
         self.volume_btn.setText(volume_button_text(volume))
 
     def set_quiet(self, choice):
         self.quiet_btn.setText(quiet_button_text(choice))
+
+    def set_stats(self, s):
+        self.conso_lbl.setText(conso_line(s))
+
+    def set_home(self, v):
+        """Contenu calculé par accueil.home_view ; on ne redessine que ce qui a changé."""
+        if v == self._home:
+            return
+        old, self._home = self._home or {}, v
+        if (v.get("state"), v.get("tone")) != (old.get("state"), old.get("tone")):
+            self.state_lbl.setText(v.get("state", ""))
+            self.state_lbl.setStyleSheet(f"font: bold 24pt {_FONT}; color: {TONE_COLORS.get(v.get('tone'), HOME['texte'])};")
+        if v.get("mode") != old.get("mode"):
+            m = v.get("mode", "")
+            self.mode_lbl.setText(m)
+            self.mode_lbl.setStyleSheet(f"background: {MODE_COLORS_HOME.get(m, HOME['off'])}; color: {HOME['fond']};"
+                                        f" border-radius: 14px; padding: 4px 14px; font: bold 12pt {_FONT};"
+                                        f" letter-spacing: 2px;")
+        self.mouse_lbl.setVisible(bool(v.get("mouse")))
+        if (v.get("now_title"), v.get("now_rows")) != (old.get("now_title"), old.get("now_rows")):
+            self.now_lbl.setText(now_html(v.get("now_title", ""), v.get("now_rows", [])))
+        if v.get("sensors") != old.get("sensors"):
+            self.sensors_lbl.setText(sensors_html(v.get("sensors", [])))
+        if v.get("last") != old.get("last"):
+            self.last_lbl.setText(last_html(v.get("last", [])))
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -258,10 +284,11 @@ class PreviewWindow(QWidget):
         h, w = img.shape[:2]
         # BGR -> QImage ; .copy() car le tableau numpy peut être réutilisé par le moteur
         qimg = QImage(img.data, w, h, img.strides[0], QImage.Format.Format_BGR888).copy()
-        self.label.setPixmap(QPixmap.fromImage(qimg))
-        if not self._sized:
-            self.resize(w + self.conso.width(), max(h, self.conso.minimumHeight()))
-            self._sized = True
+        pix = QPixmap.fromImage(qimg)
+        box = self.label.size()
+        if box.width() > 0 and box.height() > 0:
+            pix = pix.scaled(box, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.FastTransformation)
+        self.label.setPixmap(pix)
 
     def closeEvent(self, event):
         # la croix n'arrête plus l'appli : seul le bouton STOP le fait. Elle réduit la fenêtre.
@@ -958,6 +985,46 @@ def islet_ring(st, age, motion=True):
     return (col, 3.5) if col is not None else (RING_DEFAULT, 2.0)
 
 
+def paint_logo(p, x, y, size, pm, ring=None):
+    """Logo d'Iris (île et accueil) : disque clair à fin contour, la main agrandie et centrée sur l'œil,
+    découpée par le cercle (le bout des doigts sort du cadre et n'est pas dessiné)."""
+    circle = QRectF(x + 1, y + 1, size - 2, size - 2)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(245, 245, 240))
+    p.drawEllipse(circle)
+    if pm is not None:
+        pw = size * EYE_IN_ISLET / EYE_W                    # largeur affichée de l'image
+        ph = pw * pm.height() / pm.width()
+        clip = QPainterPath()
+        clip.addEllipse(circle)
+        p.save()
+        p.setClipPath(clip)
+        p.drawPixmap(QRectF(x + size / 2 - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
+        p.restore()
+    col, width = ring or (RING_DEFAULT, 2.0)
+    p.setPen(QPen(col, width))
+    p.setBrush(Qt.BrushStyle.NoBrush)
+    p.drawEllipse(circle.adjusted(width / 2 - 1, width / 2 - 1, 1 - width / 2, 1 - width / 2))
+
+
+class HomeLogo(QWidget):
+    """Le logo de l'île, en tête de l'accueil (même dessin, même taille)."""
+
+    def __init__(self, size=None):
+        super().__init__()
+        self.size_px = size or ISLET
+        self.setFixedSize(self.size_px, self.size_px)
+        pm = QPixmap(_os.path.join(_LOGO_DIR, "neutre.png"))
+        self.pm = None if pm.isNull() else pm
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        paint_logo(p, 0, 0, self.size_px, self.pm)
+        p.end()
+
+
 def load_fonts():
     """Atkinson Hyperlegible (licence OFL, dans assets/fonts) : conçue pour la lisibilité."""
     for name in ("AtkinsonHyperlegible-Bold.ttf", "AtkinsonHyperlegible-Regular.ttf"):
@@ -1577,25 +1644,4 @@ class _IslandPainter:
         p.restore()
 
     def _draw_logo(self, p, x, y):
-        """Disque clair à fin contour sombre. La main, agrandie et centrée sur l'œil, est découpée
-        par le cercle : le bout des doigts sort du cadre et n'est pas dessiné."""
-        circle = QRectF(x + 1, y + 1, ISLET - 2, ISLET - 2)
-        # centrée sur l'œil à l'horizontale ; le bas de la paume posé sur le bas du cercle
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(245, 245, 240))
-        p.drawEllipse(circle)
-        pm = self.logos.get(self.logo)
-        if pm is not None:
-            pw = ISLET * EYE_IN_ISLET / EYE_W                   # largeur affichée de l'image
-            ph = pw * pm.height() / pm.width()
-            cx = x + ISLET / 2
-            clip = QPainterPath()
-            clip.addEllipse(circle)
-            p.save()
-            p.setClipPath(clip)
-            p.drawPixmap(QRectF(cx - EYE_AT[0] * pw, circle.bottom() - ph, pw, ph), pm, QRectF(pm.rect()))
-            p.restore()
-        col, width = self.ring
-        p.setPen(QPen(col, width))
-        p.setBrush(Qt.BrushStyle.NoBrush)
-        p.drawEllipse(circle.adjusted(width / 2 - 1, width / 2 - 1, 1 - width / 2, 1 - width / 2))
+        paint_logo(p, x, y, ISLET, self.logos.get(self.logo), self.ring)

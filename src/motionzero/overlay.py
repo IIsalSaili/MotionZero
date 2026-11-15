@@ -1,4 +1,5 @@
-"""Affichage (gestes v2) : image caméra + bandes de bord + anneau d'immobilité + bulle + menu + panneau d'aide."""
+"""Image caméra de l'accueil : bandes de bord, mains, anneau d'immobilité, bulle, menu, panne de caméra.
+Aucun texte d'aide ici : l'aide, l'état et les dernières commandes sont dessinés en Qt (accueil.py, ui.py)."""
 import time
 
 import cv2
@@ -7,43 +8,8 @@ import numpy as np
 from .camera import OK
 from .core import MENU_LABELS, Mode
 
-PANEL_W = 340
 WHITE, DIM, GREEN, YELLOW = (255, 255, 255), (110, 110, 110), (0, 220, 0), (0, 220, 255)
-MODE_COLORS = {Mode.NEUTRAL: (90, 90, 90), Mode.READING: (216, 78, 29), Mode.MOUSE: (12, 65, 194), Mode.DISABLED: (60, 60, 60)}  # BGR
 FLASH_S = 1.5
-
-HELP = {
-    Mode.NEUTRAL: [
-        "NEUTRE : la main ne fait rien",
-        "IRIS LECTURE > pages a la main",
-        "IRIS SOURIS  > curseur a la main",
-        "IRIS STOP    > revenir ici",
-    ],
-    Mode.READING: [
-        "LECTURE",
-        "Paume au bord DROIT  > page suivante",
-        "Paume au bord GAUCHE > page precedente",
-        "  (revenir au centre entre deux pages)",
-        "Paume en HAUT / en BAS > defile",
-        "",
-        "IRIS SOURIS > mode souris",
-    ],
-    Mode.MOUSE: [
-        "SOURIS",
-        "Bouger la main = deplacer le curseur",
-        "Retirer la main = la reposer ailleurs",
-        "",
-        "Cliquer a la voix :",
-        "  IRIS CLIC   = clic gauche",
-        "  IRIS MENU   = clic droit",
-        "  IRIS DOUBLE = double clic",
-        "  IRIS GLISSE / LACHE = glisser",
-        "(main immobile = rien ne se passe)",
-        "",
-        "Main absente 2 s > LECTURE",
-    ],
-    Mode.DISABLED: ["DESACTIVE"],
-}
 
 
 def _text(img, s, xy, scale=0.5, color=WHITE, thick=1):
@@ -129,125 +95,13 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
             left = max(0.0, cfg.menu_timeout_s - (now - core.menu.t0))
             _text(cam, f"{left:.1f} s", (mc[0] - 18, mc[1] + 5), 0.45, WHITE, 1)
 
-    # bandeau de mode
-    cv2.rectangle(cam, (0, 0), (w, 48), MODE_COLORS.get(core.mode, (60, 60, 60)), -1)
-    _text(cam, f"MODE : {core.mode}" + ("  + SOURIS" if core.mouse else "") + ("  (SIMULATION)" if simulation else ""), (12, 33), 0.85, WHITE, 2)
-    _text(cam, ("main detectee" if core.palm is not None else "AUCUNE MAIN") + f"   {fps:.0f} img/s"
-          "   fermer = STOP", (12, h - 14), 0.5, WHITE if core.palm is not None else (0, 0, 255), 1)
-
-    # confirmation d'action
+    # confirmation d'action : un contour vert (le libellé est dans les dernières commandes de l'accueil)
     if core.last_gesture and now - core.last_gesture[1] < FLASH_S:
         cv2.rectangle(cam, (0, 0), (w - 1, h - 1), GREEN, 8)
-        label = core.last_gesture[0]
-        scale = 1.3 if len(label) <= 16 else 0.9
-        cv2.rectangle(cam, (10, h // 2 + 20), (w - 10, h // 2 + 100 if simulation else h // 2 + 75), (0, 0, 0), -1)
-        _text(cam, label, (20, h // 2 + 62), scale, GREEN, 3)
-        if simulation:
-            _text(cam, "(simulation : rien n'est envoye a Windows)", (20, h // 2 + 90), 0.5, WHITE, 1)
 
     if cam_status != OK:
         cv2.rectangle(cam, (0, h // 2 - 40), (w, h // 2 + 40), (0, 0, 160), -1)
         _text(cam, f"CAMERA {cam_status.upper()}", (20, h // 2 + 12), 1.1, WHITE, 3)
 
-    # dictée Claude (VS Code) : micro allumé, puis « envoie » / « annule »
-    if voice_on and (core.dictating or core.confirming(now)):
-        cv2.rectangle(cam, (3, 51), (w - 4, h - 4), (200, 0, 200), 6)
-        cv2.rectangle(cam, (0, 52), (w, 92), (120, 0, 120), -1)
-        msg = (f"MICRO CLAUDE ({now - core.dictation_t0:.0f} s) - parle, coupe au silence" if core.dictating
-               else f"Dis ENVOIE ou ANNULE ({core.confirm_until - now:.0f} s)")
-        _text(cam, msg, (10, 79), 0.55, WHITE, 2)
-    # écoute vocale
-    elif voice_on and core.listening(now):
-        cv2.rectangle(cam, (3, 51), (w - 4, h - 4), (255, 220, 0), 4)
-        _text(cam, "ECOUTE : dis une commande", (w - 290, 76), 0.55, (255, 220, 0), 2)
-    if voice_on and core.last_word and now - core.last_word[1] < 2.0:
-        word, _, ok = core.last_word
-        _text(cam, f"entendu : {_ascii(word)}" + ("" if ok else " (ecoute fermee)"), (12, h - 40), 0.55,
-              (255, 220, 0) if ok else DIM, 1)
-
-    # panneau d'aide
-    panel = np.full((h, PANEL_W, 3), 30, np.uint8)
-    lines = HELP.get(Mode.MOUSE if core.mouse else core.mode, [])
-    for i, line in enumerate(lines):
-        if i == 0:
-            cv2.rectangle(panel, (0, 0), (PANEL_W, 48), MODE_COLORS.get(core.mode, (60, 60, 60)), -1)
-            _text(panel, f"GESTES - {line}", (12, 33), 0.7, WHITE, 2)
-        else:
-            _text(panel, line, (14, 46 + 24 * i), 0.48, WHITE)
-    _text(panel, "Les 2 mains marchent : celle qui bouge agit", (12, h - 18), 0.42, DIM)
-    if voice_on:
-        panel = np.vstack([panel, _voice_panel(core, now, PANEL_W)])
-    feed = _feed_box(core, now, w, simulation, max(panel.shape[0] - h, 170))
-    cam = np.vstack([cam, feed])
-    if panel.shape[0] < cam.shape[0]:
-        panel = np.vstack([panel, np.full((cam.shape[0] - panel.shape[0], PANEL_W, 3), 22, np.uint8)])
-    return np.hstack([cam, panel])
-
-
-def _feed_box(core, now, width, simulation, height):
-    """Historique des dernières commandes reconnues (gestes et voix), le plus récent en haut."""
-    box = np.full((height, width, 3), 20, np.uint8)
-    title = "COMMANDES RECONNUES" + ("  (simulation : rien n'est envoye)" if simulation else "")
-    _text(box, title, (10, 24), 0.5, WHITE, 1)
-    for i, (label, t) in enumerate(reversed(core.feed)):
-        age = now - t
-        color = GREEN if age < FLASH_S else (WHITE if age < 10 else DIM)
-        if "ignore" in label:
-            color = (0, 140, 255)
-        _text(box, f"{_ascii(label)}", (14, 54 + 24 * i), 0.55, color, 1)
-        _text(box, f"il y a {age:.0f} s", (width - 110, 54 + 24 * i), 0.45, DIM, 1)
-    if not core.feed:
-        _text(box, "(rien pour l'instant)", (14, 54), 0.5, DIM, 1)
-    return box
-
-
-VOICE_HELP = [  # (mot à dire, ce qui se passe) — un mot par ligne ; la liste complète : « iris aide »
-    ("aide", "TOUTES les commandes"),
-    ("guide", "documentation (GitHub)"),
-    ("clic", "clic gauche"),
-    ("double", "double clic"),
-    ("menu", "clic droit"),
-    ("defile", "puis monte/descends la main"),
-    ("glisse", "tenir le bouton (glisser)"),
-    ("lache", "relacher le bouton"),
-    ("entree", "touche Entree"),
-    ("espace", "touche Espace (ou SPACE)"),
-    ("annule", "touche Echap"),
-    ("copie", "Ctrl+C"),
-    ("colle", "Ctrl+V"),
-    ("claude", "micro Claude (VS Code)"),
-    ("", "  coupe au silence, puis"),
-    ("", "  ENVOIE ou ANNULE"),
-    ("ouvre", "puis le nom d'une appli"),
-    ("ferme", "puis le nom : la fermer"),
-    ("type", "dicter du texte au curseur"),
-    ("", "  puis ENVOIE / ANNULE (3 s)"),
-    ("pause", "tout desactiver"),
-    ("stop", "tout annuler (toujours ecoute)"),
-]
-CYAN = (255, 220, 0)
-
-
-
-def _voice_panel(core, now, width):
-    """Bloc d'aide vocale sous le panneau : un mot par ligne, état de l'écoute avec compte à rebours."""
-    rows = 2 + len(VOICE_HELP)
-    blk = np.full((22 * rows + 24, width, 3), 22, np.uint8)
-    if core.listening(now):
-        left = max(0.0, core.listen_until - now)
-        state = f"ECOUTE OUVERTE ({left:.0f} s)" if left > 0 else "ECOUTE OUVERTE (main immobile)"
-        cv2.rectangle(blk, (0, 0), (width, 30), (120, 100, 0), -1)
-        _text(blk, state, (10, 21), 0.55, WHITE, 2)
-    else:
-        _text(blk, "Dis IRIS pour ouvrir l'ecoute", (10, 21), 0.55, CYAN, 1)
-    _text(blk, "puis UN mot, seul :", (10, 50), 0.45, DIM)
-    for i, (word, what) in enumerate(VOICE_HELP):
-        y = 74 + 22 * i
-        if word:
-            _text(blk, f'"{word}"', (14, y), 0.5, CYAN, 1)
-        _text(blk, f"> {what}", (110, y), 0.45, WHITE, 1)
-    return blk
-
-
-def _ascii(s):
-    return s.translate(str.maketrans("éèêàâîôûçÉ", "eeeaaioucE"))
+    # l'état (écoute, dictée), l'aide et les dernières commandes sont sur la page d'accueil (accueil.py)
+    return cam
