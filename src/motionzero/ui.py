@@ -1142,8 +1142,9 @@ class _IslandPainter:
         if self.rem or self.help:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
+        self.quota = st.get("quota")           # « 40 % · reset 22h59 », tant que « iris quota » l'a allumé
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
-                   rem_key, self.next_rem, tuple(self.timer_pills))
+                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -1178,6 +1179,30 @@ class _IslandPainter:
     def paint(self, p):
         if not self.content:
             return
+        self._paint_main(p)
+        if getattr(self, "quota", None):
+            self._paint_quota(p, self.quota)
+
+    def _paint_quota(self, p, text):
+        """Fiche du quota Claude, en haut à droite de la zone de l'île ; jamais estompée."""
+        fm = QFontMetrics(self.font_msg)
+        pad = 18
+        w = 2 * pad + fm.horizontalAdvance("Claude ") + fm.horizontalAdvance(text)
+        r = self.rect()
+        x, y = r.right() - w - 8, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        p.save()
+        p.setOpacity(1.0)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        p.setFont(self.font_msg)
+        p.setPen(QColor(255, 255, 255, 160))
+        p.drawText(QRectF(x + pad, y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, "Claude")
+        p.setPen(QColor(255, 255, 255))
+        p.drawText(QRectF(x + pad + fm.horizontalAdvance("Claude "), y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, text)
+        p.restore()
+
+    def _paint_main(self, p):
         mode, msg = self.content[0], self.content[1]
         if self.help and not (self.rem and self.rem[0] == "current"):   # une alarme qui sonne passe devant
             self._paint_help(p, self.help)

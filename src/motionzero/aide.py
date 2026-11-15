@@ -65,6 +65,7 @@ GROUPS = [
         ("chronomètre", "démarre / arrête"),
         ("calendrier", "la semaine"),
         ("heure / date", "affichées 5 s"),
+        ("quota", "quota Claude, oui / non"),
     ]),
     ("Iris", [
         ("stop", "arrête tout, sans « iris »"),

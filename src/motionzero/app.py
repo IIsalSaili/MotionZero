@@ -34,6 +34,7 @@ from .output import Controller, FakeBackend, SendInputBackend, primary_screen, s
 from .sounds import Sounds, is_failure
 from .vscode import chrome_in_front, foreground_exe
 from .volume import VIEW as VOLUME_VIEW
+from .quota import Quota, read_shown, write_shown
 from .accueil import home_view, sensors as home_sensors
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
@@ -100,6 +101,7 @@ def drain(q):
 
 
 POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
+QUOTA_FILE = os.path.join(ROOT, "quota.txt")        # « oui » : quota Claude affiché (non versionné)
 QUIET_FILE = os.path.join(ROOT, "voix_basse.txt")   # « auto », « oui » ou « non » (non versionné)
 
 
@@ -455,6 +457,11 @@ class Engine:
                 if not core.mode_auto:        # suivi de l'appli devant : pas de son à chaque Alt+Tab
                     d.sounds.play(a[1])
                 _log.info("mode %s (%s)", a[1], core.mode_why or "?")
+            elif a[0] == "quota":
+                write_shown(QUOTA_FILE, a[1])
+                if a[1]:
+                    d.quota.force()
+                _log.info("quota %s", "affiche" if a[1] else "masque")
             elif a[0] == "pointer":
                 write_pointer(POINTER_FILE, a[1])
                 d.bridge.pointer.emit(a[1])
@@ -524,9 +531,18 @@ class Engine:
             "discord": (d.discord_voice["mute"], d.discord_voice["deaf"]),
             "reminders": d.desk.state(t, calendar_open=t < core.calendar_until),
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
+            "quota": self._quota(t),
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 
+
+    def _quota(self, t):
+        """Texte du quota Claude (en haut à droite), ou None s'il est masqué. Lu en fond, jamais bloquant."""
+        q, core = getattr(self.d, "quota", None), self.d.core
+        if q is None or not core.quota_shown:
+            return None
+        q.tick(t, True)
+        return q.text()
 
     def home(self, cam_status, t):
         """Contenu de la page d'accueil (accueil.home_view). Le gardien est relu toutes les 2 s seulement."""
@@ -584,6 +600,7 @@ def main(argv=None):
     cfg = load_config(args.config)
     cfg.pointer = read_pointer(POINTER_FILE, cfg.pointer)    # main ou tête : le dernier choix est gardé
     core = Core(cfg, primary_screen())
+    core.quota_shown = read_shown(QUOTA_FILE)                # « iris quota » : le dernier choix est gardé
     try:                                       # repères des poses de l'utilisateur (index pointé = clic)
         from .poses import load_centroids
         core.pose_cents = load_centroids(os.path.join(ROOT, "calibration", "poses.json"))
@@ -776,7 +793,7 @@ def main(argv=None):
         face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
         quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
-        speaker=speaker, desk=desk, discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
+        speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
         bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
 
     def run_engine():
