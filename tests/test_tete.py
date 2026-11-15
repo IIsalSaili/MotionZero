@@ -5,7 +5,7 @@ import random
 
 from motionzero.config import Config
 from motionzero.core import Core, Mode
-from motionzero.head import (BOTTOM_PTS, LEFT_PTS, NOSE_PTS, RIGHT_PTS, TOP_PTS, HeadPointer, head_offsets,
+from motionzero.head import (POSE_DEADZONE, soft_deadzone, BOTTOM_PTS, LEFT_PTS, NOSE_PTS, RIGHT_PTS, TOP_PTS, HeadPointer, head_offsets,
                              pose_angles)
 
 
@@ -48,7 +48,8 @@ def test_tourner_a_droite_et_lever_la_tete():
     assert hp.point(*turned()) == (0.5, 0.5)
     x, _ = hp.point(*turned(yaw=0.2))
     _, y = hp.point(*turned(pitch=0.2))
-    assert abs(x - (0.5 + 1.4 * 0.2)) < 1e-9 and abs(y - (0.5 - 2.0 * 0.2)) < 1e-9   # curseur à droite, en haut
+    dz = POSE_DEADZONE                     # zone morte douce : seul l'excédent passe
+    assert abs(x - (0.5 + 1.4 * (0.2 - dz))) < 1e-9 and abs(y - (0.5 - 2.0 * (0.2 - dz))) < 1e-9   # curseur à droite, en haut
 
 
 def test_bouger_le_buste_ne_bouge_rien():
@@ -298,3 +299,39 @@ def test_sensibilite_tete_douce():
         core.step_head(lms, t, m)
         t += 1 / 30
     assert 20 < core.cursor[0] - x0 < 350
+
+
+
+def test_zone_morte_douce_sans_saut():
+    assert soft_deadzone(0.002, 0.0, 0.003) == 0.0            # tremblement : rien
+    assert abs(soft_deadzone(0.004, 0.0, 0.003) - 0.001) < 1e-12   # au-delà : seul l'excédent, pas 0,004 d'un coup
+    assert abs(soft_deadzone(-0.004, 0.0, 0.003) + 0.001) < 1e-12
+    # mouvement lent et continu : le point avance par petits pas réguliers, jamais par bonds
+    held, steps = 0.0, []
+    for i in range(1, 40):
+        new = soft_deadzone(i * 0.001, held, 0.003)
+        steps.append(new - held)
+        held = new
+    assert max(steps) <= 0.001 + 1e-12
+
+
+def test_gain_de_la_tete_en_s():
+    from motionzero.core import head_gain
+    lo, hi = 0.2, 3.5
+    assert head_gain(0.0, 0.03, 0.6, lo, hi) == lo
+    assert head_gain(5.0, 0.03, 0.6, lo, hi) == hi
+    mid = head_gain(0.315, 0.03, 0.6, lo, hi)                 # mi-chemin : au carré, bien plus près du lent
+    assert lo < mid < (lo + hi) / 2
+    assert head_gain(0.1, 0.03, 0.6, lo, hi) < 0.25            # petit mouvement : quasi le gain lent
+
+
+def test_a_coup_isole_n_accelere_pas():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    c = Core(Config())
+    c.pointer = "tete"
+    g_jerk = c._gain(0.5, 1 / 20)                               # une image saccadée (tremblement), après l'arrêt
+    assert g_jerk < 0.6                                         # sans moyenne : 2,4
+    for _ in range(20):                                         # geste franc qui dure
+        g = c._gain(2.0, 1 / 20)
+    assert g > 3.0

@@ -18,9 +18,10 @@ RIGHT_PTS = (454, 323, 361)
 TOP_PTS = (10, 109, 338)                     # front
 BOTTOM_PTS = (152, 148, 377)                 # menton
 
-POSE_MIN_CUTOFF = 0.6      # lissage fort tête immobile...
-POSE_BETA = 0.5            # ... réactif quand elle tourne (unités : radians)
-POSE_DEADZONE = 0.003      # ~0,2 degré : variation ignorée (l'orientation tremble beaucoup moins qu'un point)
+POSE_MIN_CUTOFF = 0.3      # lissage très fort tête presque immobile (viser)...
+POSE_BETA = 1.0            # ... et presque nul quand elle tourne franchement (unités : radians)
+POSE_DEADZONE = 0.003      # ~0,2 degré : tremblement ignoré. Zone morte DOUCE (15/11) : au-delà, seul l'excédent
+                           # passe ; avant, le point restait figé puis sautait de tout l'écart d'un coup
 SIGN_VOTES = 3             # mouvements nets concordants avant de corriger le sens d'un axe
 REL_MOVE, POSE_MOVE = 0.06, 0.04             # « mouvement net » : nez/visage et radians
 
@@ -53,6 +54,15 @@ def pose_angles(matrix):
     if fx == fy == fz == 0:
         return None
     return math.atan2(fx, fz), math.atan2(fy, math.hypot(fx, fz))
+
+
+def soft_deadzone(value, held, dz):
+    """Point tiré par un fil de longueur dz : immobile tant que value reste à moins de dz de held, puis suit
+    sans saut (seul l'excédent passe). Pur : testable."""
+    d = value - held
+    if abs(d) <= dz:
+        return held
+    return value - dz if d > 0 else value + dz
 
 
 class HeadPointer:
@@ -93,8 +103,8 @@ class HeadPointer:
             return self._from_rel(rel)
         if t is not None:
             pose = (self.fx(pose[0], t), self.fy(pose[1], t))
-        if self.held is not None and max(abs(pose[0] - self.held[0]), abs(pose[1] - self.held[1])) < POSE_DEADZONE:
-            pose = self.held                       # micro-variation : on ne bouge pas
+        if self.held is not None:
+            pose = tuple(soft_deadzone(p, h, POSE_DEADZONE) for p, h in zip(pose, self.held))
         self.held = pose
         if self.base is None:
             self.base, self.base_rel = pose, rel   # tête maintenant = centre de l'écran
