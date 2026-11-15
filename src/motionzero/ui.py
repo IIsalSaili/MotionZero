@@ -1065,6 +1065,28 @@ def island_text(st):
     return mode, None, False
 
 
+CLAUDE_ORANGE = "#D97757"
+QUOTA_MARGIN = 8          # px entre la pastille du quota et le bord gauche
+
+
+def paint_claude_logo(p, cx, cy, r):
+    """Logo Claude : rond orange, étoile blanche à rayons inégaux (dessinée, pas d'image)."""
+    import math
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(CLAUDE_ORANGE))
+    p.drawEllipse(QPointF(cx, cy), r, r)
+    pen = QPen(QColor(255, 255, 255))
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    for i, k in enumerate((0.62, 0.48, 0.58, 0.44, 0.64, 0.5, 0.56, 0.46, 0.62, 0.5, 0.58, 0.45)):
+        a = math.radians(i * 30 + 8)
+        pen.setWidthF(r * 0.13)
+        p.setPen(pen)
+        p.drawLine(QPointF(cx, cy), QPointF(cx + math.cos(a) * r * k, cy + math.sin(a) * r * k))
+    p.restore()
+
+
 class _IslandPainter:
     """Dessine l'île dans le verre. Ne garde que ce qu'il faut pour l'estomper au repos."""
 
@@ -1110,7 +1132,10 @@ class _IslandPainter:
     def rect(self):
         w = max(ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120, CAL_W + 40)   # + pastille Discord / calendrier
         h = max(ISLET + ANSWER_MAX_H + 8, ISLET + 14 + 56 + CAL_H + 10, ISLET + 14 + HELP_H + 10)
-        return QRect(int((self.width - w) // 2), ISLAND_TOP - 4, int(w), h)
+        x = int((self.width - w) // 2)
+        if getattr(self, "quota", None):       # pastille du quota, collée au coin haut gauche
+            w, x = w + x, 0
+        return QRect(x, ISLAND_TOP - 4, int(w), h)
 
     def update(self, st, now):
         mode, msg, active = island_text(st)
@@ -1142,8 +1167,10 @@ class _IslandPainter:
         if self.rem or self.help:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
+        q = st.get("quota")                    # [(« 5 h », « 40 % · reset 22h59 »), (« Semaine », …)] si allumé
+        self.quota = tuple(q) if q else None
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
-                   rem_key, self.next_rem, tuple(self.timer_pills))
+                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -1178,6 +1205,38 @@ class _IslandPainter:
     def paint(self, p):
         if not self.content:
             return
+        self._paint_main(p)
+        if getattr(self, "quota", None):
+            self._paint_quota(p, self.quota)
+
+    def _paint_quota(self, p, lines):
+        """Fiche du quota, coin haut gauche : logo Claude, session 5 h puis semaine dessous ; jamais estompée."""
+        fm, fs = QFontMetrics(self.font_msg), QFontMetrics(self.font_small)
+        pad, logo, gap = 12, 38, 12
+        label_w = max(fs.horizontalAdvance(l) for l, _ in lines) + 8 if any(l for l, _ in lines) else 0
+        w = pad + logo + gap + label_w + max(fm.horizontalAdvance(t) for _, t in lines) + pad + 6
+        h = max(ISLET, 14 + 24 * len(lines))
+        x, y = QUOTA_MARGIN, ISLAND_TOP + (ISLET - h) / 2   # coin haut gauche, centrée sur le bandeau
+        p.save()
+        p.setOpacity(1.0)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, y, w, h), min(h / 2, 28), min(h / 2, 28))
+        paint_claude_logo(p, x + pad + logo / 2, y + h / 2, logo / 2)
+        ty = y + (h - 24 * len(lines)) / 2
+        tx = x + pad + logo + gap
+        for label, text in lines:
+            if label:
+                p.setFont(self.font_small)
+                p.setPen(QColor(255, 255, 255, 150))
+                p.drawText(QRectF(tx, ty, label_w, 24), Qt.AlignmentFlag.AlignVCenter, label)
+            p.setFont(self.font_msg)
+            p.setPen(QColor(255, 255, 255))
+            p.drawText(QRectF(tx + label_w, ty, w, 24), Qt.AlignmentFlag.AlignVCenter, text)
+            ty += 24
+        p.restore()
+
+    def _paint_main(self, p):
         mode, msg = self.content[0], self.content[1]
         if self.help and not (self.rem and self.rem[0] == "current"):   # une alarme qui sonne passe devant
             self._paint_help(p, self.help)
