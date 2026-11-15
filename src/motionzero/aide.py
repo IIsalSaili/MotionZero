@@ -46,6 +46,7 @@ GROUPS = [
     ("Claude", [
         ("claude", "micro dans VS Code"),
         ("question", "réponse en haut"),
+        ("quota", "quota affiché, oui / non"),
     ]),
     ("Discord", [
         ("mute / démute", "le micro"),
@@ -64,13 +65,12 @@ GROUPS = [
         ("chronomètre", "démarre / arrête"),
         ("calendrier", "la semaine"),
         ("heure / date", "affichées 5 s"),
-        ("quota", "quota Claude, oui / non"),
-        ("focus", "sans dire iris, 10 min"),
     ]),
     ("Iris", [
         ("stop", "arrête tout, sans « iris »"),
         ("pause", "tout désactiver"),
         ("reprise", "après la pause"),
+        ("focus", "sans dire iris, 10 min"),
         ("lecture", "éteint la souris"),
         ("aide", "cette page"),
         ("guide", "la documentation"),
