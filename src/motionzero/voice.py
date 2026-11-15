@@ -179,6 +179,11 @@ def _join_demute(words):
     return out
 
 
+# « iris » suivi d'une commande nette : seuil bas. Mesuré du 11 au 15/11 : 10 à 27 rejets par jour du type
+# « iris(0.37) claude(1.00) » ; dire « iris » puis une commande par hasard est rare, et la 2e vérification reste.
+IRIS_MIN_CONF = 0.3
+
+
 def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     """Mots acceptés d'un résultat Vosk.
     - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
@@ -190,10 +195,12 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     if not words:
         return []
     for i in range(len(words) - 1, -1, -1):          # le dernier « iris » de la phrase
-        if words[i]["word"] != WAKE_WORD or words[i]["conf"] < min_conf:
+        if words[i]["word"] != WAKE_WORD or words[i]["conf"] < min(min_conf, IRIS_MIN_CONF):
             continue
         nxt = words[i + 1] if i + 1 < len(words) else None
         if nxt is None:
+            if words[i]["conf"] < min_conf:
+                continue                               # « iris » seul : seuil normal
             return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
         if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
             if _gap(words[i], nxt) > IRIS_GAP_S:

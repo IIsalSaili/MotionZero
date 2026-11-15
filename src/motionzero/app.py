@@ -205,6 +205,7 @@ class Engine:
         self.last_rej_seen = self.last_fail_seen = None
         self.chrome_check_t = 0.0
         self.quiet_check_t = -1e9
+        self.mic_check_t = -1e9
         self.quiet_choice = getattr(d, "quiet_choice", "auto")
         self.last_hand_t = self.t0
         self.errors = deque(maxlen=20)
@@ -340,6 +341,12 @@ class Engine:
         if d.listener is not None:
             speech = d.listener.last_speech_t
             acts += core.dictation_tick(t, speech) + core.ask_tick(t, speech)
+            if core.dictating and t - core.dictation_t0 > 2.0 and t - self.mic_check_t >= 0.5:
+                self.mic_check_t = t
+                from .vscode import claude_mic_state
+                if claude_mic_state() is False:      # Claude a coupé son micro tout seul : Iris suit
+                    _log.info("micro Claude coupe par Claude : fin de la dictee")
+                    core.claude_mic_stopped(t)
             acts += core.type_tick(t, speech) + core.open_tick(t, speech)
         if getattr(d, "typer", None) is not None:
             for ok in drain(d.typer.done):    # texte de « iris type » écrit (fil du typer) : la confirmation part
@@ -1050,7 +1057,15 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
             if not err and discord is not None:
                 discord["deaf"] = not discord["deaf"]
         elif a[0] == "vscode_dictation":
-            err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
+            from .vscode import claude_mic_state
+            real = claude_mic_state()
+            if real is not None and real == core.dictating:
+                # déjà dans l'état voulu (Claude a coupé son micro seul, ou il était déjà allumé) : la
+                # bascule ferait l'inverse
+                _log.info("micro Claude deja %s : raccourci non envoye", "allume" if real else "coupe")
+                err = None
+            else:
+                err = toggle_claude_dictation(send)   # Discord n'est pas touché : l'utilisateur coupe lui-même
             if not err and core.dictating:
                 time.sleep(0.4)          # le micro de VS Code met un instant à démarrer
                 sounds.play("PARLE")     # signal : tu peux parler

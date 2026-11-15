@@ -1061,6 +1061,15 @@ class Core:
             return [("vscode_dictation",)]
         return []
 
+    def claude_mic_stopped(self, t):
+        """Le micro de Claude s'est coupé sans Iris : fin de la dictée, sans renvoyer le raccourci."""
+        if not self.dictating:
+            return
+        self.dictating = False
+        self.confirm_until = t + self.cfg.send_confirm_s
+        self.confirm_kind = "claude"
+        self.last_gesture = ("MICRO COUPE : dis ENVOIE ou ANNULE", t)
+
     def freeze_for_voice(self, t):
         """Plus de gel du curseur sur « iris » (gênant, demande de l'utilisateur, 12/11) : le clic vocal vise
         désormais là où était le curseur quand la commande a commencé (voir _aim). Gardée pour la boucle."""
