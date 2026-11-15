@@ -525,6 +525,7 @@ class Engine:
             "scroll_gauge": core.scroll_gauge(t),
             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
             "mode": core.mode,
+            "focus": core.focus_on(t),
             "dictating": core.dictating,
             "typing": core.typing or core.opening,
             "confirming": core.confirming(t),
