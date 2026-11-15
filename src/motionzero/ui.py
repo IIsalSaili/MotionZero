@@ -1065,6 +1065,27 @@ def island_text(st):
     return mode, None, False
 
 
+CLAUDE_ORANGE = "#D97757"
+
+
+def paint_claude_logo(p, cx, cy, r):
+    """Logo Claude : rond orange, étoile blanche à rayons inégaux (dessinée, pas d'image)."""
+    import math
+    p.save()
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(CLAUDE_ORANGE))
+    p.drawEllipse(QPointF(cx, cy), r, r)
+    pen = QPen(QColor(255, 255, 255))
+    pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+    for i, k in enumerate((0.62, 0.48, 0.58, 0.44, 0.64, 0.5, 0.56, 0.46, 0.62, 0.5, 0.58, 0.45)):
+        a = math.radians(i * 30 + 8)
+        pen.setWidthF(r * 0.13)
+        p.setPen(pen)
+        p.drawLine(QPointF(cx, cy), QPointF(cx + math.cos(a) * r * k, cy + math.sin(a) * r * k))
+    p.restore()
+
+
 class _IslandPainter:
     """Dessine l'île dans le verre. Ne garde que ce qu'il faut pour l'estomper au repos."""
 
@@ -1142,7 +1163,8 @@ class _IslandPainter:
         if self.rem or self.help:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
-        self.quota = st.get("quota")           # « 40 % · reset 22h59 », tant que « iris quota » l'a allumé
+        q = st.get("quota")                    # [(« 5 h », « 40 % · reset 22h59 »), (« Semaine », …)] si allumé
+        self.quota = tuple(q) if q else None
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
                    rem_key, self.next_rem, tuple(self.timer_pills), self.quota)
         if content != self.content:
@@ -1183,23 +1205,32 @@ class _IslandPainter:
         if getattr(self, "quota", None):
             self._paint_quota(p, self.quota)
 
-    def _paint_quota(self, p, text):
-        """Fiche du quota Claude, en haut à droite de la zone de l'île ; jamais estompée."""
-        fm = QFontMetrics(self.font_msg)
-        pad = 18
-        w = 2 * pad + fm.horizontalAdvance("Claude ") + fm.horizontalAdvance(text)
+    def _paint_quota(self, p, lines):
+        """Fiche du quota : logo Claude dans un rond, session 5 h puis semaine dessous ; jamais estompée."""
+        fm, fs = QFontMetrics(self.font_msg), QFontMetrics(self.font_small)
+        pad, logo, gap = 12, 38, 12
+        label_w = max(fs.horizontalAdvance(l) for l, _ in lines) + 8 if any(l for l, _ in lines) else 0
+        w = pad + logo + gap + label_w + max(fm.horizontalAdvance(t) for _, t in lines) + pad + 6
+        h = max(ISLET, 14 + 24 * len(lines))
         r = self.rect()
-        x, y = r.right() - w - 8, ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        x, y = r.right() - w - 8, ISLAND_TOP
         p.save()
         p.setOpacity(1.0)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))
-        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
-        p.setFont(self.font_msg)
-        p.setPen(QColor(255, 255, 255, 160))
-        p.drawText(QRectF(x + pad, y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, "Claude")
-        p.setPen(QColor(255, 255, 255))
-        p.drawText(QRectF(x + pad + fm.horizontalAdvance("Claude "), y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, text)
+        p.drawRoundedRect(QRectF(x, y, w, h), min(h / 2, 28), min(h / 2, 28))
+        paint_claude_logo(p, x + pad + logo / 2, y + h / 2, logo / 2)
+        ty = y + (h - 24 * len(lines)) / 2
+        tx = x + pad + logo + gap
+        for label, text in lines:
+            if label:
+                p.setFont(self.font_small)
+                p.setPen(QColor(255, 255, 255, 150))
+                p.drawText(QRectF(tx, ty, label_w, 24), Qt.AlignmentFlag.AlignVCenter, label)
+            p.setFont(self.font_msg)
+            p.setPen(QColor(255, 255, 255))
+            p.drawText(QRectF(tx + label_w, ty, w, 24), Qt.AlignmentFlag.AlignVCenter, text)
+            ty += 24
         p.restore()
 
     def _paint_main(self, p):

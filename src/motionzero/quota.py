@@ -36,16 +36,24 @@ def fetch(token, timeout=TIMEOUT_S):
         return json.loads(r.read().decode("utf-8"))
 
 
+def _window(data, key):
+    w = data[key]
+    resets = w.get("resets_at")
+    return float(w["utilization"]), datetime.datetime.fromisoformat(resets).astimezone() if resets else None
+
+
 def parse(data):
-    """Réponse -> (pourcentage utilisé, heure du reset en local). ValueError si le format a changé."""
+    """Réponse -> ((% utilisé, reset) de la session 5 h, (% utilisé, reset) de la semaine, ou None).
+    Heures en local. ValueError si le format de la session a changé ; la semaine absente ne bloque pas."""
     try:
-        five = data["five_hour"]
-        pct = float(five["utilization"])
-        resets = five.get("resets_at")
-        reset = datetime.datetime.fromisoformat(resets).astimezone() if resets else None
-    except (KeyError, TypeError, ValueError) as e:
+        five = _window(data, "five_hour")
+    except (KeyError, TypeError, ValueError, AttributeError) as e:
         raise ValueError(f"réponse quota inattendue : {e}") from e
-    return pct, reset
+    try:
+        week = _window(data, "seven_day")
+    except (KeyError, TypeError, ValueError, AttributeError):
+        week = None
+    return five, week
 
 
 def quota_text(pct, reset, now=None):
@@ -59,9 +67,17 @@ def quota_text(pct, reset, now=None):
     if reset <= now:
         return text + " · reset passé"
     hm = f"{reset.hour}h{reset.minute:02d}"
-    if reset.date() != now.date():
-        hm = ("demain " if reset.date() == now.date() + datetime.timedelta(days=1) else reset.strftime("%d/%m ")) + hm
+    days = (reset.date() - now.date()).days
+    if days == 1:
+        hm = "demain " + hm
+    elif 1 < days < 7:
+        hm = JOURS[reset.weekday()] + " " + hm
+    elif days >= 7:
+        hm = reset.strftime("%d/%m ") + hm
     return f"{text} · reset {hm}"
+
+
+JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 
 
 def read_shown(path):
@@ -85,7 +101,7 @@ class Quota:
 
     def __init__(self, token_reader=read_token, fetcher=fetch):
         self.token_reader, self.fetcher = token_reader, fetcher
-        self.pct, self.reset, self.ok = None, None, False
+        self.five, self.week, self.ok = None, None, False
         self.loaded = False                   # au moins une lecture terminée (réussie ou non)
         self.next_t = -1e9
         self._busy = False
@@ -94,13 +110,13 @@ class Quota:
     def refresh_now(self):
         """Lecture synchrone (utilisée par le fil et les tests). Ne lève jamais."""
         try:
-            pct, reset = parse(self.fetcher(self.token_reader()))
+            five, week = parse(self.fetcher(self.token_reader()))
             ok = True
         except Exception as e:                # réseau, jeton, format : tout finit en « indisponible »
             _log.warning("quota illisible : %s", e)
-            pct, reset, ok = None, None, False
+            five, week, ok = None, None, False
         with self._lock:
-            self.pct, self.reset, self.ok, self.loaded = pct, reset, ok, True
+            self.five, self.week, self.ok, self.loaded = five, week, ok, True
         return ok
 
     def tick(self, t, shown):
@@ -123,8 +139,14 @@ class Quota:
         """« iris quota » qui allume : relire tout de suite."""
         self.next_t = -1e9
 
-    def text(self, now=None):
+    def lines(self, now=None):
+        """[(« 5 h », texte), (« Semaine », texte)] pour la pastille ; une seule ligne si rien de lisible."""
         with self._lock:
             if not self.loaded:
-                return "Quota…"
-            return quota_text(self.pct if self.ok else None, self.reset, now)
+                return [("", "Quota…")]
+            if not self.ok:
+                return [("", "Quota indisponible")]
+            out = [("5 h", quota_text(*self.five, now))]
+            if self.week:
+                out.append(("Semaine", quota_text(*self.week, now)))
+            return out

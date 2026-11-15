@@ -542,7 +542,7 @@ class Engine:
         if q is None or not core.quota_shown:
             return None
         q.tick(t, True)
-        return q.text()
+        return q.lines()
 
     def home(self, cam_status, t):
         """Contenu de la page d'accueil (accueil.home_view). Le gardien est relu toutes les 2 s seulement."""

@@ -148,7 +148,7 @@ sequenceDiagram
 | `chronomètre` | démarre ; redit : arrête | non | tous |
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
 | `heure` / `date` | jour, date et heure affichés 5 s | non | tous |
-| `quota` | quota Claude (session de 5 h) : pourcentage utilisé et heure du reset, en haut à droite, en permanence ; redire `quota` le masque (choix gardé au redémarrage) | non | tous |
+| `quota` | quota Claude : session de 5 h et semaine (pourcentage utilisé, heure du reset), logo Claude, en haut à droite, en permanence ; redire `quota` le masque (choix gardé au redémarrage) | non | tous |
 
 ```mermaid
 sequenceDiagram

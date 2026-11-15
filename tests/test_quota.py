@@ -20,19 +20,27 @@ def say(core, word, t=1.0):
 
 
 def test_texte_pourcentage_utilise_et_heure_du_reset():
-    pct, reset = quota.parse(SAMPLE)
+    (pct, reset), (wpct, wreset) = quota.parse(SAMPLE)
     assert quota.quota_text(pct, reset.astimezone(TZ), NOW) == "40 % · reset 22h59"
+    assert quota.quota_text(wpct, wreset.astimezone(TZ), NOW) == "53 % · reset jeudi 22h59"
+
+
+def test_semaine_absente_ne_bloque_pas_la_session():
+    five, week = quota.parse({"five_hour": SAMPLE["five_hour"]})
+    assert five[0] == 40.0 and week is None
 
 
 def test_reset_demain_ou_plus_tard_precise():
     demain = datetime.datetime(2026, 11, 16, 1, 5, tzinfo=TZ)
     assert quota.quota_text(12.4, demain, NOW) == "12 % · reset demain 1h05"
-    loin = datetime.datetime(2026, 11, 18, 9, 0, tzinfo=TZ)
-    assert quota.quota_text(12, loin, NOW) == "12 % · reset 18/11 9h00"
+    mercredi = datetime.datetime(2026, 11, 18, 9, 0, tzinfo=TZ)
+    assert quota.quota_text(12, mercredi, NOW) == "12 % · reset mercredi 9h00"
+    loin = datetime.datetime(2026, 11, 25, 9, 0, tzinfo=TZ)
+    assert quota.quota_text(12, loin, NOW) == "12 % · reset 25/11 9h00"
 
 
 def test_pas_de_session_en_cours():
-    pct, reset = quota.parse({"five_hour": {"utilization": 0, "resets_at": None}})
+    (pct, reset), _ = quota.parse({"five_hour": {"utilization": 0, "resets_at": None}})
     assert quota.quota_text(pct, reset, NOW) == "0 % · pas de session"
 
 
@@ -58,7 +66,7 @@ def test_echecs_affichent_indisponible_sans_planter():
               quota.Quota(token_reader=lambda: "x", fetcher=lambda t: {"autre": 1}),
               quota.Quota(token_reader=lambda: "x", fetcher=_fail(json.JSONDecodeError("x", "", 0)))):
         assert q.refresh_now() is False
-        assert q.text(NOW) == "Quota indisponible"
+        assert q.lines(NOW) == [("", "Quota indisponible")]
 
 
 def test_reussite_puis_echec_n_affiche_pas_de_vieux_chiffre():
@@ -69,9 +77,11 @@ def test_reussite_puis_echec_n_affiche_pas_de_vieux_chiffre():
             raise urllib.error.URLError("coupé")
         return a
     q = quota.Quota(token_reader=lambda: "x", fetcher=fetch)
-    assert q.text(NOW) == "Quota…"            # avant la première lecture
-    assert q.refresh_now() and q.text(NOW).startswith("40 %")
-    assert not q.refresh_now() and q.text(NOW) == "Quota indisponible"
+    assert q.lines(NOW) == [("", "Quota…")]   # avant la première lecture
+    assert q.refresh_now()
+    lines = q.lines(NOW)
+    assert [l for l, _ in lines] == ["5 h", "Semaine"] and lines[0][1].startswith("40 %") and lines[1][1].startswith("53 %")
+    assert not q.refresh_now() and q.lines(NOW) == [("", "Quota indisponible")]
 
 
 def test_tick_lit_en_fond_seulement_si_affiche_et_a_l_heure():
