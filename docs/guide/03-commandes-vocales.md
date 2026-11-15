@@ -98,7 +98,7 @@ Mode : « tous » sauf mention.
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `claude` | VS Code devant, micro de Claude allumé ; coupé après 2,75 s de silence | oui pour redicter, après une dictée | tous |
-| `question` | question enregistrée, puis Whisper, puis Haiku ; réponse dans l'île | non | tous |
+| `question` | question enregistrée, puis Whisper, puis Haiku ; si la réponse demande une info récente, recherche internet (Startpage, puis Bing) dans un navigateur sans fenêtre, puis réponse sourcée ; réponse dans l'île (« Iris cherche sur internet… » pendant la recherche) | non | tous |
 
 ```mermaid
 sequenceDiagram

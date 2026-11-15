@@ -1043,6 +1043,8 @@ def island_text(st):
         return mode, "Pose ta question…", True
     if qa.get("phase") == "thinking":
         return mode, "Iris réfléchit…", True
+    if qa.get("phase") == "searching":
+        return mode, "Iris cherche sur internet…", True
     if qa.get("phase") == "answer":
         return mode, "Iris répond", True
     if qa.get("phase") == "error":
