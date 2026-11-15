@@ -1,6 +1,6 @@
 """« iris quota » : pourcentage utilisé de la session Claude de 5 heures, et l'heure du reset.
 
-Affiché en permanence en haut à droite de l'écran (à droite de l'île) tant qu'il est allumé ; « iris quota »
+Affiché en permanence dans le coin haut gauche, centré sur le bandeau, tant qu'il est allumé ; « iris quota »
 l'allume ou l'éteint, et le choix est gardé dans quota.txt (non versionné).
 
 Source : l'adresse que Claude Code lit lui-même pour /usage (non documentée), avec le jeton de connexion

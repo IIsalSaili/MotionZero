@@ -1066,6 +1066,7 @@ def island_text(st):
 
 
 CLAUDE_ORANGE = "#D97757"
+QUOTA_MARGIN = 8          # px entre la pastille du quota et le bord gauche
 
 
 def paint_claude_logo(p, cx, cy, r):
@@ -1131,7 +1132,10 @@ class _IslandPainter:
     def rect(self):
         w = max(ISLAND_MAX_W + 2 * (ISLET + ISLET_GAP) + 2 * 120, CAL_W + 40)   # + pastille Discord / calendrier
         h = max(ISLET + ANSWER_MAX_H + 8, ISLET + 14 + 56 + CAL_H + 10, ISLET + 14 + HELP_H + 10)
-        return QRect(int((self.width - w) // 2), ISLAND_TOP - 4, int(w), h)
+        x = int((self.width - w) // 2)
+        if getattr(self, "quota", None):       # pastille du quota, collée au coin haut gauche
+            w, x = w + x, 0
+        return QRect(x, ISLAND_TOP - 4, int(w), h)
 
     def update(self, st, now):
         mode, msg, active = island_text(st)
@@ -1206,14 +1210,13 @@ class _IslandPainter:
             self._paint_quota(p, self.quota)
 
     def _paint_quota(self, p, lines):
-        """Fiche du quota : logo Claude dans un rond, session 5 h puis semaine dessous ; jamais estompée."""
+        """Fiche du quota, coin haut gauche : logo Claude, session 5 h puis semaine dessous ; jamais estompée."""
         fm, fs = QFontMetrics(self.font_msg), QFontMetrics(self.font_small)
         pad, logo, gap = 12, 38, 12
         label_w = max(fs.horizontalAdvance(l) for l, _ in lines) + 8 if any(l for l, _ in lines) else 0
         w = pad + logo + gap + label_w + max(fm.horizontalAdvance(t) for _, t in lines) + pad + 6
         h = max(ISLET, 14 + 24 * len(lines))
-        r = self.rect()
-        x, y = r.right() - w - 8, ISLAND_TOP
+        x, y = QUOTA_MARGIN, ISLAND_TOP + (ISLET - h) / 2   # coin haut gauche, centrée sur le bandeau
         p.save()
         p.setOpacity(1.0)
         p.setPen(Qt.PenStyle.NoPen)
