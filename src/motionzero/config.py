@@ -97,8 +97,12 @@ class Config:
     head_scale: float = 1.4
     head_scale_y: float = 2.0          # on lève / baisse la tête moins loin qu'on ne la tourne
     # vitesse propre à la tête : lente pour viser (petits gestes), rapide pour traverser l'écran
-    head_gain_min: float = 0.5
-    head_gain_max: float = 3.0
+    # 15/11 : micro-mouvements beaucoup plus précis, grands gestes plus rapides ; courbe en S (au carré)
+    head_gain_min: float = 0.2           # ~9 px par degré sur 1920 px : on vise au pixel près
+    head_gain_max: float = 3.5           # un geste franc de 20° traverse l'écran
+    head_speed_lo: float = 0.03          # vitesse du point de tête (/s) en dessous : gain_min (~1°/s)
+    head_speed_hi: float = 0.6           # au-dessus : gain_max (~25°/s)
+    head_speed_tau: float = 0.15         # vitesse moyennée sur ~0,15 s : un à-coup isolé n'accélère pas
     gain_speed_lo: float = 0.05          # vitesse (largeur d'image / s) en dessous : gain_min
     gain_speed_hi: float = 0.8           # au-dessus : gain_max
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume

@@ -128,6 +128,13 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "glisse": "drag
             "aide": "help", "guide": "guide"}
 
 
+
+def head_gain(speed, lo_speed, hi_speed, lo, hi):
+    """Gain de la souris à la tête : courbe au carré entre les deux vitesses. Lent = très précis, longtemps ;
+    l'accélération ne vient qu'avec un geste franc. Pur : testable."""
+    k = min(max((speed - lo_speed) / max(hi_speed - lo_speed, 1e-6), 0.0), 1.0)
+    return lo + (hi - lo) * k * k
+
 class Core:
     # Chaque action reconnue (geste ou voix) passe par last_gesture : on la garde aussi dans l'historique
     # affiché sous la caméra, pour vérifier en simulation que la commande « aurait eu lieu ».
@@ -183,6 +190,8 @@ class Core:
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
         self.wake_t = -1e9                    # début du dernier « iris » entendu
         self.freeze_until = -1e9              # curseur figé (de « iris » à la commande) : clic vocal précis
+        self.head_speed = 0.0                 # souris à la tête : vitesse moyennée (voir _head_speed)
+        self.head_speeds = deque(maxlen=200)  # pour le journal de réglage
         self.dragging = False                 # bouton tenu par « glisse » : « lâche » toujours écouté
         self.pose_cents = None                # repères de poses de l'utilisateur (calibration/poses.json)
         self.pose_voter = PoseVoter()
@@ -491,11 +500,21 @@ class Core:
             self.need_move = True
 
     # --- souris ------------------------------------------------------------
-    def _gain(self, speed):
+    def _gain(self, speed, dt=None):
         c = self.cfg
+        if self.pointer == "tete":
+            return head_gain(self._head_speed(speed, dt), c.head_speed_lo, c.head_speed_hi,
+                             c.head_gain_min, c.head_gain_max)
         k = min(max((speed - c.gain_speed_lo) / (c.gain_speed_hi - c.gain_speed_lo), 0.0), 1.0)
-        lo, hi = (c.head_gain_min, c.head_gain_max) if self.pointer == "tete" else (c.gain_min, c.gain_max)
-        return lo + (hi - lo) * k
+        return c.gain_min + (c.gain_max - c.gain_min) * k
+
+    def _head_speed(self, speed, dt):
+        """Vitesse de la tête moyennée (~0,15 s) : partir de l'arrêt reste lent (visée), seul un geste qui dure
+        accélère. Notée pour le réglage (journal « tete vitesse »)."""
+        a = 1.0 if not dt else min(dt / max(self.cfg.head_speed_tau, 1e-3), 1.0)
+        self.head_speed = self.head_speed + a * (speed - self.head_speed)
+        self.head_speeds.append(self.head_speed)
+        return self.head_speed
 
     def _mouse(self, palm, t, acts):
         c = self.cfg
@@ -534,7 +553,7 @@ class Core:
         if self.prev_palm is not None and t >= self.freeze_until:
             dt = max(t - self.prev_t, 1e-3)
             dx, dy = palm[0] - self.prev_palm[0], palm[1] - self.prev_palm[1]
-            gain = self._gain(math.hypot(dx, dy) / dt)
+            gain = self._gain(math.hypot(dx, dy) / dt, dt)
             sx, sy, sw, sh = self.screen
             nx = min(max(self._cursor_f[0] + dx * sw * gain, sx), sx + sw - 1)
             ny = min(max(self._cursor_f[1] + dy * sw * gain, sy), sy + sh - 1)

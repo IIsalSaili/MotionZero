@@ -210,6 +210,7 @@ class Engine:
         self.frame_seen = False               # une image est arrivée à ce tour
         self.home_t = self.guard_t = -1e9      # page d'accueil : dernière mise à jour, dernier regard au gardien
         self.guard_on = False
+        self.speed_log_t = -1e9                # journal des vitesses de la tête
 
     def run(self):
         d = self.d
@@ -480,6 +481,12 @@ class Engine:
             self.shown = render(view, core, d.tracker.tracks if self.pts is not None else [], self.fps,
                                 d.args.simulation, status, d.tracker.active_id, voice_on=d.listener is not None)
             d.show(self.shown)
+        if core.pointer == "tete" and core.mouse and t - self.speed_log_t >= 5.0 and core.head_speeds:
+            self.speed_log_t = t                  # réglage de la précision (15/11) : vitesses réelles de la tête
+            v = sorted(core.head_speeds)
+            core.head_speeds.clear()
+            _log.info("tete vitesse : mediane %.3f, 90 %% %.3f, max %.3f (lent < %.2f, rapide > %.2f)",
+                      v[len(v) // 2], v[int(len(v) * 0.9)], v[-1], d.cfg.head_speed_lo, d.cfg.head_speed_hi)
         if d.view_win.visible_flag and t - self.home_t >= HOME_PERIOD_S:
             self.home_t = t
             d.bridge.home.emit(self.home(status, t))
