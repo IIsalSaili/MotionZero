@@ -105,6 +105,31 @@ def toggle_claude_dictation(send_hotkey):
     return focus_and_send(send_hotkey, [DICTATION_KEYS])
 
 
+CLAUDE_LOG_GLOB = os.path.join(os.environ.get("APPDATA", ""), "Code", "logs", "*", "window*", "exthost",
+                               "Anthropic.claude-code", "Claude VSCode.log")
+
+
+def claude_mic_state(pattern=CLAUDE_LOG_GLOB, tail=65536):
+    """Micro du panneau Claude allumé (True), éteint (False) ou inconnu (None), d'après le journal de
+    l'extension (« start_speech_to_text » / « stop_speech_to_text »). Le raccourci est une bascule : sans
+    l'état réel, un micro coupé par Claude lui-même était RALLUMÉ par Iris en voulant le couper (15/11)."""
+    import glob
+    try:
+        files = glob.glob(pattern)
+        if not files:
+            return None
+        path = max(files, key=os.path.getmtime)
+        with open(path, "rb") as f:
+            f.seek(max(0, os.path.getsize(path) - tail))
+            data = f.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    on, off = data.rfind('"type":"start_speech_to_text"'), data.rfind('"type":"stop_speech_to_text"')
+    if on < 0 and off < 0:
+        return None
+    return on > off
+
+
 # --- état partagé ---------------------------------------------------------------------------------
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
 
