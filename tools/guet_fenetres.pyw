@@ -4,6 +4,9 @@ Tourne sans fenêtre (pythonw), lancé au démarrage de Windows (raccourci « Gu
 Chaque nouveau programme est noté dans logs/fenetres.log avec ses parents (qui l'a lancé), sauf le bruit
 habituel (Chrome, services Windows). Le fichier est tourné à 5 Mo (un seul ancien gardé : fenetres.log.1).
 Une seule instance : une deuxième s'arrête tout de suite.
+Avec les droits administrateur (tâche planifiée « Guet fenetres »), Windows prévient de chaque lancement
+(Win32_ProcessStartTrace) : même un programme d'un dixième de seconde a son nom et son parent. Sans ces
+droits, repli sur une lecture de la liste des programmes toutes les 0,1 s (les très courts y échappent).
 """
 import os
 import socket
@@ -59,7 +62,41 @@ def main():
         lock.bind(("127.0.0.1", LOCK_PORT))
     except OSError:
         sys.exit(0)                      # déjà lancé
-    write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} guet démarré")
+    try:
+        watch_events()
+    except Exception as e:               # pas administrateur (accès refusé) : lecture périodique
+        write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} guet sans les avis de Windows ({e.__class__.__name__}) : "
+              "lecture toutes les 0,1 s")
+    watch_poll()
+
+
+def note(pid, name, ppid, cmd=""):
+    if name.lower() in NOISE:
+        return
+    if not cmd:
+        cmd = describe(pid)[1]
+    write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {name} {pid} :: {cmd} <- {chain(ppid)}")
+
+
+def watch_events():
+    import pythoncom
+    import win32com.client
+    pythoncom.CoInitialize()
+    wmi = win32com.client.GetObject("winmgmts:root/cimv2")
+    events = wmi.ExecNotificationQuery("SELECT * FROM Win32_ProcessStartTrace")
+    write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} guet démarré (avis de Windows)")
+    while True:
+        try:
+            ev = events.NextEvent(5000)
+        except pythoncom.com_error as e:
+            if e.args and e.args[2] and e.args[2][5] == -2147209215:   # délai écoulé, rien de lancé
+                continue
+            raise
+        note(int(ev.ProcessID), str(ev.ProcessName), int(ev.ParentProcessID))
+
+
+def watch_poll():
+    write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} guet démarré (lecture périodique)")
     seen = set(psutil.pids())
     while True:
         time.sleep(POLL_S)
@@ -69,11 +106,7 @@ def main():
             continue
         for pid in now - seen:
             name, cmd, ppid = describe(pid)
-            if name is None:
-                name, cmd = "(déjà terminé)", ""
-            if name.lower() in NOISE:
-                continue
-            write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {name} {pid} :: {cmd} <- {chain(ppid)}")
+            note(pid, name or "(déjà terminé)", ppid, cmd)
         seen = now
 
 
