@@ -964,8 +964,13 @@ def bot_events(bot, core, speaker, discord_voice, t, listener=None):
             if msg.get("channel") is not None and msg.get("self_mute") is not None:
                 discord_voice["mute"] = bool(msg["self_mute"])
                 discord_voice["deaf"] = bool(msg.get("self_deaf"))
-        elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave", "activate"):
+        elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave", "activate", "send", "move"):
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"))), t)
+            from .discord_cmd import BOT_WORDS
+            for p in bot.pending_cmds:        # une commande par MP attendait cette réponse du bot
+                if p.word in BOT_WORDS and p.bot_result is None:
+                    p.bot_result = (bool(msg.get("ok")), core.last_gesture[0])
+                    break
         elif kind == "result" and bot.kinds.get(msg.get("req")) == "notify":
             bot.kinds.pop(msg.get("req"), None)          # rappel envoyé en privé : rien à afficher
             if not msg.get("ok"):
@@ -980,7 +985,7 @@ def discord_command(bot, core, msg, t, listener=None):
     """Commande écrite en MP au bot : comme « iris » + le mot dit. Une phrase qui suit (« ouvre spotify ») remplace
     l'enregistrement du micro : la capture est finie tout de suite, comme après un silence. L'écoute retrouve
     son état d'avant (une commande à distance ne doit pas laisser le micro ouvert aux conversations de la pièce)."""
-    from .discord_cmd import WAIT_PHRASE_S, WAIT_S, Pending, error_reply, parse
+    from .discord_cmd import BOT_WORDS, WAIT_BOT_S, WAIT_PHRASE_S, WAIT_S, Pending, error_reply, parse
     word, phrase, err = parse(msg.get("text"))
     _log.info("commande par MP : %r -> %s", msg.get("text"), word or err[0])
     if not err and phrase and listener is None:
@@ -1020,7 +1025,8 @@ def discord_command(bot, core, msg, t, listener=None):
         bot.send({"t": "command_result", "id": msg.get("id"), "ok": False,
                   "text": f"Ignorée : {(core.last_gesture or ('?',))[0]}"})
         return acts
-    bot.pending_cmds.append(Pending(msg.get("id"), word, before, t, WAIT_PHRASE_S if phrase else WAIT_S))
+    wait = WAIT_BOT_S if word in BOT_WORDS else WAIT_PHRASE_S if phrase else WAIT_S
+    bot.pending_cmds.append(Pending(msg.get("id"), word, before, t, wait))
     return acts
 
 

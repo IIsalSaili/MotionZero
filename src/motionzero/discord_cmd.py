@@ -20,6 +20,8 @@ PHRASE_NEEDED = {"ouvre", "type", "question", "message", "salon", "rappel", "cla
 REFUSED = {"stop"}
 WAIT_S = 1.5          # temps laissé à la commande pour s'exécuter avant de lire l'île
 WAIT_PHRASE_S = 8.0   # appli à lancer, message à envoyer, rappel compris par Haiku… : plus long
+WAIT_BOT_S = 20.0     # viens / pars / activation / message / salon : on attend la réponse du bot lui-même
+BOT_WORDS = {"viens", "pars", "activation", "message", "salon"}
 VOCAB = (set(WORDS) | set(SPLIT.values())) - {"iris"}
 EXAMPLES = {"ouvre": "ouvre spotify", "type": "type bonjour", "question": "question quel temps fait-il",
             "message": "message dans général, salut", "salon": "salon jeux", "rappel": "rappel dans 10 minutes, pâtes",
@@ -67,10 +69,20 @@ class Pending:
 
     def __init__(self, req_id, word, before, t, wait=WAIT_S):
         self.id, self.word, self.before, self.t, self.wait = req_id, word, before, t, wait
+        self.bot_result = None            # (réussi ?, texte) : réponse du bot à l'ordre envoyé par Iris
 
     def reply(self, last_gesture, t):
         """Réponse à envoyer, ou None s'il faut encore attendre. Pur : testable."""
+        if self.bot_result is not None:
+            ok, label = self.bot_result
+            return {"t": "command_result", "id": self.id, "ok": ok,
+                    "text": f"« {self.word} » : {label}" if ok else f"Échec : {label}"}
         changed = last_gesture is not None and last_gesture is not self.before
+        if self.word in BOT_WORDS and not (changed and is_failure(last_gesture[0])):
+            if t - self.t < self.wait:
+                return None
+            return {"t": "command_result", "id": self.id, "ok": False,
+                    "text": f"« {self.word} » : ordre envoyé, mais le bot n'a pas répondu"}
         if changed and is_failure(last_gesture[0]):
             return {"t": "command_result", "id": self.id, "ok": False, "text": f"Échec : {last_gesture[0]}"}
         if t - self.t < self.wait:

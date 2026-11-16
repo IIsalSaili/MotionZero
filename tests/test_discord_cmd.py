@@ -152,3 +152,48 @@ def test_phrase_manquante_exemple():
 def test_transcription_sautee():
     from motionzero.ask import Asker
     assert Asker._transcribe(None, "spotify", 16000) == "spotify"
+
+
+@pytest.mark.parametrize("word, kind, ok, error, expect_ok, part", [
+    ("viens", "join", True, None, True, "EN VOCAL"),
+    ("viens", "join", False, "pas_en_vocal", False, "PAS EN VOCAL"),        # pas un « échec » de l'île : vu quand même
+    ("pars", "leave", True, None, True, "QUITTE"),
+    ("activation", "activate", False, "permission_manquante", False, "PERMISSION"),
+])
+def test_vocal_reponse_du_bot(word, kind, ok, error, expect_ok, part):
+    core, link = Core(Config()), FakeLink()
+    acts = run(link, core, word)
+    assert acts and link.sent == []
+    link.kinds[9] = kind
+    link.inbox.put({"t": "result", "req": 9, "ok": ok, "error": error, "channel": "Jeux"})
+    app.bot_events(link, core, None, {}, 103.0)                 # bien après WAIT_S : on attendait le bot
+    app.bot_events(link, core, None, {}, 103.1)
+    r = link.sent[-1]
+    assert r["t"] == "command_result" and r["ok"] is expect_ok and part in r["text"].upper()
+
+
+def test_vocal_bot_muet():
+    from motionzero.discord_cmd import WAIT_BOT_S
+    core, link = Core(Config()), FakeLink()
+    run(link, core, "viens")
+    app.bot_events(link, core, None, {}, 100.0 + WAIT_S + 1)
+    assert link.sent == []                                     # pas de faux « fait » avant la réponse du bot
+    app.bot_events(link, core, None, {}, 100.0 + WAIT_BOT_S)
+    assert link.sent[-1]["ok"] is False and "pas répondu" in link.sent[-1]["text"]
+
+
+def test_message_par_mp_reponse_du_bot():
+    core, link, lis = Core(Config()), FakeLink(), FakeListener()
+    run_l(link, core, lis, "message dans général, salut")
+    link.kinds[3] = "send"
+    link.inbox.put({"t": "result", "req": 3, "ok": True, "channel": "général"})
+    app.bot_events(link, core, None, {}, 101.0)
+    app.bot_events(link, core, None, {}, 101.1)
+    assert link.sent[-1]["ok"] and "GÉNÉRAL" in link.sent[-1]["text"].upper()
+
+
+@pytest.mark.parametrize("word, act", [("mute", "discord_mute"), ("démute", "discord_unmute"),
+                                       ("sourdine", "discord_deafen"), ("silence", "discord_hush"), ("lis", "discord_read")])
+def test_commandes_discord_locales(word, act):
+    core, link = Core(Config()), FakeLink()
+    assert (act,) in run(link, core, word)
