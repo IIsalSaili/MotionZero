@@ -53,6 +53,7 @@ class BotLink:
         self.connected = False
         self.was_connected = False          # au moins une connexion réussie (pour l'île)
         self.kinds = {}                     # numéro de commande -> « send » / « move »
+        self.pending_cmds = []              # commandes par MP en attente de réponse (boucle principale seule)
         self.conf = read_bot_config(bot_dir)
 
     @property

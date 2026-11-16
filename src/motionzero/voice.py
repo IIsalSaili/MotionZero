@@ -514,7 +514,12 @@ class VoiceListener:
         self.capture = []
 
     def stop_capture(self):
-        """Son enregistré depuis start_capture (int16, 16 kHz, mono)."""
+        """Son enregistré depuis start_capture (int16, 16 kHz, mono) ; ou le texte d'un MP Discord (#43),
+        déposé dans `typed` par la boucle principale : il remplace l'enregistrement, Whisper est sauté."""
+        typed, self.typed = getattr(self, "typed", None), None
+        if typed is not None:
+            self.capture = None
+            return typed
         blocks, self.capture = self.capture or [], None
         return b"".join(blocks)
 

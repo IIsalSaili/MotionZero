@@ -67,6 +67,7 @@ graph LR
 | `timers.py` | timer, chronomètre | 146 | test_timers |
 | `calendar_view.py` | calendrier, mots du calendrier | 176 | test_calendar |
 | `discord_link.py` | pont vers le bot Discord (socket local) | 235 | test_discord_link |
+| `discord_cmd.py` | commandes d'Iris écrites en MP au bot (#43) | 70 | test_discord_cmd |
 | `discord_keys.py` | raccourcis Discord lus sur le PC | 65 | test_discord_keys |
 | `leveldb_mini.py` | lecteur LevelDB minimal | 130 | — (via test_discord_keys) |
 | `vscode.py` | VS Code devant, micro de Claude | 246 | test_discord_keys |

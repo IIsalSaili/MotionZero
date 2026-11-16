@@ -239,6 +239,7 @@ class FakeLink:
         self.connected, self.accept, self.sent = connected, accept, []
         self.inbox = queue.Queue()
         self.kinds = {}
+        self.pending_cmds = []
         self.was_connected = True
 
     def send(self, msg):
