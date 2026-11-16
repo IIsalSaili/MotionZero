@@ -362,7 +362,7 @@ class Engine:
         if t - self.chrome_check_t >= 0.3:
             self.chrome_check_t = t           # le mode Chrome suit Chrome au premier plan (14/11)
             acts += core.front_app(foreground_exe(), t)
-        bot_events(d.bot, core, d.speaker, d.discord_voice, t)
+        acts += bot_events(d.bot, core, d.speaker, d.discord_voice, t)
         d.desk.events(core, t)
         return acts
 
@@ -935,15 +935,26 @@ def discord_spoken(kind, audio, asker, bot, on_message):
 
 
 def bot_events(bot, core, speaker, discord_voice, t):
-    """Ce que le bot a envoyé (fil « pont-bot ») : traité ici, dans la boucle principale."""
+    """Ce que le bot a envoyé (fil « pont-bot ») : traité ici, dans la boucle principale. Renvoie les actions
+    des commandes écrites en MP (#43)."""
     from .discord_link import result_label, speech_for
+    acts = []
+    for p in list(bot.pending_cmds):          # commandes par MP : réponse quand l'effet se voit dans l'île
+        reply = p.reply(core.last_gesture, t)
+        if reply is not None:
+            bot.pending_cmds.remove(p)
+            bot.send(reply)
     while True:
         try:
             msg = bot.inbox.get_nowait()
         except queue.Empty:
-            return
+            return acts
         kind = msg.get("t")
-        if kind == "message":
+        if kind == "command":
+            acts += discord_command(bot, core, msg, t)
+        elif kind == "result" and bot.kinds.get(msg.get("req")) == "command_result":
+            bot.kinds.pop(msg.get("req"), None)  # réponse au MP transmise : rien à afficher
+        elif kind == "message":
             core.last_gesture = (f"{msg.get('author', '?')} : {msg.get('content', '')}"[:60], t)
             if speaker is not None:
                 speaker.say(speech_for(msg))
@@ -963,6 +974,33 @@ def bot_events(bot, core, speaker, discord_voice, t):
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"), "send")), t)
         elif kind == "link" and not msg.get("connected") and bot.was_connected:
             core.last_gesture = ("BOT DISCORD DECONNECTE", t)
+
+
+def discord_command(bot, core, msg, t):
+    """Commande écrite en MP au bot : comme « iris » + le mot dit. L'écoute retrouve son état d'avant
+    (une commande à distance ne doit pas laisser le micro ouvert aux conversations de la pièce)."""
+    from .discord_cmd import Pending, error_reply, parse
+    word, err = parse(msg.get("text"))
+    _log.info("commande par MP : %r -> %s", msg.get("text"), word or err[0])
+    if err:
+        bot.send(error_reply(msg.get("id"), *err))
+        return []
+    before, listen_until = core.last_gesture, core.listen_until
+    try:
+        acts = core.voice("iris", t) + core.voice(word, t)
+    except Exception:
+        _log.exception("commande par MP %s", word)
+        bot.send({"t": "command_result", "id": msg.get("id"), "ok": False,
+                  "text": "Erreur dans Iris pendant la commande (voir les journaux)."})
+        return []
+    if word not in ("reprise",) and core.listen_until > listen_until:
+        core.listen_until = listen_until
+    if core.last_word and not core.last_word[2]:
+        bot.send({"t": "command_result", "id": msg.get("id"), "ok": False,
+                  "text": f"Ignorée : {(core.last_gesture or ('?',))[0]}"})
+        return acts
+    bot.pending_cmds.append(Pending(msg.get("id"), word, before, t))
+    return acts
 
 
 def discord_actions(acts, speaker):

@@ -136,6 +136,17 @@ sequenceDiagram
 | `activation` | lance le bot vocal, charge Whisper | non | tous |
 | `viens` / `pars` | le bot rejoint / quitte ton salon vocal | non | tous |
 
+### Commandes écrites en MP au bot
+
+Un MP au bot (de toi seul, propriétaire de l'application) est une commande d'Iris : `studio`, `iris studio`, `plein écran`… Le « iris » du début est facultatif. Le bot répond dans le MP :
+
+- ce qu'Iris a affiché (« « studio » : VS CODE ») ;
+- l'échec affiché dans l'île (appli introuvable, VS Code pas devant…) ;
+- commande inconnue, avec des suggestions ;
+- Iris pas joignable (arrêtée ou plantée) ou pas de réponse en 10 s (figée).
+
+Pas possibles par écrit : `stop` (personne ne pourrait relancer Iris) et les commandes suivies d'une phrase dite (`ouvre`, `type`, `question`, `message`, `salon`, `rappel`, `timer`, `volume`, `claude`). Une commande écrite ne laisse pas l'écoute ouverte.
+
 ## Rappels, temps, calendrier
 
 | Mot | Effet | Sans iris ? | Mode |
