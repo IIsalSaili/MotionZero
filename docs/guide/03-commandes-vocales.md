@@ -145,7 +145,7 @@ Un MP au bot (de toi seul, propriétaire de l'application) est une commande d'Ir
 - commande inconnue, avec des suggestions ;
 - Iris pas joignable (arrêtée ou plantée) ou pas de réponse en 10 s (figée).
 
-Pas possibles par écrit : `stop` (personne ne pourrait relancer Iris) et les commandes suivies d'une phrase dite (`ouvre`, `type`, `question`, `message`, `salon`, `rappel`, `timer`, `volume`, `claude`). Une commande écrite ne laisse pas l'écoute ouverte.
+Les commandes suivies d'une phrase prennent la suite du MP à la place du micro (Whisper est sauté) : `ouvre spotify`, `timer 10 minutes`, `message dans général, salut`, `rappel dans 10 minutes, pâtes`, `question …`, `type …`, `volume 40`, `salon jeux`. `claude …` met VS Code devant et y tape le texte (puis `envoie` en MP). Seul `stop` est refusé : personne ne pourrait relancer Iris. Une commande écrite ne laisse pas l'écoute ouverte.
 
 ## Rappels, temps, calendrier
 

@@ -13,22 +13,30 @@ from test_discord_link import FakeLink
     ("  iris   plein   écran ", "plein écran"), ("double clic", "double"), ("reprise", "reprise"),
 ])
 def test_parse_ok(text, word):
-    assert parse(text) == (word, None)
+    assert parse(text) == (word, None, None)
 
 
 @pytest.mark.parametrize("text, error", [
     ("", "message_vide"), (None, "message_vide"), ("iris", "message_vide"), ("!!!", "message_vide"),
-    ("iris stop", "refuse_a_distance"), ("ouvre spotify", "pas_encore_par_ecrit"),
-    ("iris ouvre", "pas_encore_par_ecrit"), ("question", "pas_encore_par_ecrit"),
+    ("iris stop", "refuse_a_distance"), ("iris ouvre", "phrase_manquante"), ("question", "phrase_manquante"),
     ("bonjour toi", "commande_inconnue"),
 ])
 def test_parse_echecs(text, error):
-    word, err = parse(text)
-    assert word is None and err[0] == error
+    word, phrase, err = parse(text)
+    assert word is None and phrase is None and err[0] == error
 
 
 def test_parse_suggestions():
-    assert "studio" in parse("studoi")[1][1]
+    assert "studio" in parse("studoi")[2][1]
+
+
+@pytest.mark.parametrize("text, word, phrase", [
+    ("ouvre spotify", "ouvre", "spotify"), ("Iris, timer 10 minutes", "timer", "10 minutes"),
+    ("message dans général, Salut !", "message", "dans général, Salut !"), ("timer", "timer", None),
+    ("iris ferme", "ferme", None), ("claude corrige le test", "claude", "corrige le test"),
+])
+def test_parse_phrase(text, word, phrase):
+    assert parse(text) == (word, phrase, None)
 
 
 def run(link, core, text, t=100.0):
@@ -83,3 +91,64 @@ def test_pending_sans_changement():
     p = Pending(1, "copie", ("avant", 0), 0.0)
     assert p.reply(p.before, 0.1) is None
     assert p.reply(p.before, WAIT_S)["text"] == "« copie » : fait"
+
+
+class FakeListener:
+    def __init__(self):
+        self.typed, self.capture = None, None
+
+    def stop_capture(self):
+        from motionzero.voice import VoiceListener as Listener
+        return Listener.stop_capture(self)
+
+
+def run_l(link, core, listener, text, t=100.0):
+    link.inbox.put({"t": "command", "id": 5, "text": text})
+    return app.bot_events(link, core, None, {}, t, listener)
+
+
+@pytest.mark.parametrize("text, start, stop", [
+    ("ouvre spotify", "open_start", "open_stop"), ("timer 10 minutes", "open_start", "timer_stop"),
+    ("rappel dans 10 minutes pâtes", "open_start", "rappel_stop"), ("question quelle heure", "ask_start", "ask_stop"),
+    ("type bonjour", "type_start", "type_stop"), ("message dans général, salut", "open_start", "message_stop"),
+    ("volume 40", "open_start", "volume_stop"), ("salon jeux", "open_start", "salon_stop"),
+])
+def test_phrase_remplace_le_micro(text, start, stop):
+    core, link, lis = Core(Config()), FakeLink(), FakeListener()
+    names = [a[0] for a in run_l(link, core, lis, text)]
+    assert names.index(start) < names.index(stop)        # capture ouverte puis fermée dans la même image
+    assert lis.stop_capture() == text.split(None, 1)[1]  # le texte du MP à la place du son
+    assert lis.stop_capture() == b""                     # une seule fois : la voix suivante enregistre
+    assert not (core.opening or core.asking or core.typing) and not core.listening(100.5)
+
+
+def test_claude_avec_texte_tape_dans_vs_code():
+    core, link, lis = Core(Config()), FakeLink(), FakeListener()
+    acts = run_l(link, core, lis, "claude corrige le test")
+    names = [a[0] for a in acts]
+    assert ("open_app", "studio") in acts and names.index("type_stop") > names.index("open_app")
+    assert lis.typed == "corrige le test"
+
+
+def test_phrase_sans_micro():
+    core, link = Core(Config()), FakeLink()
+    assert run_l(link, core, None, "ouvre spotify") == []
+    assert link.sent[-1]["ok"] is False and "sans la voix" in link.sent[-1]["text"]
+
+
+def test_phrase_inutilisee_effacee():
+    core, link, lis = Core(Config()), FakeLink(), FakeListener()
+    core.timer_running = True                            # « timer » annule celui en cours : pas d'écoute
+    run_l(link, core, lis, "timer 5 minutes")
+    assert lis.typed is None
+
+
+def test_phrase_manquante_exemple():
+    core, link = Core(Config()), FakeLink()
+    run_l(link, core, FakeListener(), "ouvre")
+    assert "ouvre spotify" in link.sent[-1]["text"]
+
+
+def test_transcription_sautee():
+    from motionzero.ask import Asker
+    assert Asker._transcribe(None, "spotify", 16000) == "spotify"

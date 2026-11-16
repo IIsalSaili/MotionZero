@@ -199,6 +199,8 @@ class Asker:
                     log.info("whisper decharge (inutilise depuis %d min)", WHISPER_IDLE_S // 60)
 
     def _transcribe(self, audio, sr):
+        if isinstance(audio, str):    # texte écrit en MP au bot (#43) : déjà transcrit
+            return audio
         self._load()          # rechargé à la demande s'il a été déchargé
         pcm = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
         # une transcription à la fois : jamais deux en même temps sur la carte graphique
