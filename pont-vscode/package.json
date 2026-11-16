@@ -1,0 +1,11 @@
+{
+  "name": "iris-pont",
+  "displayName": "Iris (pont)",
+  "description": "Laisse Iris lancer des commandes de VS Code (onglet suivant / précédent) sans touche simulée.",
+  "version": "0.1.0",
+  "publisher": "iris",
+  "engines": { "vscode": "^1.80.0" },
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "extensionKind": ["ui"]
+}

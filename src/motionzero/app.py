@@ -36,6 +36,7 @@ from .vscode import chrome_in_front, foreground_exe
 from .volume import VIEW as VOLUME_VIEW
 from .quota import Quota, read_shown, write_shown
 from .accueil import home_view, sensors as home_sensors
+from . import pont
 from .ui import Bridge, clock_text, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -1017,6 +1018,18 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
                 core.last_gesture = ("CHROME PAS DEVANT : rien envoye", t)
             continue
         if a[0] == "editor_tab":
+            # d'abord le pont (extension) : commande de VS Code, effet vérifié ; sinon l'ancienne touche
+            sens = "next" if "pagedown" in a[1] else "prev"
+            res = pont.command(sens)
+            if res is not None:
+                ok, info = res
+                if ok:
+                    core.last_gesture = ("ONGLET " + ("SUIVANT" if sens == "next" else "PRECEDENT")
+                                         + (f" : {info[:30]}" if info else ""), t)
+                else:
+                    _log.info("onglet VS Code pas change : %s", info)
+                    core.last_gesture = (f"ONGLET : ECHEC ({info})".upper(), t)   # « ECHEC » : son d'échec
+                continue
             if vscode_in_front():
                 rest.append(("hotkey", a[1]))
                 continue
