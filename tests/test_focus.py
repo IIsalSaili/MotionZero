@@ -58,3 +58,20 @@ def test_agrippe_enfonce_puis_relache():
     assert not c.dragging and ("release", "mouse", "left") in acts
     c2 = Core(Config())                                             # souris éteinte, sans « iris » : rien
     assert c2.voice("agrippe", 5.0) == [] and not c2.dragging
+
+
+def test_clic_ecoute_souris_eteinte():
+    """16/11 : souris éteinte, « clic » absent de la liste écoutée : « iris clic » devenait « iris lis »."""
+    import json
+    from motionzero.voice import GRAMMARS
+    base = json.loads(GRAMMARS["base"])
+    assert "iris clic" in base and "iris double clic" in base and "clic" not in base
+    c = Core(Config())
+    assert ("click", "left") in _say(c, 10.0, "iris", "clic")        # souris éteinte : « iris clic »
+    _say(c, 20.0, "iris", "focus")
+    assert ("click", "left") in c.voice("clic", 22.0, t_start=21.8)  # focus : « clic » seul
+
+
+def test_clic_seul_ignore_sans_focus_ni_souris():
+    c = Core(Config())
+    assert c.voice("clic", 5.0, t_start=4.8) == []

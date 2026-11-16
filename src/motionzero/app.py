@@ -375,7 +375,8 @@ class Engine:
             elif core.mode == Mode.CHROME:
                 listener.grammar = "chrome"
             else:                             # mots de la souris : seulement souris allumée ou bouton tenu
-                listener.grammar = "souris" if core.mouse or core.dragging else "base"
+                # mode focus : commandes sans « iris », clic compris (16/11)
+                listener.grammar = "souris" if core.mouse or core.dragging or core.focus_on(t) else "base"
             # juste après une dictée : « envoie / annule » attendus, reconnus plus facilement (seuil normal, et un
             # texte libre vide les confirme : mesuré, juste après la coupure du micro il est souvent vide)
             listener.relaxed = CONFIRM_WORDS if core.confirming(t) else frozenset()

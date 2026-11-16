@@ -205,7 +205,8 @@ def test_mots_chrome_absents_de_la_liste_de_base():
     for w in ("haut", "bas", "retour", "recharge", "descends"):
         assert w not in base and w in chrome, w
     assert all(w in chrome for w in CHROME_KEYS)
-    assert all(w in chrome for w in base)          # en mode Chrome, les commandes habituelles restent
+    # en mode Chrome, les commandes habituelles restent (« iris clic » : « clic » y est seul)
+    assert all(w.removeprefix("iris ") in chrome for w in base)
 
 
 def test_changement_de_liste_dans_le_fil_voix():

@@ -133,6 +133,8 @@ def grammar(extra=(), mouse=True):
     skip = CAL_ONLY | (set() if mouse else MOUSE_ONLY)
     phrases = [w for w in WORDS if (w not in SPLIT.values() or w in SOLO_TOO) and w not in skip]
     phrases += [f"{a} {b}" for a, b in SPLIT if mouse or SPLIT[(a, b)] not in MOUSE_ONLY]
+    if not mouse:   # souris éteinte : seulement précédés de « iris » (16/11 : « iris clic » devenait « iris lis »)
+        phrases += [f"iris {w}" for w in sorted(MOUSE_ONLY)] + ["iris double clic"]
     phrases += [w for w in extra if w not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
