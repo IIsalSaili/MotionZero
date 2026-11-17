@@ -42,6 +42,7 @@ GROUPS = [
         ("accueil", "accueil d'Iris"),
         ("volume", "puis « 40 »…"),
         ("réveil", "rallume l'écran"),
+        ("traducteur", "sous-titres du son, oui / non"),
     ]),
     ("Claude", [
         ("claude", "micro dans VS Code"),

@@ -367,6 +367,7 @@ class GlassOverlay(QWidget):
             except OSError:
                 self.hand_icon = None     # sans l'icône : un simple disque gris
         self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
+        self.subs = None          # « iris traducteur » : {"lines", "error"} ou None
         self.vol = None           # barre de volume (« iris volume ») : {"level", "muted"} ou None
         self._last_st = {}
         self._anim = QTimer(self)                 # tourne seulement pendant une animation (logo, alarme)
@@ -408,6 +409,12 @@ class GlassOverlay(QWidget):
             if vol != self.vol:
                 self.vol = vol
                 self.update(volume_rect(self.width(), self.height()).toAlignedRect().adjusted(-4, -4, 4, 4))
+            subs = st.get("subs")
+            if subs != self.subs:
+                for s in (self.subs, subs):
+                    if s is not None:
+                        self.update(subs_rect(self.width(), self.height()).toAlignedRect().adjusted(-4, -4, 4, 4))
+                self.subs = subs
             self._last_st = st
             now = _time.perf_counter()
             if self.island.update(st, now):
@@ -540,6 +547,8 @@ class GlassOverlay(QWidget):
             self.island.paint(p)
         if self.vol is not None:
             paint_volume(p, volume_rect(self.width(), self.height()), self.vol["level"], self.vol["muted"])
+        if self.subs is not None:
+            paint_subs(p, subs_rect(self.width(), self.height()), subs_text(self.subs))
         if self.ghost is not None:
             self._paint_ghost(p)
         if self.gauge is not None:
@@ -865,6 +874,40 @@ def reminder_texts(kind, data):
 
 GHOST_S = 56     # taille de la main fantôme (px logiques)
 VOL_W, VOL_H, VOL_MARGIN = 64, 300, 24      # barre de volume, à droite, centrée en hauteur
+
+
+SUBS_W_FRAC = 0.7       # bandeau des sous-titres : 70 % de la largeur de l'écran
+SUBS_H = 110
+SUBS_BOTTOM = 70        # px au-dessus du bas (laisse la barre des tâches et les commandes de lecture)
+
+
+def subs_rect(w, h):
+    bw = w * SUBS_W_FRAC
+    return QRectF((w - bw) / 2, h - SUBS_BOTTOM - SUBS_H, bw, SUBS_H)
+
+
+def subs_text(subs):
+    """Texte du bandeau : l'erreur, les 2 dernières phrases, ou None (rien entendu : bandeau caché). Pur."""
+    if subs is None:
+        return None
+    if subs.get("error"):
+        return subs["error"]
+    return "\n".join(subs.get("lines") or []) or None
+
+
+def paint_subs(p, box, text):
+    """Même style que l'île : noir opaque, blanc, Atkinson. Rien à dire : rien de dessiné."""
+    if not text:
+        return
+    p.save()
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QColor(0, 0, 0, 215))
+    p.drawRoundedRect(box, 18, 18)
+    p.setPen(QColor(255, 255, 255))
+    p.setFont(QFont("Atkinson Hyperlegible", 19, QFont.Weight.Bold))
+    p.drawText(box.adjusted(24, 10, -24, -10),
+               int(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap), text)
+    p.restore()
 
 
 def volume_rect(w, h):

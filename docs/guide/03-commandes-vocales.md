@@ -159,6 +159,7 @@ Les commandes suivies d'une phrase prennent la suite du MP à la place du micro 
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
 | `heure` / `date` | jour, date et heure affichés 5 s | non | tous |
 | `quota` | quota Claude : session de 5 h et semaine (pourcentage utilisé, heure du reset), logo Claude, collé au coin haut gauche, en permanence ; redire `quota` le masque (choix gardé au redémarrage) | non | tous |
+| `traducteur` | sous-titres du son qui sort du PC (vidéo, appel…), traduits en anglais par Whisper (langue détectée seule), dans un bandeau en bas de l'écran que les clics traversent ; environ 3-5 s de retard ; redire `traducteur` l'éteint. Utilise le même Whisper que la voix : une commande dictée fait patienter les sous-titres | non | tous |
 
 ```mermaid
 sequenceDiagram

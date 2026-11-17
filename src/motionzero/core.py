@@ -91,7 +91,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
 "réduis": "FENETRE REDUITE",
                 "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
-                "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE", "quota": "QUOTA CLAUDE", "focus": "FOCUS"}
+                "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE", "quota": "QUOTA CLAUDE", "focus": "FOCUS", "traducteur": "TRADUCTEUR"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop", "timer": "timer_stop",
@@ -127,7 +127,8 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
-            "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus"}
+            "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
+            "traducteur": "translator"}
 
 
 
@@ -208,6 +209,7 @@ class Core:
         self.calendar_until = -1e9            # « iris calendrier » : ouvert jusqu'à cet instant
         self.timer_running = False            # mis à jour par les rappels (même fil) : « iris timer » l'annule
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
+        self.translating = False              # « iris traducteur » : sous-titres du son du PC (#14)
         self.quota_shown = False              # « iris quota » : quota Claude affiché en permanence (repris au démarrage)
         self.repeat_until = -1e9              # « iris skip / back » : « skip » / « back » seuls, sans « iris »
         self.repeat_acts = {}                 # mot répétable -> (actions, libellé affiché)
@@ -937,6 +939,12 @@ class Core:
             return "FOCUS ETEINT : redis IRIS avant"
         self.focus_until = t + FOCUS_IDLE_S
         return "FOCUS : plus besoin de dire IRIS"
+
+    def _cmd_translator(self, word, t, acts):
+        """« iris traducteur » : allume les sous-titres traduits ; redit, les éteint."""
+        self.translating = not self.translating
+        acts.append(("traducteur", self.translating))
+        return "TRADUCTEUR ALLUME" if self.translating else "TRADUCTEUR ETEINT"
 
     def _cmd_quota(self, word, t, acts):
         self.quota_shown = not self.quota_shown
