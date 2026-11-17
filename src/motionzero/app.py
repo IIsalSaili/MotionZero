@@ -689,7 +689,10 @@ def main(argv=None):
                 None, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),   # rappels sans voix (12/11)
                 transcribe=lambda audio: asker._transcribe(audio, 16000))
     from .instruction import Instructeur        # « iris instruction » -> Whisper -> modèle local -> plan (#45)
-    instructeur = Instructeur(lambda audio: asker._transcribe(audio, 16000), launcher, desk)
+    from .outils import Store
+    instructeur = Instructeur(lambda audio: asker._transcribe(audio, 16000), launcher, desk,
+                              routines=Store(os.path.join(ROOT, "routines.json")),     # non versionnés
+                              favoris=Store(os.path.join(ROOT, "favoris.json")))
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
