@@ -98,7 +98,8 @@ WORDS = {
     "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
     "pars": "pars",       # « iris pars » : il quitte le vocal
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
-    "instruction": "instruction",  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
+    "instruction": "instruction",
+    "bypass": "bypass",           # « iris bypass » : mots acceptés même mal dits (sauf les définitifs) ; redit, éteint  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
     "stop": "stop",
 }
 
@@ -184,8 +185,19 @@ def _join_demute(words):
 # « iris(0.37) claude(1.00) » ; dire « iris » puis une commande par hasard est rare, et la 2e vérification reste.
 IRIS_MIN_CONF = 0.3
 
+# « iris bypass » (17/11) : quand l'utilisateur sait qu'il ne parlera pas à côté. Seuils plus bas et pas de 2e
+# vérification, sauf pour les mots qui font une action définitive (fermer, envoyer, effacer…).
+BYPASS_MIN_CONF = 0.4       # commande après « iris » (normal : 0,6)
+BYPASS_LONE_CONF = 0.55     # mot dit seul, en focus (normal : 0,8)
+BYPASS_EXCLUDED = {"ferme", "envoie", "envoyé", "annule", "efface", "coupe", "recharge", "stop", "agrippe",
+                   "instruction", "bypass"}
 
-def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
+
+def bypassable(word, bypass):
+    return bool(bypass) and word not in BYPASS_EXCLUDED and word != WAKE_WORD
+
+
+def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset(), bypass=False):
     """Mots acceptés d'un résultat Vosk.
     - « iris » + une commande : pris n'importe où dans la phrase. Mesuré le 10/11 : avec de la parole en
       fond (vidéo, Discord), la reconnaissance colle « iris claude » au bruit d'avant (« stop pause stop iris
@@ -203,7 +215,8 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
             if words[i]["conf"] < min_conf:
                 continue                               # « iris » seul : seuil normal
             return [words[i]]                          # « iris » en fin de phrase : écoute ouverte
-        if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= min_conf:
+        need_next = BYPASS_MIN_CONF if bypassable(nxt["word"], bypass) else min_conf
+        if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= need_next:
             if _gap(words[i], nxt) > IRIS_GAP_S:
                 return []                              # « iris m'a mis en sourdine » : des mots au milieu
             return [words[i], nxt]
@@ -214,6 +227,8 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset()):
     # relaxed : mots attendus à ce moment précis (« envoie / annule » juste après une dictée) : seuil normal
     lone = words[0]["word"] != WAKE_WORD and words[0]["word"] not in relaxed
     need = max(min_conf, LONE_MIN_CONF) if lone else min_conf
+    if bypassable(words[0]["word"], bypass):
+        need = BYPASS_LONE_CONF if lone else min(need, BYPASS_MIN_CONF)
     return [w for w in words if w["conf"] >= need]
 
 
@@ -241,7 +256,7 @@ def _dedupe(tokens):
     return [tok for i, tok in enumerate(tokens) if i == 0 or tok != tokens[i - 1]]
 
 
-def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, relaxed=frozenset()):
+def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, relaxed=frozenset(), bypass=False):
     """2e vérification. La grammaire fermée « force » toute parole vers ses mots (mesuré : « tu as vu la
     série hier soir » -> « envoie », « une souris sans fil » -> « défile »). Une reconnaissance libre du même
     son doit donc confirmer :
@@ -259,6 +274,9 @@ def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, rel
     names = [w["word"] for w in words]
     if not names or set(names) & ALWAYS_HEARD:
         return True
+    cmds = [n for n in names if n != WAKE_WORD]
+    if cmds and all(bypassable(n, bypass) for n in cmds):
+        return True                   # bypass : pas de 2e vérification (les mots définitifs l'ont toujours)
     if after_iris and names[0] != WAKE_WORD and len(names) == 1:
         return True
     tokens = _dedupe(free_text.lower().split())
@@ -316,6 +334,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.quiet = False          # voix basse : écrit par la boucle principale (un booléen), lu ici
+        self.bypass = False         # « iris bypass » : écrit par la boucle principale (un booléen), lu ici
         self.relaxed = frozenset()  # mots attendus maintenant (« envoie / annule » après une dictée) : idem
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
         self.iris_heard_t = -1e9    # dernier « iris » repéré dans le texte PROVISOIRE (fige le curseur tôt)
@@ -437,12 +456,13 @@ class VoiceListener:
         if why:
             log.info("iris rejete : %s", why)
         relaxed = getattr(self, "relaxed", frozenset())   # (écouteurs de test créés sans __init__)
-        words = accepted_words(res, self.min_conf, relaxed=relaxed)
+        bypass = getattr(self, "bypass", False)
+        words = accepted_words(res, self.min_conf, relaxed=relaxed, bypass=bypass)
         if not words:
             return
         after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
-                                                   self.quiet, relaxed):
+                                                   self.quiet, relaxed, bypass):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())

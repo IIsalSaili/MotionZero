@@ -15,9 +15,9 @@ def test_aucun_nouveau_mot_guette():
     guette en permanence ne grandit pas. Nombres figés le 17/11 (« instruction » compris) : un ajout doit être
     voulu et ce test mis à jour à la main."""
     from motionzero.voice import GRAMMARS, WORDS
-    assert len(WORDS) == 118          # 17/11 : 7 mots passés dans « instruction »
+    assert len(WORDS) == 119          # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 68, "souris": 68, "chrome": 79, "calendrier": 120}
+        {"base": 69, "souris": 69, "chrome": 80, "calendrier": 121}
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 

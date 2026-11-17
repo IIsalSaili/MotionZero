@@ -117,6 +117,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
                   "sourdine": (("discord_deafen",), None)}
+BYPASS_IDLE_S = 600.0    # « iris bypass » éteint seul après 10 min sans commande, comme le focus
 FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
 
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
@@ -129,7 +130,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
-            "traducteur": "translator"}
+            "traducteur": "translator", "bypass": "bypass"}
 
 
 
@@ -219,6 +220,7 @@ class Core:
         self.ask_t0 = -1e9
         # voix
         self.listen_until = -1e9
+        self.bypass_until = -1e9         # « iris bypass » : mots acceptés même mal dits jusqu'à cet instant
         self.focus_until = -1e9          # mode focus : commandes sans « iris » jusqu'à cet instant
         self.voice_scroll_until = -1e9
         self.voice_scroll_armed = False       # la main est passée dans la bande du centre
@@ -794,6 +796,8 @@ class Core:
     def _v_command(self, word, t, acts):
         if self.focus_on(t) and word != "focus":
             self.focus_until = t + FOCUS_IDLE_S   # chaque commande prolonge le mode focus
+        if self.bypass_on(t) and word != "bypass":
+            self.bypass_until = t + BYPASS_IDLE_S # pareil pour le bypass
         return self._v_command_run(word, t, acts)
 
     def _v_command_run(self, word, t, acts):
@@ -950,6 +954,18 @@ class Core:
         self.translating = not self.translating
         acts.append(("traducteur", self.translating))
         return "TRADUCTEUR ALLUME" if self.translating else "TRADUCTEUR ETEINT"
+
+    def bypass_on(self, t):
+        return self.mode != Mode.DISABLED and t < self.bypass_until
+
+    def _cmd_bypass(self, word, t, acts):
+        """« iris bypass » : reconnaissance plus permissive (voir voice.BYPASS_*) ; redit, éteint ; seul après
+        10 min sans commande. S'ajoute au mode focus sans le changer."""
+        if self.bypass_on(t):
+            self.bypass_until = -1e9
+            return "BYPASS ETEINT"
+        self.bypass_until = t + BYPASS_IDLE_S
+        return "BYPASS : mots acceptes meme mal dits"
 
     def _cmd_quota(self, word, t, acts):
         self.quota_shown = not self.quota_shown

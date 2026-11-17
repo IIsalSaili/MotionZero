@@ -387,6 +387,7 @@ class Engine:
             # juste après une dictée : « envoie / annule » attendus, reconnus plus facilement (seuil normal, et un
             # texte libre vide les confirme : mesuré, juste après la coupure du micro il est souvent vide)
             listener.relaxed = CONFIRM_WORDS if core.confirming(t) else frozenset()
+            listener.bypass = core.bypass_on(t)   # « iris bypass » : seuils plus bas (un booléen, lu par le fil voix)
             if t - listener.iris_heard_t < 0.5:
                 core.freeze_for_voice(t)      # « iris » en cours de prononciation : curseur figé
             events = listener.poll()
@@ -544,6 +545,7 @@ class Engine:
             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
             "mode": core.mode,
             "focus": core.focus_on(t),
+            "bypass": core.bypass_on(t),
             "dictating": core.dictating,
             "typing": core.typing or core.opening,
             "confirming": core.confirming(t),

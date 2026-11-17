@@ -1105,6 +1105,8 @@ def island_text(st):
         mode = "SOURIS" if mode in ("NEUTRE", "") else f"{mode} · SOURIS"   # la souris s'ajoute au mode
     if st.get("focus"):
         mode = f"{mode} · FOCUS" if mode else "FOCUS"
+    if st.get("bypass"):
+        mode = f"{mode} · BYPASS" if mode else "BYPASS"
     qa = st.get("qa") or {}
     if qa.get("phase") == "listening":
         return mode, "Pose ta question…", True

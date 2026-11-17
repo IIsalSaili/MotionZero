@@ -46,6 +46,7 @@ GROUPS = [
     ("Claude", [
         ("claude", "micro dans VS Code"),
         ("question", "réponse en haut"),
+        ("bypass", "mots acceptés même mal dits, oui / non"),
         ("instruction", "puis : ouvre, timer, rappel, volume, message, salon, chrono…"),
         ("quota", "quota affiché, oui / non"),
     ]),
