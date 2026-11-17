@@ -190,3 +190,24 @@ def test_heure_et_meteo():
     assert o.weather("Paris", get) == "Paris : 12 °C, pluie faible (min 7, max 13, pluie 80 %)"
     with pytest.raises(RuntimeError):
         o.weather("Nullepart", lambda url: {"results": []})
+
+
+# ---- Discord : salon et message par le bot (affichés avant, rien ne part sans « envoie »)
+def test_discord_salon_et_message():
+    from types import SimpleNamespace
+    from motionzero.instruction import Instructeur
+    assert "général" in check_step("discord_message", "dans général, j'arrive dans 5 min")[2]
+    with pytest.raises(PlanError):
+        check_step("discord_message", "salut")              # sans destinataire
+    with pytest.raises(PlanError):
+        check_step("discord_salon", "")
+    sent = []
+    bot = SimpleNamespace(connected=True, send=lambda m: sent.append(m) or 1)
+    i = Instructeur(lambda a: "", bot=bot)
+    i._run_tool("discord_salon", "Gaming")
+    i._run_tool("discord_message", "dans général, salut")
+    assert sent == [{"t": "move", "channel": "Gaming"}, {"t": "send", "text": "dans général, salut"}]
+    for bad in (None, SimpleNamespace(connected=False, send=lambda m: 1),
+                SimpleNamespace(connected=True, send=lambda m: None)):
+        with pytest.raises(RuntimeError):
+            Instructeur(lambda a: "", bot=bad)._run_tool("discord_salon", "Gaming")

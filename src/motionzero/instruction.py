@@ -47,6 +47,8 @@ TOOLS = {
     "ecris": "écrit un texte là où se trouve le curseur (arg : le texte)",
     "volume": "règle le son du PC (arg : « 40 », « plus fort », « moins fort », « coupe », « remets »)",
     "discord": "micro Discord (arg : « coupe », « allume » ou « sourdine »)",
+    "discord_salon": "te déplace dans un salon vocal Discord (arg : le nom du salon)",
+    "discord_message": "envoie un message Discord par le bot (arg : « dans <salon ou personne>, <le message> »)",
     "timer": "lance un compte à rebours (arg : la durée, ex. « 5 minutes »)",
     "rappel": "crée un rappel, à valider ensuite (arg : la demande, ex. « demain 9 h appeler le médecin »)",
     "traducteur": "allume ou éteint les sous-titres traduits du son du PC (arg vide)",
@@ -110,6 +112,10 @@ SYSTEM = (
     "\"refus\": \"\"}\n"
     "« itinéraire vers la gare de Lyon » -> {\"etapes\": [{\"outil\": \"recherche\", \"arg\": \"itineraire: gare de Lyon\"}], "
     "\"refus\": \"\"}\n"
+    "« dis dans le salon blabla que le film commence à 20 h 30 » -> {\"etapes\": [{\"outil\": \"discord_message\", "
+    "\"arg\": \"dans blabla, le film commence à 20 h 30\"}], \"refus\": \"\"}\n"
+    "- Pour un message Discord : UNE seule étape discord_message, le message recopié en entier, rien d'autre "
+    "(pas de timer, pas de salon vocal).\n"
     "Exemples de refus :\n"
     "« supprime mes fichiers » -> {\"etapes\": [], \"refus\": \"Je ne touche pas aux fichiers.\"}\n"
     "« achète ce livre » -> {\"etapes\": [], \"refus\": \"Je ne fais pas de paiement.\"}\n"
@@ -380,6 +386,14 @@ def _check_more(outil, arg, app_names, ctx):
         return outil, arg, {"meteo": "Météo : ", "heure_ville": "Heure à ", "conversion": "Conversion : "}[outil] + arg
     if outil == "agenda":
         return outil, "", "Rappels à venir"
+    if outil == "discord_salon":
+        if not arg:
+            raise PlanError("salon sans nom")
+        return outil, arg, f"Discord : aller dans le salon « {arg} »"
+    if outil == "discord_message":
+        if not re.match(r"^(dans|à|a|pour)\s+\S.*,\s*\S", arg, re.I):
+            raise PlanError(f"message incompris : {arg} (dans <salon>, <message>)")
+        return outil, arg, f"Discord : envoyer « {arg} »"
     return None
 
 
@@ -475,9 +489,9 @@ class Instructeur:
     """submit(audio) depuis la boucle ; events / actions / state appelés par la boucle principale seulement."""
 
     def __init__(self, transcribe, launcher=None, desk=None, ask=ask_local, open_url=None, runner=None,
-                 routines=None, favoris=None):
+                 routines=None, favoris=None, bot=None):
         self.transcribe, self.launcher, self.desk, self.ask = transcribe, launcher, desk, ask
-        self.routines, self.favoris = routines, favoris    # outils.Store (routines.json, favoris.json)
+        self.routines, self.favoris, self.bot = routines, favoris, bot    # outils.Store (routines.json, favoris.json)
         self.last_raw = None      # étapes brutes de la dernière instruction réussie (« refais »)
         self._pending_raw = None
         self.open_url = open_url or os.startfile
@@ -649,6 +663,13 @@ class Instructeur:
                 return o.money(arg)
         elif outil == "agenda":
             self._q.put(("main", "agenda", ""))
+        elif outil in ("discord_salon", "discord_message"):
+            bot = self.bot
+            if bot is None or not bot.connected:
+                raise RuntimeError("bot Discord absent")
+            msg = {"t": "move", "channel": arg} if outil == "discord_salon" else {"t": "send", "text": arg}
+            if bot.send(msg) is None:
+                raise RuntimeError("bot Discord occupé")
         else:
             raise RuntimeError(f"outil sans action : {outil}")
         return None
