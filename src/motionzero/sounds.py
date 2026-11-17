@@ -123,6 +123,9 @@ class Sounds:
         self.stream = None
         self._factory = stream_factory
         self._failed = False
+        # posé par le fil voix quand il relance PortAudio (sd._terminate tue AUSSI ce flux de sortie : 17/11,
+        # plus aucun son après « micro figé » ou « réparer le son ») ; lu ici, dans le fil qui joue
+        self.need_reopen = False
         if not enabled:
             return
         for name, base in FILES.items():
@@ -132,7 +135,26 @@ class Sounds:
             except (OSError, wave.Error, EOFError):
                 log.warning("son absent ou illisible : %s", path)
 
+    def reopen(self):
+        """Demande de rouvrir la sortie au prochain son (appelable depuis n'importe quel fil : un booléen)."""
+        self.need_reopen = True
+
+    def _alive(self):
+        try:
+            return bool(getattr(self.stream, "active", True))
+        except Exception:
+            return False
+
     def _ensure_stream(self):
+        if self.stream is not None and (self.need_reopen or not self._alive()):
+            log.warning("sortie son perdue (PortAudio relancé ou flux arrêté) : rouverte")
+            old, self.stream = self.stream, None
+            try:
+                old.close()
+            except Exception:
+                pass
+            self._failed = False
+        self.need_reopen = False
         if self.stream is not None or self._failed:
             return self.stream is not None
         try:

@@ -504,6 +504,10 @@ class VoiceListener:
             sd._initialize()
         except Exception:
             log.exception("reinitialisation de l'audio")
+        finally:
+            after = getattr(self, "after_reopen", None)
+            if after is not None:
+                after()                   # la sortie des sons d'Iris est morte avec PortAudio : à rouvrir
         self.stream = sd.RawInputStream(samplerate=self.sr, blocksize=int(self.sr * 0.03), dtype="int16",
                                         channels=1, callback=self._callback)
         self.stream.start()

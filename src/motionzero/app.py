@@ -660,6 +660,7 @@ def main(argv=None):
     if args.voice:
         from .voice import VoiceListener, default_model_dir
         listener = VoiceListener(default_model_dir(ROOT)).start()
+        listener.after_reopen = sounds.reopen      # micro rouvert = PortAudio relancé : la sortie des sons aussi
     from .ask import Asker
     asker = Asker()                            # « iris question » -> Whisper -> Claude Haiku
     if listener is not None:                   # sans la voix, Whisper ne sert à rien : pas chargé
