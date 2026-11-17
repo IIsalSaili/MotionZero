@@ -25,7 +25,8 @@ OLLAMA = "http://127.0.0.1:11434"
 KEEP_ALIVE = "5m"          # modèle déchargé de la carte graphique après 5 min sans instruction
 LLM_TIMEOUT_S = 60
 HELP_S = 25.0              # la carte d'exemples reste ce temps
-HELP_HINT = "« iris instruction » puis « aide » : des exemples"
+HELP_HINT = "Pour des exemples : « iris instruction », puis « aide »."
+CLOSE_HINT = "« iris merci » pour fermer"
 HELP_WORDS = ("aide", "exemple", "sais faire", "tu sais faire", "peux faire", "comment ca marche", "quoi dire")
 
 
@@ -695,19 +696,20 @@ class Instructeur:
                 break
             kind = msg[0]
             if kind == "error":
-                self.plan, self.title = None, "INSTRUCTION IMPOSSIBLE"
+                self.plan, self.title, self.meta = None, "Instruction impossible", CLOSE_HINT
                 self.lines = ([f"« {msg[1]} »"] if msg[1] else []) + [msg[2], HELP_HINT]
                 self.show_until = t + SHOW_DONE_S
                 core.last_gesture = (f"INSTRUCTION : {msg[2]}".upper()[:60], t)
             elif kind == "help":
                 from .outils import EXAMPLES
-                self.plan, self.title = None, "INSTRUCTION : exemples à dire"
+                self.plan, self.title = None, "Dis « iris instruction », puis par exemple :"
                 self.lines = list(EXAMPLES)
+                self.meta = CLOSE_HINT
                 self.show_until = t + HELP_S
             elif kind == "plan":
                 self.phrase, self.plan = msg[1], msg[2]
                 self._pending_raw = msg[3] if len(msg) > 3 else None
-                self.title = "INSTRUCTION : dis ENVOIE pour faire"
+                self.title, self.meta = "Dis « envoie » pour le faire", None
                 self.lines = [f"{i + 1}. {lbl}" for i, (_, _, lbl) in enumerate(self.plan)]
                 self.show_until = t + CONFIRM_S
                 core.ask_confirm("instruction", t, CONFIRM_S)
@@ -721,7 +723,8 @@ class Instructeur:
                 self.busy = False
                 if msg[1] and getattr(self, "_running_raw", None):
                     self.last_raw = self._running_raw        # « refais » rejoue celle-ci
-                self.title = "INSTRUCTION FAITE" if msg[1] else "INSTRUCTION INTERROMPUE"
+                self.title = "Instruction faite" if msg[1] else "Instruction interrompue"
+                self.meta = CLOSE_HINT
                 self.show_until = t + SHOW_DONE_S
             elif kind == "main":
                 if msg[1] == "discord":
@@ -743,10 +746,16 @@ class Instructeur:
                 plan, self.plan = self.plan, None
                 self._running_raw = self._pending_raw
                 self.busy = True
-                self.title = "INSTRUCTION EN COURS"
+                self.title, self.meta = "Instruction en cours", "« stop » : arrêter"
                 self._cancel = threading.Event()
                 threading.Thread(target=self._execute, args=(plan,), name="instruction-exec", daemon=True).start()
                 core.last_gesture = ("INSTRUCTION LANCEE", t)
+            elif a[0] in ("rappel_merci", "ask_close") and not self.busy and self.lines is not None:
+                # « iris merci » / « iris ferme » : la carte se ferme ; un plan en attente est abandonné (rien fait)
+                if self.plan is not None:
+                    core.confirm_until = -1e9
+                self.plan, self.lines = None, None
+                rest.append(a)
             elif a[0] == "instruction_non":
                 self.plan, self.lines = None, None
                 core.last_gesture = ("INSTRUCTION ABANDONNEE", t)
@@ -760,4 +769,4 @@ class Instructeur:
         """Carte du haut : None ou {"title", "lines"}."""
         if self.lines is None or (t >= self.show_until and not self.busy and self.plan is None):
             return None
-        return {"title": self.title, "lines": list(self.lines)}
+        return {"title": self.title, "lines": list(self.lines), "meta": getattr(self, "meta", None)}

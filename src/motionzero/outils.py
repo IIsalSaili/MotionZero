@@ -423,17 +423,13 @@ def find_site(name, favs=None, search=_ddg):
 
 
 # ---------------------------------------------------------------- exemples montrés à l'utilisateur
-EXAMPLES = [
-    "ouvre mes mails · ouvre leboncoin · ouvre Netflix",
-    "mets la dernière vidéo de One Click Studio",
-    "remets la vidéo que je regardais hier sur la cuisine",
-    "mets la vidéo en pause · plein écran · vidéo suivante",
-    "va sur l'onglet Gmail · ferme les onglets YouTube",
-    "cherche un casque sur Amazon · itinéraire vers la gare",
-    "Chrome à gauche et Discord à droite",
-    "mets le son à 30 et coupe mon micro Discord",
-    "dis dans général que j'arrive dans 5 minutes",
-    "quel temps fait-il à Lyon · 15 % de 240 · 20 euros en dollars",
-    "crée la routine mode travail : ouvre Discord et mets le son à 30",
-    "lance la routine mode travail · refais",
+EXAMPLES = [   # carte d'aide : une phrase par ligne, à dire telle quelle après « iris instruction »
+    "« ouvre mes mails »",
+    "« mets la dernière vidéo de One Click Studio »",
+    "« mets la vidéo en pause »",
+    "« mets Chrome à gauche et Discord à droite »",
+    "« mets le son à 30 et coupe mon micro Discord »",
+    "« dis dans général que j'arrive »",
+    "« quel temps fait-il à Lyon »",
+    "« crée la routine travail : ouvre Discord »",
 ]

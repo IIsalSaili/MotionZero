@@ -237,3 +237,19 @@ def test_discord_salon_et_message():
                 SimpleNamespace(connected=True, send=lambda m: None)):
         with pytest.raises(RuntimeError):
             Instructeur(lambda a: "", bot=bad)._run_tool("discord_salon", "Gaming")
+
+
+# ---- texte jamais coupé : la police rapetisse
+def test_fit_font_texte_entier():
+    import os
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+    from PySide6.QtGui import QFont, QGuiApplication
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance() or QApplication([])
+    from motionzero.ui import MIN_PT, fit_font
+    base = QFont("Atkinson Hyperlegible", 17)
+    assert fit_font(base, "court", 500).pointSizeF() == 17
+    long = "mot " * 400
+    f = fit_font(base, long, 500, 600)
+    assert MIN_PT <= f.pointSizeF() < 17
+    assert fit_font(base, "x" * 300, 200).pointSizeF() == MIN_PT     # jamais plus petit que lisible

@@ -112,7 +112,9 @@ def top_shown(d, t):
         qa = d.asker.snapshot() if d.asker is not None else None
         desk = getattr(d, "desk", None)
         rem = desk is not None and (bool(desk.r.active) or t < desk.list_until)
-        return bool(qa) or bool(rem)
+        ins = getattr(d, "instructeur", None)
+        card = ins is not None and ins.state(t) is not None      # carte de l'instruction (aide, plan, résultat)
+        return bool(qa) or bool(rem) or card
     except Exception:
         return False
 

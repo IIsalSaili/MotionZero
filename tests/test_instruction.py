@@ -140,14 +140,14 @@ def test_plan_affiche_puis_execute_apres_envoie():
     assert ran == []                                         # rien fait avant la confirmation
     assert core.confirm_kind == "instruction" and core.confirming(1.0)
     st = instr.state(1.0)
-    assert st["lines"][0].startswith("1. YouTube") and "ENVOIE" in st["title"]
+    assert st["lines"][0].startswith("1. YouTube") and "envoie" in st["title"]
     assert reminder_view({"plan": st})[0] == "plan"
     assert "envoie" in reminder_texts("plan", st)[2]
     rest = instr.actions([("instruction_ok",), ("autre",)], core, 1.0)
     assert rest == [("autre",)]
     _pump(instr, core, 2.0, lambda: not instr.busy)
     assert [o for o, _ in ran] == ["youtube_chaine", "touche"]
-    assert instr.title == "INSTRUCTION FAITE" and all("fait" in l for l in instr.state(2.0)["lines"])
+    assert instr.title == "Instruction faite" and all("fait" in l for l in instr.state(2.0)["lines"])
 
 
 def test_annule_rien_n_est_fait():
@@ -185,7 +185,7 @@ def test_modele_indisponible():
     core = FakeCore()
     instr.submit(b"")
     _pump(instr, core, 0.0, lambda: instr.lines is not None)
-    assert "Ollama" in instr.lines[-2] and "aide" in instr.lines[-1] and instr.title == "INSTRUCTION IMPOSSIBLE"
+    assert "Ollama" in instr.lines[-2] and "aide" in instr.lines[-1] and instr.title == "Instruction impossible"
 
 
 def test_reponse_illisible_et_whisper_en_panne():
@@ -224,7 +224,7 @@ def test_stop_arrete_entre_deux_etapes(monkeypatch):
     _pump(instr, core, 1.0, lambda: len(ran) == 1)
     assert instr.actions([("release_all",)], core, 1.1) == [("release_all",)]   # « stop » garde son effet
     _pump(instr, core, 2.0, lambda: not instr.busy)
-    assert len(ran) == 1 and instr.title == "INSTRUCTION INTERROMPUE"
+    assert len(ran) == 1 and instr.title == "Instruction interrompue"
 
 
 def test_discord_et_traducteur_par_la_boucle_principale():
@@ -256,3 +256,31 @@ def test_core_envoie_annule():
     core.confirm_until = 10.0
     assert core._v_confirm("annule", 2.0, 2.0, []) == [("instruction_non",)]
     assert not core.confirming(3.0)
+
+
+# ---- fermer la carte (17/11 : la carte d'aide ne se fermait pas)
+@pytest.mark.parametrize("act", ["rappel_merci", "ask_close"])
+def test_merci_et_ferme_ferment_la_carte(act):
+    instr = Instructeur(lambda a: "aide")
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.lines is not None)
+    assert "iris merci" in instr.state(1.0)["meta"]
+    assert instr.actions([(act,)], core, 1.0) == [(act,)]     # rappels et réponses se ferment aussi
+    assert instr.state(1.1) is None
+
+
+def test_merci_abandonne_un_plan_en_attente():
+    instr, ran = _instr(PLAN)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("rappel_merci",)], core, 1.0)
+    instr.actions([("instruction_ok",)], core, 1.1)
+    time.sleep(0.05)
+    assert ran == [] and not core.confirming(1.2) and instr.state(1.2) is None
+
+
+def test_aide_lisible():
+    from motionzero.outils import EXAMPLES
+    assert len(EXAMPLES) <= 8 and all(e.startswith("«") and "·" not in e for e in EXAMPLES)

@@ -766,7 +766,7 @@ _FONT_DIR = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.dirname(_os
                           "assets", "fonts")
 ISLAND_TOP = 12          # px depuis le haut de l'écran
 ANSWER_W = 560           # largeur de l'île agrandie pour une réponse de Claude
-ANSWER_MAX_H = 440      # 3 phrases longues tiennent ; au-delà, le texte est coupé proprement
+ANSWER_MAX_H = 640      # 3 phrases longues tiennent ; au-delà, le texte est coupé proprement
 ISLAND_H = 46
 ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
@@ -865,7 +865,8 @@ def reminder_texts(kind, data):
     if kind == "list":
         return ("RAPPELS À VENIR", "\n".join(data), "« Iris rappel » pour en ajouter ou en supprimer")
     if kind == "plan":
-        return (data["title"], "\n".join(data["lines"]), "« envoie » dans les 10 s : faire · sinon annulé · « stop » : arrêter")
+        return (data["title"], "\n".join(data["lines"]),
+                data.get("meta") or "« envoie » dans les 10 s : faire · sinon annulé · « stop » : arrêter")
     title = ("ALARME" if data.get("alarm") else "RAPPEL") + (" MANQUÉ" if data.get("missed") else "")
     title += f" · {data.get('when', '')}"
     meta = "« Iris merci » : noté · « Iris plus tard » : +10 min"
@@ -912,6 +913,25 @@ def paint_subs(p, box, text):
     p.drawText(box.adjusted(24, 10, -24, -10),
                int(Qt.AlignmentFlag.AlignCenter | Qt.TextFlag.TextWordWrap), text)
     p.restore()
+
+
+MIN_PT = 11              # plus petit que ça n'est plus lisible : au-delà, la carte s'agrandit (jusqu'au maximum)
+
+
+def fit_font(font, text, width, max_h=None, min_pt=MIN_PT):
+    """Police la plus grande (jusqu'à `font`) qui fait tenir le texte entier : une ligne si max_h est None,
+    sinon en plusieurs lignes dans max_h. Jamais de texte coupé tant que min_pt suffit (demande du 17/11)."""
+    f = QFont(font)
+    flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+    while True:
+        fm = QFontMetrics(f)
+        if max_h is None:
+            fits = fm.horizontalAdvance(text) <= width
+        else:
+            fits = fm.boundingRect(QRect(0, 0, int(width), 100000), flags, text).height() <= max_h
+        if fits or f.pointSizeF() <= min_pt:
+            return f
+        f.setPointSizeF(f.pointSizeF() - 1)
 
 
 def volume_rect(w, h):
@@ -1307,8 +1327,12 @@ class _IslandPainter:
         fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_msg)
         pad, dot, gap = 20, 10, 14
         w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
+        font_msg = self.font_msg
         if msg:
-            msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, ISLAND_MAX_W - w - gap - pad)
+            room = ISLAND_MAX_W - w - gap - pad
+            font_msg = fit_font(self.font_msg, msg, room)
+            fm_msg = QFontMetrics(font_msg)
+            msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, room)
             w += gap + fm_msg.horizontalAdvance(msg)
         gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
@@ -1328,7 +1352,7 @@ class _IslandPainter:
                    Qt.AlignmentFlag.AlignVCenter, mode)
         if msg:
             p.setPen(QColor(255, 255, 255, 200))
-            p.setFont(self.font_msg)
+            p.setFont(font_msg)
             mx = tx + fm_mode.horizontalAdvance(mode) + gap
             p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
         p.restore()
@@ -1389,11 +1413,13 @@ class _IslandPainter:
         x = gx + ISLET + ISLET_GAP
         inner = ANSWER_W - 2 * pad
         fm_q = QFontMetrics(self.font_small)
-        fm_a = QFontMetrics(self.font_answer)
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
         q_text = f"« {qa.get('question')} »" if qa.get("question") else ""
-        q_rect = fm_q.boundingRect(QRect(0, 0, inner, 1000), flags, q_text) if q_text else QRect()
-        a_rect = fm_a.boundingRect(QRect(0, 0, inner, 1000), flags, qa.get("answer") or "")
+        q_rect = fm_q.boundingRect(QRect(0, 0, inner, 100000), flags, q_text) if q_text else QRect()
+        room = ANSWER_MAX_H - 44 - (q_rect.height() + 8 if q_text else 0) - 40
+        font_a = fit_font(self.font_answer, qa.get("answer") or "", inner, room)   # tout le texte, police ajustée
+        fm_a = QFontMetrics(font_a)
+        a_rect = fm_a.boundingRect(QRect(0, 0, inner, 100000), flags, qa.get("answer") or "")
         meta = f"Iris · disparaît dans {int(qa.get('left', 0))} s · « Iris, ferme » pour la retirer"
         h = min(ANSWER_MAX_H, 44 + (q_rect.height() + 8 if q_text else 0) + a_rect.height() + 40)
         p.save()
@@ -1418,13 +1444,14 @@ class _IslandPainter:
             p.drawText(QRectF(x + pad, y, inner, q_rect.height()), flags, q_text)
             y += q_rect.height() + 8
         p.setPen(QColor(255, 255, 255))
-        p.setFont(self.font_answer)
+        p.setFont(font_a)
         p.save()
         p.setClipRect(QRectF(x + pad, y, inner, max(0, top + h - 36 - y)))   # jamais sur la ligne du bas
         p.drawText(QRectF(x + pad, y, inner, a_rect.height()), flags, qa.get("answer") or "")
         p.restore()
         p.setPen(QColor(255, 255, 255, 110))
         p.setFont(self.font_small)
+        p.setFont(fit_font(self.font_small, meta, inner))
         p.drawText(QRectF(x + pad, top + h - 28, inner, 22), Qt.AlignmentFlag.AlignVCenter, meta)
         p.restore()
 
@@ -1680,11 +1707,14 @@ class _IslandPainter:
         inner = REMINDER_W - 2 * pad
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
         title, body, meta = reminder_texts(kind, data)
-        font_body = self.font_rem if kind == "current" else self.font_answer
+        font_body = fit_font(self.font_rem if kind == "current" else self.font_answer, body, inner,
+                             ANSWER_MAX_H - 46 - 44)       # tout le texte : la police rapetisse s'il le faut
+        font_title = fit_font(self.font_mode, title, inner - ICON - 10)
+        font_meta = fit_font(self.font_small, meta, inner)
         alarm = kind == "current" and data.get("alarm")
         ringing = kind == "current" and data.get("ringing")
-        fm_b, fm_s = QFontMetrics(font_body), QFontMetrics(self.font_small)
-        b_rect = fm_b.boundingRect(QRect(0, 0, inner, 1000), flags, body)
+        fm_b, fm_s = QFontMetrics(font_body), QFontMetrics(font_meta)
+        b_rect = fm_b.boundingRect(QRect(0, 0, inner, 100000), flags, body)
         h = min(ANSWER_MAX_H, 46 + b_rect.height() + 44)
         if ringing:      # pulsation : 1 s, entre rouge sombre et rouge vif (rouge vif fixe sans animation)
             k = 0.5 + 0.5 * math.sin(_t.monotonic() * 2 * math.pi) if getattr(self, "motion", True) else 1.0
@@ -1704,15 +1734,15 @@ class _IslandPainter:
         if bell is not None:
             bell.render(p, QRectF(x + pad, top + 11, ICON, ICON))
         p.setPen(QColor(255, 255, 255))
-        p.setFont(self.font_mode)
-        p.drawText(QRectF(x + pad + ICON + 10, top, inner, 46), Qt.AlignmentFlag.AlignVCenter, title)
+        p.setFont(font_title)
+        p.drawText(QRectF(x + pad + ICON + 10, top, inner - ICON - 10, 46), Qt.AlignmentFlag.AlignVCenter, title)
         p.setFont(font_body)
         p.save()
         p.setClipRect(QRectF(x + pad, top + 46, inner, max(0, h - 46 - 36)))
         p.drawText(QRectF(x + pad, top + 46, inner, b_rect.height()), flags, body)
         p.restore()
         p.setPen(QColor(255, 255, 255, 170))
-        p.setFont(self.font_small)
+        p.setFont(font_meta)
         p.drawText(QRectF(x + pad, top + h - 30, inner, 22), Qt.AlignmentFlag.AlignVCenter,
                    fm_s.elidedText(meta, Qt.TextElideMode.ElideRight, inner))
         p.restore()
