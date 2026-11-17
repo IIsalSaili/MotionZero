@@ -61,11 +61,34 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          # phase 3 : le CV et les pièces
          "prépare": "CV composé, PDF et pièces prêts (comme « Préparer la candidature »)",
          "montre": "le PDF prêt, sinon l'atelier du CV",
-         "relis": "la relecture par le jury"}
+         "relis": "la relecture par le jury",
+         "aide": "toutes les commandes du mode, par étape"}
+HELP_S = 40.0
+HELP_LINES = [
+    "Recherche : « cherche » (lance / arrête) · « état » · « offres » (la page)",
+    "Tri : « liste », puis « suivante » · « précédente » · « garde » · « écarte »",
+    "CV : « prépare » (CV et pièces en PDF) · « montre » (le PDF) · « relis » (jury)",
+    "Postuler : « lien » ouvre l'offre sur son site",
+    "Souris : « souris », puis « clic » · « scroll »… · « stop » arrête tout",
+    "Quitter le mode : « candidature »",
+]
 NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis"}   # liste ouverte
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
 A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier"}
-NAV_HINT = "« suivante » · « précédente » · « garde » · « écarte » · « lien » · « prépare » · « montre » · « relis »"
+
+
+def next_hint(o, prep_line=None, preparing=False):
+    """Bas de la carte : les 3 ou 4 mots utiles à l'étape de l'offre affichée (court : sinon illisible)."""
+    if o is None:
+        return "« liste » · « cherche » · « aide »"
+    if o.get("etat") == "a-trier":
+        return "« garde » · « écarte » · « suivante » · « aide »"
+    pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
+    if pret:
+        return "« montre » · « relis » · « lien » pour postuler · « aide »"
+    if preparing:
+        return "préparation en cours · « suivante » · « aide »"
+    return "« prépare » · « montre » · « écarte » · « aide »"
 
 
 def iris_says(msg):
@@ -261,6 +284,10 @@ class Candidature:
 
     # ---- boucle principale ----
     def ask(self, word, t):
+        if word == "aide":
+            self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
+            self.show_until = t + HELP_S
+            return
         if word in NAV:
             return self._nav(word, t)
         if self.busy:
@@ -320,11 +347,13 @@ class Candidature:
         title, lines = card(self.offres or [], self.i)
         if self.offres and self.offres[self.i]["id"] in self.prep:
             lines.append(self.prep[self.offres[self.i]["id"]])
-        self._show(title, lines + ([note] if note else []), t, meta=NAV_HINT + " · " + CLOSE_HINT)
+        o = self.offres[self.i] if self.offres else None
+        hint = next_hint(o, self.prep.get(o["id"]) if o else None, o is not None and self.preparing == o["id"])
+        self._show(title, lines + ([note] if note else []), t, meta=hint)
 
     def _show(self, title, lines, t, meta=None):
         self.title, self.lines = title, list(lines)
-        self.meta = meta or " · ".join(f"« {w} »" for w in WORDS) + " · " + CLOSE_HINT
+        self.meta = meta or next_hint(None)
         self.show_until = t + SHOW_S
 
     def events(self, core, t):

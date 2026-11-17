@@ -435,3 +435,35 @@ def test_montre_offre_deja_preparee_avant():
     c.offres[2] = {**c.offres[2], "preparation": {"etape": "pret"}}
     c.ask("montre", 0.0)
     assert ouvert[-1].endswith("/pdf/cv?voir=1")
+
+
+# ---- aide : les commandes visibles (17/11 : « aucun endroit où voir les commandes »)
+def test_aide_du_mode():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("candidature", 1.3)
+    assert core.voice("aide", 2.0) == [("cand", "aide")]          # sans « iris », dans le mode
+    c = cv.Candidature(http=FauxCvgen(), launch=lambda: None)
+    c.ask("aide", 0.0)
+    st = c.state(0.0)
+    assert st["lines"] == cv.HELP_LINES and not c.busy
+    assert c.state(cv.HELP_S - 1) is not None                      # reste le temps de lire
+
+
+def test_bas_de_carte_selon_l_etape():
+    assert "« garde »" in cv.next_hint({"etat": "a-trier"})
+    assert cv.next_hint({"etat": "generee"}).startswith("« prépare »")
+    assert "en cours" in cv.next_hint({"etat": "generee"}, preparing=True)
+    pret = cv.next_hint({"etat": "generee"}, cv.PREP_STEPS["pret"])
+    assert "« montre »" in pret and "« lien »" in pret
+    assert "« lien »" in cv.next_hint({"etat": "generee", "preparation": {"etape": "pret"}})
+    assert "« liste »" in cv.next_hint(None)
+    for h in (cv.next_hint(None), pret):
+        assert len(h) <= 60 and "« aide »" in h                    # court : sinon rétréci, illisible
+
+
+def test_carte_apres_preparation_propose_la_suite():
+    c, core, faux = _sur_v1()
+    c.ask("prépare", 0.0)
+    st = _fin_prep(c, core)
+    assert "« montre »" in st["meta"] and "« lien »" in st["meta"]
