@@ -104,6 +104,7 @@ WORDS = {
     "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
     "pars": "pars",       # « iris pars » : il quitte le vocal
     "volume": "volume",   # « iris volume » puis « 40 », « plus fort », « coupe »… (Whisper)
+    "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
     "stop": "stop",
 }
 

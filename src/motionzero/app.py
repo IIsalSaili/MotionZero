@@ -236,6 +236,8 @@ class Engine:
             d.ctl.release_all()
             if d.listener is not None:
                 d.listener.stop()
+            if getattr(d, "traducteur", None) is not None:
+                d.traducteur.stop()
             d.cam.stop()
             d.landmarker.close()
             if d.faces["lm"] is not None:
@@ -471,6 +473,13 @@ class Engine:
                 if a[1]:
                     d.quota.force()
                 _log.info("quota %s", "affiche" if a[1] else "masque")
+            elif a[0] == "traducteur":
+                if getattr(d, "traducteur", None) is None:
+                    d.core.translating = False     # sans la voix, pas de Whisper : rien à faire
+                elif a[1]:
+                    d.traducteur.start()
+                else:
+                    d.traducteur.stop()
             elif a[0] == "pointer":
                 write_pointer(POINTER_FILE, a[1])
                 d.bridge.pointer.emit(a[1])
@@ -542,6 +551,7 @@ class Engine:
             "reminders": d.desk.state(t, calendar_open=t < core.calendar_until),
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
             "quota": self._quota(t),
+            "subs": d.traducteur.snapshot() if getattr(d, "traducteur", None) is not None else None,
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 
@@ -645,6 +655,8 @@ def main(argv=None):
     if listener is not None:                   # sans la voix, Whisper ne sert à rien : pas chargé
         asker.preload()
     from .typer import Typer
+    from .traducteur import Traducteur
+    traducteur = Traducteur(asker.translate) if listener is not None else None   # « iris traducteur » (#14)
     typer = Typer(asker)                       # « iris type » -> Whisper -> texte écrit au curseur
     launcher = None
     app_messages = queue.Queue()
@@ -800,7 +812,7 @@ def main(argv=None):
 
     engine = Engine(SimpleNamespace(
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
-        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, launcher=launcher,
+        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
         quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,

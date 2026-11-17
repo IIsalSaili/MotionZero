@@ -211,6 +211,20 @@ class Asker:
             self._used_t = time.perf_counter()
             return text
 
+    def translate(self, pcm):
+        """« iris traducteur » : son du PC (float32 16 kHz), langue détectée, traduit en anglais.
+        Même modèle et même verrou que la voix : une commande dictée passe entre deux phrases."""
+        self._load()
+        with self._model_lock:
+            self._used_t = time.perf_counter()
+            # beam 5 : plus précis (demande de l'utilisateur) ; sans le texte précédent, moins d'hallucinations
+            segments, _ = self._whisper.transcribe(pcm, task="translate", beam_size=5, vad_filter=True,
+                                                   condition_on_previous_text=False)
+            # musique ou bruit : Whisper invente (« Thanks for watching ») ; segments douteux jetés
+            text = " ".join(s.text.strip() for s in segments if s.no_speech_prob < 0.6 and s.avg_logprob > -1.0)
+            self._used_t = time.perf_counter()
+            return text.strip()
+
     def _work(self, audio, sr):
         try:
             question = self._transcribe(audio, sr)
