@@ -187,3 +187,22 @@ def test_mots_du_mode_guettes_seulement_mode_allume():
         assert ("cherche" in mots) == nom.startswith("candidature"), nom
         assert "candidature" in mots
 
+
+def test_mode_n_ecoute_que_ses_mots():
+    """Demande du 17/11 : dans le mode, plus aucun mot de base ni de Chrome ; la souris seulement allumée."""
+    from motionzero.voice import GRAMMARS
+    base = set(json.loads(GRAMMARS["candidature"])) - {"[unk]"}
+    assert base == set(cv.WORDS) | {"candidature", "stop", "souris"}
+    souris = set(json.loads(GRAMMARS["candidature_souris"])) - base - {"[unk]"}
+    assert souris == {"clic", "double", "double clic", "menu", "agrippe", "scroll"}
+
+
+def test_souris_sans_iris_dans_le_mode():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("candidature", 1.3)
+    core.voice("souris", 2.0)
+    assert core.mouse and core.cand_on(2.1)
+    core.voice("souris", 3.0)
+    assert not core.mouse
+

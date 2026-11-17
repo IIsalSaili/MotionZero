@@ -159,11 +159,19 @@ def _grammars():
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
-    from .cvgen import WORDS as CAND
-    # « iris candidature » : ses mots ne sont cherchés que mode allumé (rien de plus hors du mode)
     return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
             "calendrier": grammar(CAL, mouse=False),
-            "candidature": grammar(CAND), "candidature_chrome": grammar(list(CHROME_KEYS) + list(CAND))}
+            "candidature": cand_grammar(False), "candidature_souris": cand_grammar(True)}
+
+
+def cand_grammar(mouse):
+    """« iris candidature » (17/11, demande de l'utilisateur) : SEULS ses mots, plus « stop » (toujours) et
+    « souris » ; les mots de la souris seulement souris allumée. Aucun autre mot de base, ni ceux de Chrome."""
+    from .cvgen import WORDS as CAND
+    phrases = list(CAND) + ["candidature", "stop", "souris"]
+    if mouse:
+        phrases += sorted(MOUSE_ONLY) + ["double clic", "scroll"]
+    return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
 
 GRAMMARS = _grammars()

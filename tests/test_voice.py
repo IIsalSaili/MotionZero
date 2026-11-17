@@ -393,6 +393,8 @@ def test_defun_retire_scroll_remplace_defile():
     from motionzero.voice import GRAMMARS, WORDS
     assert "défun" not in WORDS and "défile" not in WORDS and "scroll" in WORDS
     for name, g in GRAMMARS.items():
+        if name.startswith("candidature"):
+            continue                       # 17/11 : le mode candidature n'écoute que ses mots (test_cvgen)
         phrases = set(json.loads(g))
         assert "scroll" in phrases, name
         assert not {"défun", "des fun", "dis fun", "défile"} & phrases, name
@@ -405,9 +407,10 @@ def test_un_mute_retire_des_mute_reste():
     """14/11 : « un mute » retiré (« un » seul pris dans la conversation) ; « des mute » reste démute."""
     import json
     from motionzero.voice import GRAMMARS
-    for g in GRAMMARS.values():
+    for name, g in GRAMMARS.items():
         phrases = json.loads(g)
-        assert "un mute" not in phrases and "des mute" in phrases
+        assert "un mute" not in phrases
+        assert "des mute" in phrases or name.startswith("candidature")   # mode candidature : ses mots seulement
 
 
 def test_iris_accueil_ouvre_la_page_d_accueil_et_home_n_existe_plus():

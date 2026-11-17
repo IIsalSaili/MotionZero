@@ -724,6 +724,10 @@ class Core:
             self.cand_until = -1e9
             self._heard_alone(word, t, "CANDIDATURE ETEINTE")
             return [("cand_off",)]
+        if word == "souris":                  # seul mot de base gardé dans le mode (sans « iris »)
+            self._heard_alone(word, t, "")
+            self.last_gesture = (self._cmd_mouse(word, t, acts), t)
+            return acts
         return None
 
     def _cmd_candidature(self, word, t, acts):

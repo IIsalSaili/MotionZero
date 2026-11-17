@@ -393,8 +393,8 @@ class Engine:
         if listener is not None:
             if t < core.calendar_until:
                 listener.grammar = "calendrier"   # jours, mois, nombres : seulement calendrier ouvert
-            elif core.cand_on(t):             # « iris candidature » : ses mots en plus (Chrome compris)
-                listener.grammar = "candidature_chrome" if core.mode == Mode.CHROME else "candidature"
+            elif core.cand_on(t):             # « iris candidature » : ses mots seulement (souris : allumée)
+                listener.grammar = "candidature_souris" if core.mouse or core.dragging else "candidature"
             elif core.mode == Mode.CHROME:
                 listener.grammar = "chrome"
             else:                             # mots de la souris : seulement souris allumée ou bouton tenu
