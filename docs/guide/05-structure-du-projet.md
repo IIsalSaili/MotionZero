@@ -64,6 +64,7 @@ graph LR
 | `typer.py` | « iris type » : écrit le texte dicté | 99 | test_type |
 | `traducteur.py` | « iris traducteur » : son du PC (WASAPI loopback) coupé aux silences, traduit en anglais par le Whisper d'`ask.py`, sous-titres en bas d'écran | 180 | test_traducteur |
 | `instruction.py` | « iris instruction » : phrase -> modèle local (Ollama, catalogue d'outils fermé) -> plan vérifié, affiché, exécuté après « envoie » ; YouTube résolu sans clic | 330 | test_instruction |
+| `cvgen.py` | « iris candidature » : Iris pilote CVGEN par ses adresses existantes (recherche, état, page des offres), le démarre s'il est éteint ; fil + queue | 190 | test_cvgen |
 | `outils.py` | outils d'« iris instruction » : routines et favoris (routines.json, favoris.json), recherches ciblées, onglets par leur titre, historique de Chrome en lecture seule (copie), fenêtres, touches multimédia, météo (Open-Meteo), heure, calcul sûr, conversions | 330 | test_outils |
 | `apps.py` | « iris ouvre / ferme » : applis du menu Démarrer | 246 | test_type |
 | `reminders.py` | rappels, alarmes, `Desk` | 554 | test_reminders |

@@ -21,6 +21,7 @@ from .gestures import RadialMenu, ScrollDetector, StillnessDetector, ZoneDetecto
 from .hand import compute_features
 from .head import HeadPointer
 from .poses import UNSURE, PoseVoter, classify, flexion
+from .cvgen import WORDS as CAND_WORDS
 
 
 class Mode:
@@ -117,6 +118,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
                   "sourdine": (("discord_deafen",), None)}
+CAND_IDLE_S = 1800.0     # « iris candidature » éteint seul après 30 min sans commande du mode
 BYPASS_IDLE_S = 600.0    # « iris bypass » éteint seul après 10 min sans commande, comme le focus
 FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
 
@@ -130,7 +132,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
-            "traducteur": "translator", "bypass": "bypass"}
+            "traducteur": "translator", "bypass": "bypass", "candidature": "candidature"}
 
 
 
@@ -221,6 +223,7 @@ class Core:
         # voix
         self.listen_until = -1e9
         self.bypass_until = -1e9         # « iris bypass » : mots acceptés même mal dits jusqu'à cet instant
+        self.cand_until = -1e9           # « iris candidature » : mots de CVGEN sans « iris » jusqu'à cet instant
         self.focus_until = -1e9          # mode focus : commandes sans « iris » jusqu'à cet instant
         self.voice_scroll_until = -1e9
         self.voice_scroll_armed = False       # la main est passée dans la bande du centre
@@ -600,7 +603,7 @@ class Core:
             self.last_word = (word, t, False)
             return []
         acts = []
-        for step in (self._v_confirm, self._v_calendar, self._v_help, self._v_stop, self._v_without_iris, self._v_wake, self._v_resume):
+        for step in (self._v_confirm, self._v_calendar, self._v_help, self._v_stop, self._v_candidature, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
             if done is not None:
                 lw = self.last_word
@@ -705,6 +708,33 @@ class Core:
             self.last_gesture = ("BOUTON LACHE", t)
             return [("release", "mouse", "left")]
         return None
+
+    def cand_on(self, t):
+        return self.mode != Mode.DISABLED and t < self.cand_until
+
+    def _v_candidature(self, word, t, t_start, acts):
+        """Mode candidature : ses mots sans « iris » ; « candidature » (seul ou après « iris ») l'éteint."""
+        if not self.cand_on(t):
+            return None
+        if word in CAND_WORDS:
+            self.cand_until = t + CAND_IDLE_S
+            self._heard_alone(word, t, f"CANDIDATURE : {word.upper()}")
+            return [("cand", word)]
+        if word == "candidature":
+            self.cand_until = -1e9
+            self._heard_alone(word, t, "CANDIDATURE ETEINTE")
+            return [("cand_off",)]
+        if word == "souris":                  # seul mot de base gardé dans le mode (sans « iris »)
+            self._heard_alone(word, t, "")
+            self.last_gesture = (self._cmd_mouse(word, t, acts), t)
+            return acts
+        return None
+
+    def _cmd_candidature(self, word, t, acts):
+        """« iris candidature » : Iris pilote CVGEN (plan-cvgen.md) ; redit, éteint ; seul après 30 min."""
+        self.cand_until = t + CAND_IDLE_S
+        acts.append(("cand", "état"))
+        return "CANDIDATURE : cherche, etat, offres"
 
     def _heard_alone(self, word, t, label):
         """Mot accepté sans « iris » : l'écoute se ferme et le curseur est libéré."""
@@ -1013,7 +1043,9 @@ class Core:
         self.listen_until = -1e9
         if t < self.calendar_until:           # rien ne reste ouvert pendant la pause
             acts.append(("cal_close",))
-        self.calendar_until = self.help_until = -1e9
+        if self.cand_until > t:
+            acts.append(("cand_off",))
+        self.calendar_until = self.help_until = self.cand_until = -1e9
         return "PAUSE (dis IRIS REPRISE pour reprendre)"
 
     def scroll_gauge(self, t):

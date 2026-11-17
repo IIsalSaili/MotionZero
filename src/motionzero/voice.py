@@ -100,6 +100,7 @@ WORDS = {
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
     "instruction": "instruction",
     "bypass": "bypass",           # « iris bypass » : mots acceptés même mal dits (sauf les définitifs) ; redit, éteint  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
+    "candidature": "candidature",   # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md) ; redit, éteint
     "stop": "stop",
 }
 
@@ -159,7 +160,18 @@ def _grammars():
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
     return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
-            "calendrier": grammar(CAL, mouse=False)}
+            "calendrier": grammar(CAL, mouse=False),
+            "candidature": cand_grammar(False), "candidature_souris": cand_grammar(True)}
+
+
+def cand_grammar(mouse):
+    """« iris candidature » (17/11, demande de l'utilisateur) : SEULS ses mots, plus « stop » (toujours) et
+    « souris » ; les mots de la souris seulement souris allumée. Aucun autre mot de base, ni ceux de Chrome."""
+    from .cvgen import WORDS as CAND
+    phrases = list(CAND) + ["candidature", "stop", "souris"]
+    if mouse:
+        phrases += sorted(MOUSE_ONLY) + ["double clic", "scroll"]
+    return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
 
 GRAMMARS = _grammars()
