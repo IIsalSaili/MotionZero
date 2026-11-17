@@ -114,9 +114,21 @@ def top_shown(d, t):
         rem = desk is not None and (bool(desk.r.active) or t < desk.list_until)
         ins = getattr(d, "instructeur", None)
         card = ins is not None and ins.state(t) is not None      # carte de l'instruction (aide, plan, résultat)
+        cand = getattr(d, "candidature", None)
+        card = card or (cand is not None and cand.state(t) is not None)   # carte de « iris candidature »
         return bool(qa) or bool(rem) or card
     except Exception:
         return False
+
+
+def plan_card(d, t):
+    """Carte du haut : celle de l'instruction, sinon celle de « iris candidature »."""
+    for name in ("instructeur", "candidature"):
+        svc = getattr(d, name, None)
+        card = svc.state(t) if svc is not None else None
+        if card is not None:
+            return card
+    return None
 
 
 def reminder_shown(d):
@@ -370,6 +382,8 @@ class Engine:
         d.desk.events(core, t)
         if getattr(d, "instructeur", None) is not None:
             acts += d.instructeur.events(core, t)   # « iris instruction » : plan prêt, étapes, Discord
+        if getattr(d, "candidature", None) is not None:
+            acts += d.candidature.events(core, t)   # « iris candidature » : réponses de CVGEN
         return acts
 
     # --- 3. voix ---
@@ -379,6 +393,8 @@ class Engine:
         if listener is not None:
             if t < core.calendar_until:
                 listener.grammar = "calendrier"   # jours, mois, nombres : seulement calendrier ouvert
+            elif core.cand_on(t):             # « iris candidature » : ses mots en plus (Chrome compris)
+                listener.grammar = "candidature_chrome" if core.mode == Mode.CHROME else "candidature"
             elif core.mode == Mode.CHROME:
                 listener.grammar = "chrome"
             else:                             # mots de la souris : seulement souris allumée ou bouton tenu
@@ -461,6 +477,8 @@ class Engine:
                                 getattr(d, "instructeur", None))
         if getattr(d, "instructeur", None) is not None:
             acts = d.instructeur.actions(acts, d.core, t)
+        if getattr(d, "candidature", None) is not None:
+            acts = d.candidature.actions(acts, d.core, t)
         acts = d.desk.actions(acts, d.core, t)
         acts = discord_actions(acts, d.speaker)
         acts = power_actions(acts)
@@ -546,6 +564,7 @@ class Engine:
             "mode": core.mode,
             "focus": core.focus_on(t),
             "bypass": core.bypass_on(t),
+            "candidature": core.cand_on(t),
             "dictating": core.dictating,
             "typing": core.typing or core.opening,
             "confirming": core.confirming(t),
@@ -561,7 +580,7 @@ class Engine:
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
             "quota": self._quota(t),
             "subs": d.traducteur.snapshot() if getattr(d, "traducteur", None) is not None else None,
-            "plan": d.instructeur.state(t) if getattr(d, "instructeur", None) is not None else None,
+            "plan": plan_card(d, t),
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 
@@ -698,6 +717,8 @@ def main(argv=None):
     instructeur = Instructeur(lambda audio: asker._transcribe(audio, 16000), launcher, desk,
                               routines=Store(os.path.join(ROOT, "routines.json")),     # non versionnés
                               favoris=Store(os.path.join(ROOT, "favoris.json")), bot=bot)
+    from .cvgen import Candidature              # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md)
+    candidature = Candidature(open_url=os.startfile)
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -828,7 +849,7 @@ def main(argv=None):
 
     engine = Engine(SimpleNamespace(
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
-        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, instructeur=instructeur, launcher=launcher,
+        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, instructeur=instructeur, candidature=candidature, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
         quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,

@@ -100,6 +100,7 @@ WORDS = {
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
     "instruction": "instruction",
     "bypass": "bypass",           # « iris bypass » : mots acceptés même mal dits (sauf les définitifs) ; redit, éteint  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
+    "candidature": "candidature",   # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md) ; redit, éteint
     "stop": "stop",
 }
 
@@ -158,8 +159,11 @@ def _grammars():
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
+    from .cvgen import WORDS as CAND
+    # « iris candidature » : ses mots ne sont cherchés que mode allumé (rien de plus hors du mode)
     return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
-            "calendrier": grammar(CAL, mouse=False)}
+            "calendrier": grammar(CAL, mouse=False),
+            "candidature": grammar(CAND), "candidature_chrome": grammar(list(CHROME_KEYS) + list(CAND))}
 
 
 GRAMMARS = _grammars()
