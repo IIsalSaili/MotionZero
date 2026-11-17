@@ -19,7 +19,7 @@ def test_aucun_nouveau_mot_guette():
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
     assert len(WORDS) == 120
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 70, "souris": 70, "chrome": 81, "calendrier": 122, "candidature": 13, "candidature_souris": 19}
+        {"base": 70, "souris": 70, "chrome": 81, "calendrier": 122, "candidature": 16, "candidature_souris": 22}
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 

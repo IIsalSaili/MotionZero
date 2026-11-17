@@ -49,7 +49,7 @@ GROUPS = [
         ("bypass", "mots acceptés même mal dits, oui / non"),
         ("instruction", "puis : ouvre, timer, rappel, volume, message, salon, chrono…"),
         ("quota", "quota affiché, oui / non"),
-        ("candidature", "pilote CVGEN : cherche, état, offres, liste, garde, écarte, lien ; redit, éteint"),
+        ("candidature", "pilote CVGEN : cherche, état, offres, liste, garde, écarte, lien, prépare, montre, relis ; redit, éteint"),
     ]),
     ("Discord", [
         ("mute / démute", "le micro"),

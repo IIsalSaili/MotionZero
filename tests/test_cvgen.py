@@ -17,9 +17,20 @@ def test_routes_existent_dans_cvgen():
     if not server.exists():
         pytest.skip("CVGEN absent de ce PC")
     src = server.read_text(encoding="utf-8")
+    # toutes les routes du serveur : ['MÉTHODE', /regex/i, …] ; la regex JS se lit telle quelle en Python
+    routes = [(m, re.compile(rx.replace("\\/", "/"), re.I if fl else 0))
+              for m, rx, fl in re.findall(r"\['(GET|POST|PUT|PATCH|DELETE|\*)', /(\^.+?\$)/(i?),", src)]
+
+    def existe(method, path):
+        return any(m in (method, "*") and rx.match(path) for m, rx in routes)
+
     for name, (method, path) in cv.ROUTES.items():
-        motif = re.escape(path.replace("/", "\\/")).replace(re.escape("{id}"), re.escape("[^/]+"))
-        assert re.search(rf"\['{method}', /\^{motif}\$/", src), name
+        assert existe(method, path.format(id="o-1")), name
+    pdf = cv.PAGES["pdf_cv"].format(id="o-1").split("?")[0]
+    assert existe("GET", pdf)
+    for page in ("atelier", "jury"):
+        fichier = cv.PAGES[page].split("?")[0].lstrip("/")
+        assert (cv.DIR / "public" / fichier).exists(), page
 
 
 # ---- carte « état »
@@ -35,6 +46,8 @@ class FauxCvgen:
     def __init__(self, up=True, etat="arrete", refus=None, panne=None):
         self.up, self.etat, self.refus, self.panne = up, etat, refus, panne
         self.calls = []
+        self.preps = [{"etape": "cv"}, {"etape": "pdf-cv"}, {"etape": "lettre", "libelle": "Lettre…"},
+                      {"etape": "pret"}]
 
     def __call__(self, method, path, body=None):
         self.calls.append((method, path) if body is None else (method, path, body))
@@ -50,6 +63,8 @@ class FauxCvgen:
             self.etat = "arrete"
         if path == "/api/offres":
             return OFFRES
+        if path.startswith("/api/offres/") and method == "GET" and path != "/api/offres/compte":
+            return {"preparation": self.preps.pop(0) if len(self.preps) > 1 else self.preps[0]}
         return {"/api/agent": {"etat": self.etat}, "/api/offres/compte": {"verif": 2},
                 "/api/preparation": {"offreId": None}}.get(path, {"ok": True})
 
@@ -212,7 +227,7 @@ def test_souris_sans_iris_dans_le_mode():
 
 # ---- phase 2 : tri des offres
 def _offre(id, etat, note, url="https://exemple.fr/o"):
-    return {"id": id, "etat": etat, "poste": f"Poste {id}", "entreprise": "ACME", "source": "apec", "url": url,
+    return {"id": id, "etat": etat, **({"cvId": f"cv-{id}"} if etat == "generee" else {}), "poste": f"Poste {id}", "entreprise": "ACME", "source": "apec", "url": url,
             "evaluation": {"globale": note, "verdict": "Bonne", "axes": [
                 {"libelle": "Adéquation", "note": 5, "detail": "très bien"},
                 {"libelle": "Niveau", "note": 2, "detail": "senior"}]}}
@@ -325,3 +340,98 @@ def test_quitter_le_mode_ferme_la_liste():
     c, core, _ = _liste()
     c.actions([("cand_off",)], core, 0.0)
     assert c.offres is None and c.state(0.0) is None
+
+
+# ---- phase 3 : CV et pièces
+def test_texte_d_avancement():
+    assert cv.prep_text({"etape": "cv"}) == "Préparation : Iris compose le CV…"
+    assert cv.prep_text({"etape": "lettre", "libelle": "Lettre…"}) == "Préparation : Lettre…"
+    assert cv.prep_text({"etape": "pret"}) == "Prêt : CV et pièces en PDF"
+    assert cv.prep_text({"etape": "erreur", "erreur": "Claude est déjà occupé"}) == "Échec : Iris est déjà occupé"
+    assert cv.prep_text(None) == "Préparation : pièces…"
+
+
+def _sur_v1(ouvert=None):
+    c, core, faux = _liste(ouvert)
+    c.i = 2                                        # v1 : à vérifier, CV prêt
+    c.sleep = lambda s: None
+    return c, core, faux
+
+
+def _fin_prep(c, core):
+    for _ in range(300):
+        c.events(core, 0.0)
+        if c.preparing is None:
+            return c.state(0.0)
+        time.sleep(0.01)
+    raise AssertionError("préparation jamais finie")
+
+
+def test_prepare_suit_jusqu_a_pret():
+    c, core, faux = _sur_v1()
+    c.ask("prépare", 0.0)
+    st = _fin_prep(c, core)
+    assert ("POST", "/api/offres/v1/preparer", {}) in faux.calls
+    assert st["lines"][-1] == "Prêt : CV et pièces en PDF"
+
+
+def test_prepare_echec_de_cvgen():
+    c, core, faux = _sur_v1()
+    faux.preps = [{"etape": "erreur", "erreur": "Le CV déborde d'une page"}]
+    c.ask("prépare", 0.0)
+    assert _fin_prep(c, core)["lines"][-1] == "Échec : Le CV déborde d'une page"
+
+
+def test_prepare_refusee_au_lancement():
+    c, core, faux = _sur_v1()
+    faux.refus = ("/api/offres/v1/preparer", "Claude est déjà occupé (jury ou composition en cours)")
+    c.ask("prépare", 0.0)
+    _fin_prep(c, core)
+    assert c.prep["v1"] == "Échec : Iris est déjà occupé (jury ou composition en cours)"
+    assert "Claude" not in " ".join(c.state(0.0)["lines"])
+
+
+def test_prepare_une_seule_a_la_fois():
+    c, core, faux = _sur_v1()
+    c.preparing = "autre"
+    c.ask("prépare", 0.0)
+    assert "en préparation" in c.state(0.0)["lines"][-1]
+    assert not [x for x in faux.calls if "preparer" in x[1]]
+
+
+def test_prepare_sans_cv():
+    c, core, faux = _liste()                       # t2 : à trier, pas de CV
+    for w in ("prépare", "montre", "relis"):
+        c.ask(w, 0.0)
+        assert "dis « garde » d'abord" in c.state(0.0)["lines"][-1]
+    assert c.preparing is None
+
+
+def test_prepare_trop_long():
+    horloge = iter(range(0, 100000, 100))
+    c, core, faux = _sur_v1()
+    c.clock = lambda: next(horloge)
+    faux.preps = [{"etape": "cv"}]
+    c.ask("prépare", 0.0)
+    assert "trop long" in _fin_prep(c, core)["lines"][-1]
+
+
+def test_montre_atelier_puis_pdf_et_relis():
+    ouvert = []
+    c, core, faux = _sur_v1(ouvert)
+    c.ask("montre", 0.0)
+    assert ouvert[-1] == cv.BASE + "/generate.html?id=cv-v1"       # pas encore préparé : l'atelier
+    c.ask("prépare", 0.0)
+    _fin_prep(c, core)
+    c.ask("montre", 0.0)
+    assert ouvert[-1] == cv.BASE + "/api/offres/v1/pdf/cv?voir=1"
+    c.ask("relis", 0.0)
+    assert ouvert[-1] == cv.BASE + "/jury.html?id=cv-v1"
+
+
+def test_montre_offre_deja_preparee_avant():
+    ouvert = []
+    c, core, faux = _sur_v1(ouvert)
+    c.offres[2] = {**c.offres[2], "preparation": {"etape": "pret"}}
+    c.ask("montre", 0.0)
+    assert ouvert[-1].endswith("/pdf/cv?voir=1")
