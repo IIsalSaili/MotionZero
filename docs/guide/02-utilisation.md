@@ -92,8 +92,8 @@ Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans s
 ## Défilement
 
 1. « iris scroll ».
-2. Amène la main au **centre** (bande horizontale) : la jauge à droite s'arme.
-3. Monte la main : ça monte. Descends-la : ça descend. Plus loin du centre = plus vite.
+2. Main : amène-la au **centre** (bande horizontale), la jauge à droite s'arme. Tête : armée tout de suite, le centre est la position de la tête à ce moment-là.
+3. Monte la main (ou lève la tête) : ça monte. Descends-la : ça descend. Lent juste hors de la zone verte, de plus en plus vite vers les extrêmes (8 crans / s au plus à la main, 4 à la tête).
 4. Fin : « iris scroll » redit, « stop », une autre commande, ou (à la main) main sortie de l'image.
 
 En LECTURE, la main en haut / bas de l'image défile aussi, sans voix.

@@ -132,13 +132,14 @@ class Config:
     listen_s: float = 3.5                # écoute après « iris » dit seul ; une seule commande, puis fermée
     voice_scroll_arm: float = 0.05       # bande horizontale du centre (toute la largeur) qui arme le défilement
     voice_scroll_dead: float = 0.06      # zone neutre autour du centre de l'image (plus large que la bande)
-    voice_scroll_gain: float = 20.0      # crans / s par unité d'écart au-delà du neutre (main)
-    voice_scroll_arm_head: float = 0.06  # tête : petits mouvements, bande et neutre plus étroits
-    voice_scroll_dead_head: float = 0.09   # large : la tête peut bouger un peu sans défiler
-    voice_scroll_gain_head: float = 30.0  # tête : un petit écart défile déjà vite
-    voice_scroll_span_head: float = 0.16  # tête : écart maximal au centre ; au-delà, le centre suit la tête
+    voice_scroll_dead_head: float = 0.07   # tête : environ 2° sans défiler (le centre = la tête à l'armement)
+    voice_scroll_arm_head: float = 0.06  # tête : (jauge seulement) la tête s'arme là où elle est
+    voice_scroll_span_head: float = 0.30  # tête : environ 9° pour la vitesse maximale ; au-delà, le centre suit
     voice_scroll_span: float = 1.0         # main : pas de butée (le centre reste celui de l'image)
-    voice_scroll_max_rate: float = 5.0  # crans par seconde au maximum
+    voice_scroll_full: float = 0.35      # main : écart au centre où la vitesse est maximale
+    voice_scroll_min_rate: float = 0.5   # crans / s juste à la sortie de la zone verte
+    voice_scroll_max_rate: float = 8.0   # crans / s aux extrêmes (courbe en carré entre les deux)
+    voice_scroll_max_rate_head: float = 4.0   # tête : plus doux (8 jugé trop violent à la tête)
 
     # « iris, claude » : micro du panneau Claude dans VS Code, coupé quand tu as fini de parler
     dictation_silence_s: float = 2.75    # silence après ta dernière parole -> micro coupé (2 s trop court, 4 s trop long)
