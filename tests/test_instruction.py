@@ -288,26 +288,52 @@ def test_aide_lisible():
 
 
 # ---- commandes passées dans « instruction » (17/11)
-def test_chronometre_par_la_boucle_principale():
+def test_chronometre_direct_sans_envoie():
     raw = {"etapes": [{"outil": "chronometre", "arg": ""}], "refus": ""}
     instr = Instructeur(lambda a: "x", ask=lambda p: raw)
     core = FakeCore()
     instr.submit(b"")
-    _pump(instr, core, 0.0, lambda: instr.plan is not None)
-    instr.actions([("instruction_ok",)], core, 1.0)
-    acts = _pump(instr, core, 2.0, lambda: not instr.busy)
-    assert ("chrono",) in acts + instr.events(core, 2.1)
+    acts = _pump(instr, core, 0.0, lambda: instr.title == "Instruction faite")   # lancé sans « envoie »
+    assert ("chrono",) in acts + instr.events(core, 1.1) and core.confirm_kind is None
+    assert instr.state(1.2)["title"] == "Instruction faite"   # affiché après coup
 
 
-def test_rappel_seul_une_seule_confirmation():
-    raw = {"etapes": [{"outil": "rappel", "arg": "demain 9 h médecin"}], "refus": ""}
-    sent = []
-    desk = SimpleNamespace(submit=sent.append)
-    instr = Instructeur(lambda a: "x", ask=lambda p: raw, desk=desk)
+def test_commandes_directes_sans_envoie():
+    raw = {"etapes": [{"outil": "timer", "arg": "10 minutes"}, {"outil": "volume", "arg": "40"},
+                      {"outil": "rappel", "arg": "demain 9 h médecin"}], "refus": ""}
+    instr, ran = _instr(raw)
     core = FakeCore()
     instr.submit(b"")
-    _pump(instr, core, 0.0, lambda: sent != [])
-    assert sent == ["demain 9 h médecin"] and instr.plan is None and core.confirm_kind is None
+    _pump(instr, core, 0.0, lambda: not instr.busy and len(ran) == 3)
+    assert [o for o, _ in ran] == ["timer", "volume", "rappel"] and core.confirm_kind is None
+
+
+def test_plan_melange_demande_toujours_envoie():
+    raw = {"etapes": [{"outil": "timer", "arg": "10 minutes"}, {"outil": "touche", "arg": "f"}], "refus": ""}
+    instr, ran = _instr(raw)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    time.sleep(0.1)
+    instr.events(core, 0.5)
+    assert ran == [] and core.confirm_kind == "instruction"
+
+
+def test_rappel_direct_enregistre_sans_confirmation(tmp_path):
+    import datetime as dt
+    from motionzero.reminders import Desk, Reminders
+    now = dt.datetime(2026, 11, 17, 15, 0)
+    reply = '{"action": "create", "text": "appeler le médecin", "at": "2026-11-18T09:00", "repeat": null}'
+    desk = Desk(Reminders(str(tmp_path / "r.json")).load(now), None, None, None, ask=lambda q: reply,
+                transcribe=lambda a: a, clock=lambda: now)
+    core = FakeCore()
+    desk.submit("demain 9 h appeler le médecin", confirm=False)
+    end = time.time() + 2
+    while time.time() < end and not desk.r.items:
+        desk.events(core, 1.0)
+        time.sleep(0.01)
+    assert [r.text for r in desk.r.items] == ["appeler le médecin"] and core.confirm_kind is None
+    assert "ENREGISTRE" in core.last_gesture[0]
 
 
 def test_mots_passes_plus_guettes_mais_compris_en_mp():

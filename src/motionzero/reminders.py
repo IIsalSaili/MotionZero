@@ -346,10 +346,11 @@ class Desk:
         self.timers = Timers()
 
     # ---- fil « rappel » ----
-    def submit(self, audio):
+    def submit(self, audio, confirm=True):
+        """confirm=False (« iris instruction », 17/11) : créé ou supprimé tout de suite, sans « envoie »."""
         import threading
         items = list(self.r.items)
-        threading.Thread(target=self._work, args=(audio, items), name="rappel", daemon=True).start()
+        threading.Thread(target=self._work, args=(audio, items, confirm), name="rappel", daemon=True).start()
 
     def submit_timer(self, audio):
         import threading
@@ -366,7 +367,7 @@ class Desk:
         log.info("timer : %s -> %s", phrase, seconds)
         self._q.put(("timer", seconds) if seconds else ("error", "duree incomprise" if phrase else "rien entendu"))
 
-    def _work(self, audio, items):
+    def _work(self, audio, items, confirm=True):
         try:
             phrase = (self._transcribe(audio) or "").strip(" .")
         except Exception:
@@ -383,6 +384,8 @@ class Desk:
             log.warning("rappel incompris (%s) : %s", e.__class__.__name__, phrase)
             result = ("error", "Iris indisponible" if isinstance(e, RuntimeError) else "pas compris")
         log.info("rappel : %s -> %s", phrase, result[0])
+        if not confirm and result[0] in ("create", "cancel"):
+            result = (result[0] + "_direct", result[1])
         self._q.put(result)
 
     # ---- boucle principale ----
@@ -450,6 +453,16 @@ class Desk:
             core.timer_running = True
             core.last_gesture = (f"TIMER {fmt(obj)}", t)
             self._say(f"Timer de {spoken(obj)}.")
+            return
+        if kind == "create_direct":
+            self.r.add(obj)
+            label = "ALARME" if obj.alarm else "RAPPEL"
+            core.last_gesture = (f"{label} ENREGISTRE : {describe(obj, now)} : {obj.text}"[:60], t)
+            self._say(f"{label.capitalize()} enregistré : {describe(obj, now)}, {obj.text}.")
+            return
+        if kind == "cancel_direct":
+            target = self.r.cancel(obj)
+            core.last_gesture = (f"RAPPEL SUPPRIME : {target.text}"[:60] if target else "RAPPEL INTROUVABLE", t)
             return
         if kind == "create":
             self.pending = ("create", obj)

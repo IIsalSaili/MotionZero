@@ -36,6 +36,10 @@ def is_help(phrase):
     return any(w in p for w in HELP_WORDS) and len(p) < 60
 
 
+# Faits sans « envoie » quand le plan ne contient qu'eux (choix de l'utilisateur, 17/11) : les commandes qui
+# existaient seules avant (ouvre, timer, rappel, volume, message, salon, chronomètre). Tout autre outil dans le
+# plan : « envoie » obligatoire pour l'ensemble.
+DIRECT = {"ouvre_app", "site", "timer", "rappel", "volume", "discord_message", "discord_salon", "chronometre"}
 CONFIRM_S = 10.0          # sans « envoie » dans ce temps : plan annulé (jamais lancé seul)
 MAX_STEPS = 8
 STEP_PAUSE_S = 0.8         # entre deux étapes : la fenêtre ouverte a le temps de passer devant
@@ -617,7 +621,7 @@ class Instructeur:
         elif outil == "timer":
             self.desk.submit_timer(arg)        # texte au lieu du son : Asker._transcribe le rend tel quel
         elif outil == "rappel":
-            self.desk.submit(arg)              # le rappel demande ensuite son propre « envoie »
+            self.desk.submit(arg, confirm=False)   # plan déjà validé (ou direct) : pas de 2e « envoie »
         elif outil in ("discord", "traducteur", "chronometre"):
             self._q.put(("main", outil, arg))  # état tenu par la boucle principale
         elif outil == "attends":
@@ -715,16 +719,13 @@ class Instructeur:
                 self.meta = CLOSE_HINT
                 self.show_until = t + HELP_S
             elif kind == "plan":
-                if len(msg[2]) == 1 and msg[2][0][0] == "rappel" and self.desk is not None:
-                    # rappel seul : sa propre confirmation montre la date comprise, « envoie » une seule fois
-                    self.desk.submit(msg[2][0][1])
-                    self.plan, self.lines = None, None
-                    core.last_gesture = ("RAPPEL : Iris reflechit…", t)
-                    continue
                 self.phrase, self.plan = msg[1], msg[2]
                 self._pending_raw = msg[3] if len(msg) > 3 else None
-                self.title, self.meta = "Dis « envoie » pour le faire", None
                 self.lines = [f"{i + 1}. {lbl}" for i, (_, _, lbl) in enumerate(self.plan)]
+                if not self.busy and all(o in DIRECT for o, _, _ in self.plan):
+                    self._start(core, t)          # ouvre, timer, rappel, volume, message, salon, chrono : direct
+                    continue
+                self.title, self.meta = "Dis « envoie » pour le faire", None
                 self.show_until = t + CONFIRM_S
                 core.ask_confirm("instruction", t, CONFIRM_S)
             elif kind == "step":
@@ -753,19 +754,24 @@ class Instructeur:
             self.plan = None                   # pas de réponse : plan abandonné
         return acts
 
+    def _start(self, core, t):
+        """Lance le plan en attente dans le fil « instruction-exec » (boucle principale seulement)."""
+        plan, self.plan = self.plan, None
+        self._running_raw = self._pending_raw
+        self.busy = True
+        self.title, self.meta = "Instruction en cours", "« stop » : arrêter"
+        self.show_until = t + SHOW_DONE_S
+        self._cancel = threading.Event()
+        threading.Thread(target=self._execute, args=(plan,), name="instruction-exec", daemon=True).start()
+        core.last_gesture = ("INSTRUCTION LANCEE", t)
+
     def actions(self, acts, core, t):
         rest = []
         for a in acts:
             if a[0] == "instruction_ok":
                 if self.plan is None or self.busy:
                     continue
-                plan, self.plan = self.plan, None
-                self._running_raw = self._pending_raw
-                self.busy = True
-                self.title, self.meta = "Instruction en cours", "« stop » : arrêter"
-                self._cancel = threading.Event()
-                threading.Thread(target=self._execute, args=(plan,), name="instruction-exec", daemon=True).start()
-                core.last_gesture = ("INSTRUCTION LANCEE", t)
+                self._start(core, t)
             elif a[0] in ("rappel_merci", "ask_close") and not self.busy and self.lines is not None:
                 # « iris merci » / « iris ferme » : la carte se ferme ; un plan en attente est abandonné (rien fait)
                 if self.plan is not None:

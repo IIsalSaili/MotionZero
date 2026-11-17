@@ -88,10 +88,10 @@ Mode : « tous » sauf mention.
 | `suivant` / `précédent` | onglet suivant / précédent de VS Code (par exemple les onglets Claude), par l'extension « Iris (pont) » : commande de VS Code, pas de touche, marche où que soit le focus ; l'île dit « ECHEC » si l'onglet n'a pas changé. Sans l'extension : Ctrl+Page suivante / précédente, VS Code devant seulement. Installer : `tools/installer_pont.py` | oui VS Code devant ; répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris (le mode Chrome s'arrête quand Discord ou VS Code passe devant ; l'accueil ne le quitte pas) | non | tous |
-| `ouvre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « ouvre Spotify ». Ancien fonctionnement : puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
+| `ouvre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « ouvre Spotify ». Ancien fonctionnement : puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
 | `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | oui si quelque chose est affiché en haut | hors Chrome (en Chrome : ferme l'onglet) |
 | `réveil` | rallume l'écran éteint | non | tous |
-| `volume` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « volume à 40 ». Ancien fonctionnement : puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
+| `volume` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « volume à 40 ». Ancien fonctionnement : puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
 
 ## Claude
 
@@ -130,8 +130,8 @@ sequenceDiagram
 | `mute` (`muet`) | coupe le micro Discord | non | tous |
 | `démute` (« des mute ») | rallume le micro | non | tous |
 | `sourdine` | sourdine casque + micro | non | tous |
-| `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
-| `salon` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « mets-moi dans le salon jeux ». Ancien fonctionnement : puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
+| `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
+| `salon` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « mets-moi dans le salon jeux ». Ancien fonctionnement : puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
 | `activation` | lance le bot vocal, charge Whisper | non | tous |
 | `viens` / `pars` | le bot rejoint / quitte ton salon vocal | non | tous |
@@ -151,11 +151,11 @@ Les commandes suivies d'une phrase prennent la suite du MP à la place du micro 
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
+| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
 | `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
 | `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
-| `timer` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « timer de 10 minutes ». Ancien fonctionnement : puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
-| `chronomètre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul, puis `envoie`) : « lance le chronomètre ». Ancien fonctionnement : démarre ; redit : arrête | non | tous |
+| `timer` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « timer de 10 minutes ». Ancien fonctionnement : puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
+| `chronomètre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « lance le chronomètre ». Ancien fonctionnement : démarre ; redit : arrête | non | tous |
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
 | `heure` / `date` | jour, date et heure affichés 5 s | non | tous |
 | `quota` | quota Claude : session de 5 h et semaine (pourcentage utilisé, heure du reset), logo Claude, collé au coin haut gauche, en permanence ; redire `quota` le masque (choix gardé au redémarrage) | non | tous |
