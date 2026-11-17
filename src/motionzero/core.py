@@ -1252,19 +1252,34 @@ class Core:
         return t < self.voice_scroll_until
 
     def _scroll_params(self):
-        """(demi-bande d'armement, demi-zone neutre, gain) : plus serrés à la tête, qui bouge peu."""
+        """(demi-bande d'armement, demi-zone neutre, écart de vitesse maximale, butée) : la tête bouge peu."""
         c = self.cfg
         if self.pointer == "tete":
-            return (c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_gain_head,
+            return (c.voice_scroll_arm_head, c.voice_scroll_dead_head, c.voice_scroll_span_head,
                     c.voice_scroll_span_head)
-        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_gain, c.voice_scroll_span
+        return c.voice_scroll_arm, c.voice_scroll_dead, c.voice_scroll_full, c.voice_scroll_span
+
+    def scroll_rate(self, dy, dead, full):
+        """Crans / s : 0 dans la zone verte, lent juste après, de plus en plus vite vers les extrêmes (carré)."""
+        c = self.cfg
+        if abs(dy) <= dead:
+            return 0.0
+        u = min((abs(dy) - dead) / max(full - dead, 1e-6), 1.0)
+        top = c.voice_scroll_max_rate_head if self.pointer == "tete" else c.voice_scroll_max_rate
+        return c.voice_scroll_min_rate + (top - c.voice_scroll_min_rate) * u * u
 
     def _voice_scroll(self, palm, t, acts):
         """« défile » : comme la souris, rien ne bouge tant que la main n'est pas passée au centre de l'image
         (une bande horizontale : seule la hauteur compte). Ensuite, plus la main est au-dessus / en dessous
         du centre, plus ça défile vite. Fin : « iris défile » redit, « stop », une autre commande, ou (main) main sortie de l'image."""
         c = self.cfg
-        arm, dead, gain, span = self._scroll_params()
+        arm, dead, full, span = self._scroll_params()
+        if not self.voice_scroll_armed and self.pointer == "tete":
+            # tête : le centre = la tête au moment de « défile » (la référence de la souris peut être ancienne)
+            self.voice_scroll_armed = True
+            self.voice_scroll_y0, self.voice_scroll_dy = palm[1], 0.0
+            self.last_gesture = ("DEFILE : leve / baisse la tete", t)
+            return
         if not self.voice_scroll_armed:
             dy = palm[1] - 0.5
             if abs(dy) > arm:
@@ -1285,7 +1300,7 @@ class Core:
         if abs(dy) <= dead:
             self._scroll_acc = 0.0
             return
-        rate = min((abs(dy) - dead) * gain, c.voice_scroll_max_rate)  # crans / s
+        rate = self.scroll_rate(dy, dead, full)
         dt = (t - self.prev_t) if self.prev_t is not None else 0.0
         self._scroll_acc += rate * min(dt, 0.2)
         notches = int(self._scroll_acc)

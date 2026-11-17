@@ -547,3 +547,25 @@ def test_iris_peu_sur_suivi_d_une_commande_nette():
     assert accepted_words({"result": [w("iris", 0.2, 0.0), w("claude", 1.0, 0.35)]}) == []     # trop faible
     assert accepted_words({"result": [w("iris", 0.37, 0.0), w("claude", 0.5, 0.35)]}) == []    # commande floue
     assert accepted_words({"result": [w("iris", 0.4, 0.0)]}) == []                              # iris seul
+
+
+def test_defile_courbe_lente_pres_du_vert_rapide_aux_extremes():
+    core = Core(Config())
+    c = core.cfg
+    dead, full = c.voice_scroll_dead, c.voice_scroll_full
+    assert core.scroll_rate(dead, dead, full) == 0.0                         # zone verte : rien
+    assert core.scroll_rate(dead + 0.01, dead, full) < 1.0                   # juste après : lent
+    mid, top = core.scroll_rate(0.2, dead, full), core.scroll_rate(full, dead, full)
+    assert 1.0 < mid < top == c.voice_scroll_max_rate                        # de plus en plus vite
+    assert core.scroll_rate(0.5, dead, full) == top                          # jamais au-delà du maximum
+    assert core.scroll_rate(-0.2, dead, full) == mid                         # même vitesse vers le haut
+
+
+def test_defile_main_lente_pres_du_vert_rapide_en_bas():
+    core, clk = Core(Config()), Clock()
+    _defile(core, clk)
+    clk.run(core, 0.3, cx=0.5, cy=0.5)
+    pres = _scrolls(clk.run(core, 2.0, cx=0.5, cy=0.59))
+    clk.run(core, 0.3, cx=0.5, cy=0.5)
+    loin = _scrolls(clk.run(core, 2.0, cx=0.5, cy=0.9))
+    assert len(pres) <= 3 and len(loin) >= 3 * max(len(pres), 1)

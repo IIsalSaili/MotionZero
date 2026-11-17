@@ -1,3 +1,4 @@
+import pytest
 """Souris à la tête : orientation de la tête (matrice MediaPipe) -> point virtuel -> même pavé tactile que la main.
 Sans caméra : visage et matrice simulés."""
 import math
@@ -263,7 +264,7 @@ def test_defile_tete_vitesse_douce_a_fond():
     core.voice("iris", t)
     core.voice("scroll", t)
     core, acts, t = _tete_defile([0.0] * 10 + [-0.3] * 90, core, t)    # 3 s yeux au sol
-    assert len([a for a in acts if a[0] == "scroll"]) <= 9
+    assert len([a for a in acts if a[0] == "scroll"]) <= 13            # 4 crans / s au plus
 
 
 def test_defile_tete_ne_s_arrete_pas_si_le_visage_disparait():
@@ -335,3 +336,27 @@ def test_a_coup_isole_n_accelere_pas():
     for _ in range(20):                                         # geste franc qui dure
         g = c._gain(2.0, 1 / 20)
     assert g > 3.0
+
+
+def test_defile_tete_droite_avec_vieille_reference_ne_defile_pas():
+    """Référence prise tête baissée (souris), puis tête droite : « défile » part de la tête droite (bug du 17/11)."""
+    core, _, t = _tete_defile([-0.1] * 10)                  # référence de la souris prise tête baissée
+    core, _, t = _tete_defile([0.0] * 30, core, t)          # l'utilisateur se redresse
+    core.voice("iris", t)
+    core.voice("scroll", t)
+    core, acts, t = _tete_defile([0.0] * 90, core, t)       # tête droite, 3 s
+    assert not [a for a in acts if a[0] == "scroll"]
+    assert core.scroll_gauge(t)[0] == pytest.approx(0.5, abs=0.05)   # jauge au centre, pas tout en haut
+
+
+def test_defile_tete_plus_on_penche_plus_ca_va_vite():
+    core, _, t = _tete_defile([0.0] * 10)
+    core.voice("iris", t)
+    core.voice("scroll", t)
+    core, _, t = _tete_defile([0.0] * 10, core, t)
+    core, peu, t = _tete_defile([-0.05] * 90, core, t)      # environ 3° : lent
+    core, _, t = _tete_defile([0.0] * 30, core, t)
+    core, fort, t = _tete_defile([-0.15] * 90, core, t)     # environ 9° : vitesse maximale
+    n_peu = len([a for a in peu if a[0] == "scroll"])
+    n_fort = len([a for a in fort if a[0] == "scroll"])
+    assert 1 <= n_peu <= 4 and n_fort >= 2 * n_peu and n_fort <= 13
