@@ -10,7 +10,7 @@ import difflib
 import re
 
 from .sounds import is_failure
-from .voice import SPLIT, WORDS
+from .voice import SPLIT, VIA_INSTRUCTION, WORDS
 
 # suivies d'une phrase (dite au micro, ici écrite dans le MP)
 WITH_PHRASE = {"ouvre", "ferme", "type", "question", "message", "salon", "rappel", "timer", "volume", "claude"}
@@ -22,7 +22,7 @@ WAIT_S = 1.5          # temps laissé à la commande pour s'exécuter avant de l
 WAIT_PHRASE_S = 8.0   # appli à lancer, message à envoyer, rappel compris par Haiku… : plus long
 WAIT_BOT_S = 20.0     # viens / pars / activation / message / salon : on attend la réponse du bot lui-même
 BOT_WORDS = {"viens", "pars", "activation", "message", "salon"}
-VOCAB = (set(WORDS) | set(SPLIT.values())) - {"iris"}
+VOCAB = (set(WORDS) | set(SPLIT.values()) | VIA_INSTRUCTION) - {"iris"}
 EXAMPLES = {"ouvre": "ouvre spotify", "type": "type bonjour", "question": "question quel temps fait-il",
             "message": "message dans général, salut", "salon": "salon jeux", "rappel": "rappel dans 10 minutes, pâtes",
             "claude": "claude corrige le test"}

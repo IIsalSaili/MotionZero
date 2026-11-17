@@ -15,9 +15,9 @@ def test_aucun_nouveau_mot_guette():
     guette en permanence ne grandit pas. Nombres figés le 17/11 (« instruction » compris) : un ajout doit être
     voulu et ce test mis à jour à la main."""
     from motionzero.voice import GRAMMARS, WORDS
-    assert len(WORDS) == 125
+    assert len(WORDS) == 118          # 17/11 : 7 mots passés dans « instruction »
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 75, "souris": 75, "chrome": 86, "calendrier": 127}
+        {"base": 68, "souris": 68, "chrome": 79, "calendrier": 120}
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 
@@ -253,3 +253,12 @@ def test_fit_font_texte_entier():
     f = fit_font(base, long, 500, 600)
     assert MIN_PT <= f.pointSizeF() < 17
     assert fit_font(base, "x" * 300, 200).pointSizeF() == MIN_PT     # jamais plus petit que lisible
+
+
+def test_appli_absente_mais_site_connu():
+    apps = {"Discord": "x"}
+    assert check_step("ouvre_app", "netflix", apps)[:2] == ("site", "https://www.netflix.com")
+    with pytest.raises(PlanError):
+        check_step("ferme_app", "netflix", apps)              # fermer : jamais remplacé par un site
+    with pytest.raises(PlanError):
+        check_step("ouvre_app", "zzqq", apps)

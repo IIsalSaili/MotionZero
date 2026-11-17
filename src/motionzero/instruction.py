@@ -64,6 +64,7 @@ TOOLS = {
     "timer": "lance un compte à rebours (arg : la durée, ex. « 5 minutes »)",
     "rappel": "crée un rappel, à valider ensuite (arg : la demande, ex. « demain 9 h appeler le médecin »)",
     "traducteur": "allume ou éteint les sous-titres traduits du son du PC (arg vide)",
+    "chronometre": "démarre le chronomètre, ou l'arrête s'il tourne (arg vide)",
     "attends": "attend quelques secondes (arg : nombre de secondes, 10 au plus)",
     # routines : une suite d'étapes enregistrée sous un nom, rejouée ensuite
     "routine": "lance une routine enregistrée (arg : son nom, parmi les routines connues)",
@@ -260,6 +261,11 @@ def check_step(outil, arg, app_names=None, ctx=None):
         if app_names is not None:
             from .apps import best_match
             name = best_match(arg, app_names)
+            if not name and outil == "ouvre_app":
+                from .outils import known_site
+                url = known_site(arg, (ctx or {}).get("favoris"))
+                if url:                      # pas installée mais site connu (Netflix…) : le site
+                    return "site", url, f"Ouvrir {arg} (site)"
             if not name:
                 raise PlanError(f"appli introuvable : {arg}")
             if BLOCKED_APPS.search(name):
@@ -313,6 +319,8 @@ def check_step(outil, arg, app_names=None, ctx=None):
         return outil, arg, f"Timer {arg}"
     if outil == "traducteur":
         return outil, "", "Traducteur (allume / éteint)"
+    if outil == "chronometre":
+        return outil, "", "Chronomètre (démarre / arrête)"
     r = _check_more(outil, arg, app_names, ctx or {})
     if r is not None:
         return r
@@ -610,7 +618,7 @@ class Instructeur:
             self.desk.submit_timer(arg)        # texte au lieu du son : Asker._transcribe le rend tel quel
         elif outil == "rappel":
             self.desk.submit(arg)              # le rappel demande ensuite son propre « envoie »
-        elif outil in ("discord", "traducteur"):
+        elif outil in ("discord", "traducteur", "chronometre"):
             self._q.put(("main", outil, arg))  # état tenu par la boucle principale
         elif outil == "attends":
             time.sleep(arg)
@@ -707,6 +715,12 @@ class Instructeur:
                 self.meta = CLOSE_HINT
                 self.show_until = t + HELP_S
             elif kind == "plan":
+                if len(msg[2]) == 1 and msg[2][0][0] == "rappel" and self.desk is not None:
+                    # rappel seul : sa propre confirmation montre la date comprise, « envoie » une seule fois
+                    self.desk.submit(msg[2][0][1])
+                    self.plan, self.lines = None, None
+                    core.last_gesture = ("RAPPEL : Iris reflechit…", t)
+                    continue
                 self.phrase, self.plan = msg[1], msg[2]
                 self._pending_raw = msg[3] if len(msg) > 3 else None
                 self.title, self.meta = "Dis « envoie » pour le faire", None
@@ -729,6 +743,8 @@ class Instructeur:
             elif kind == "main":
                 if msg[1] == "discord":
                     acts.append((msg[2],))
+                elif msg[1] == "chronometre":
+                    acts.append(("chrono",))
                 elif msg[1] == "traducteur":
                     core._cmd_translator("traducteur", t, acts)
                 elif msg[1] == "agenda" and self.desk is not None:

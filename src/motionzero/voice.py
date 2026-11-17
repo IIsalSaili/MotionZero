@@ -72,7 +72,6 @@ WORDS = {
     "studio": "studio",   # « iris studio » : VS Code au premier plan, sans ouvrir le micro (« code » ressemble trop à « claude »)
     "souris": "souris",   # « iris souris » : mode souris
     "lecture": "lecture", # « iris lecture » : mode lecture (pages et défilement à la main)
-    "ouvre": "ouvre",     # « iris ouvre » puis le nom d'une appli (Whisper) : n'importe quelle appli
     "type": "type",       # « iris type » : dicter du texte, écrit là où se trouve le curseur
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
@@ -84,18 +83,13 @@ WORDS = {
     "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
     "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
-    "message": "message", # « iris message » puis « dans général, … » (Whisper) : envoyé par le bot Discord
-    "salon": "salon",     # « iris salon » puis le nom d'un salon vocal : le bot t'y déplace
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
     "lis": "lis",         # « iris lis » : la remet
     "skip": "skip",       # « iris skip » : flèche droite (YouTube : +10 s)
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
-    "rappel": "rappel",   # « iris rappel » puis la demande (Whisper + Haiku) : créer, lister, annuler
     "merci": "merci",     # « iris merci » : retire ce qui est affiché en haut (rappel, réponse…) ; « ok » retiré le 14/11
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
     "réveil": "réveil",   # « iris réveil » : rallume l'écran éteint (« wake » retiré le 14/11 : jamais utilisé)
-    "chronomètre": "chronomètre",   # « iris chronomètre » : démarre / arrête le chrono
-    "timer": "timer",     # « iris timer » puis la durée : compte à rebours qui sonne à zéro
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",
@@ -103,11 +97,14 @@ WORDS = {
     "quota": "quota",     # « iris quota » : affiche / masque le quota Claude (session de 5 h) en haut à droite
     "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
     "pars": "pars",       # « iris pars » : il quitte le vocal
-    "volume": "volume",   # « iris volume » puis « 40 », « plus fort », « coupe »… (Whisper)
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
     "instruction": "instruction",  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
     "stop": "stop",
 }
+
+# Passées dans « iris instruction » (17/11, choix de l'utilisateur) : plus guettées par Vosk (moins de fausses
+# détections). Toujours comprises en MP Discord et par Core.
+VIA_INSTRUCTION = {"ouvre", "message", "rappel", "chronomètre", "timer", "volume", "salon"}
 
 
 WAKE_WORD = "iris"

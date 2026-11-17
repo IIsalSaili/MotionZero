@@ -426,10 +426,10 @@ def find_site(name, favs=None, search=_ddg):
 EXAMPLES = [   # carte d'aide : une phrase par ligne, à dire telle quelle après « iris instruction »
     "« ouvre mes mails »",
     "« mets la dernière vidéo de One Click Studio »",
-    "« mets la vidéo en pause »",
     "« mets Chrome à gauche et Discord à droite »",
     "« mets le son à 30 et coupe mon micro Discord »",
     "« dis dans général que j'arrive »",
-    "« quel temps fait-il à Lyon »",
+    "« timer de 10 minutes »",
+    "« rappelle-moi demain à 9 h d'appeler le médecin »",
     "« crée la routine travail : ouvre Discord »",
 ]

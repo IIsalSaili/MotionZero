@@ -1,4 +1,5 @@
 """« iris instruction » (#45) : plan vérifié, affiché, exécuté après « envoie » ; échecs."""
+import json
 import re
 import time
 from types import SimpleNamespace
@@ -284,3 +285,35 @@ def test_merci_abandonne_un_plan_en_attente():
 def test_aide_lisible():
     from motionzero.outils import EXAMPLES
     assert len(EXAMPLES) <= 8 and all(e.startswith("«") and "·" not in e for e in EXAMPLES)
+
+
+# ---- commandes passées dans « instruction » (17/11)
+def test_chronometre_par_la_boucle_principale():
+    raw = {"etapes": [{"outil": "chronometre", "arg": ""}], "refus": ""}
+    instr = Instructeur(lambda a: "x", ask=lambda p: raw)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("instruction_ok",)], core, 1.0)
+    acts = _pump(instr, core, 2.0, lambda: not instr.busy)
+    assert ("chrono",) in acts + instr.events(core, 2.1)
+
+
+def test_rappel_seul_une_seule_confirmation():
+    raw = {"etapes": [{"outil": "rappel", "arg": "demain 9 h médecin"}], "refus": ""}
+    sent = []
+    desk = SimpleNamespace(submit=sent.append)
+    instr = Instructeur(lambda a: "x", ask=lambda p: raw, desk=desk)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: sent != [])
+    assert sent == ["demain 9 h médecin"] and instr.plan is None and core.confirm_kind is None
+
+
+def test_mots_passes_plus_guettes_mais_compris_en_mp():
+    from motionzero.discord_cmd import VOCAB, parse
+    from motionzero.voice import GRAMMARS, VIA_INSTRUCTION
+    for w in VIA_INSTRUCTION:
+        assert all(w not in json.loads(g) for g in GRAMMARS.values())
+    assert "chronomètre" in VOCAB and parse("chronomètre")[0] == "chronomètre"
+    assert parse("timer 10 minutes")[:2] == ("timer", "10 minutes")
