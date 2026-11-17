@@ -54,7 +54,7 @@ def test_plan_valide_et_libelles():
     assert plan[1][1] == ["f"] and "One Click Studio" in plan[0][2]
 
 
-@pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("site", "pas une url"),
+@pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("site", ""),
                                        ("volume", "beaucoup"), ("discord", "danse"), ("timer", "bientôt"),
                                        ("ecris", ""), ("attends", "longtemps"), ("ouvre_app", "")])
 def test_etape_refusee(outil, arg):
@@ -185,7 +185,7 @@ def test_modele_indisponible():
     core = FakeCore()
     instr.submit(b"")
     _pump(instr, core, 0.0, lambda: instr.lines is not None)
-    assert "Ollama" in instr.lines[-1] and instr.title == "INSTRUCTION IMPOSSIBLE"
+    assert "Ollama" in instr.lines[-2] and "aide" in instr.lines[-1] and instr.title == "INSTRUCTION IMPOSSIBLE"
 
 
 def test_reponse_illisible_et_whisper_en_panne():

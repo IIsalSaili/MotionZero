@@ -24,7 +24,18 @@ MODEL = "qwen3:4b"
 OLLAMA = "http://127.0.0.1:11434"
 KEEP_ALIVE = "5m"          # modèle déchargé de la carte graphique après 5 min sans instruction
 LLM_TIMEOUT_S = 60
-CONFIRM_S = 30.0           # temps pour lire le plan et dire « envoie »
+HELP_S = 25.0              # la carte d'exemples reste ce temps
+HELP_HINT = "« iris instruction » puis « aide » : des exemples"
+HELP_WORDS = ("aide", "exemple", "sais faire", "tu sais faire", "peux faire", "comment ca marche", "quoi dire")
+
+
+def is_help(phrase):
+    from .outils import norm_name
+    p = norm_name(phrase)
+    return any(w in p for w in HELP_WORDS) and len(p) < 60
+
+
+CONFIRM_S = 10.0          # sans « envoie » dans ce temps : plan annulé (jamais lancé seul)
 MAX_STEPS = 8
 STEP_PAUSE_S = 0.8         # entre deux étapes : la fenêtre ouverte a le temps de passer devant
 SHOW_DONE_S = 8.0          # le compte rendu reste affiché ce temps
@@ -39,7 +50,7 @@ KEY_NAMES = {"entree": "enter", "entrée": "enter", "echap": "escape", "échap":
 TOOLS = {
     "ouvre_app": "ouvre une application installée (arg : son nom, ex. « chrome », « discord », « word »)",
     "ferme_app": "ferme une application (arg : son nom)",
-    "site": "ouvre une adresse web dans le navigateur (arg : l'adresse, ex. « youtube.com »)",
+    "site": "ouvre un site par son nom ou son adresse (arg : ex. « mes mails », « leboncoin », « youtube.com »)",
     "recherche_web": "ouvre une recherche Google dans le navigateur (arg : les mots cherchés)",
     "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche)",
     "youtube_chaine": "ouvre directement la dernière vidéo publiée par une chaîne YouTube (arg : le nom de la chaîne)",
@@ -58,10 +69,7 @@ TOOLS = {
     "cree_routine": "enregistre les AUTRES étapes du plan sous un nom au lieu de les faire (arg : le nom)",
     "oublie_routine": "oublie une routine (arg : son nom)",
     "refais": "refait la dernière instruction réussie (arg vide)",
-    # favoris : un nom -> une adresse web
-    "favori": "ouvre un site favori (arg : son nom, parmi les favoris connus)",
-    "ajoute_favori": "retient un site favori (arg : « nom = adresse », ex. « mes mails = mail.google.com »)",
-    "oublie_favori": "oublie un favori (arg : son nom)",
+    "aide": "montre des exemples de demandes (arg vide) : pour « aide », « qu'est-ce que tu sais faire »",
     # navigateur
     "recherche": "ouvre la page de résultats d'un site (arg : « site: texte » ; sites : google, youtube, amazon, "
                  "maps, itineraire, wikipedia, twitch, spotify, images)",
@@ -93,7 +101,7 @@ SYSTEM = (
     "\nRègles :\n"
     "- Pour une vidéo YouTube, utilise youtube ou youtube_chaine directement (ils ouvrent eux-mêmes le navigateur) : "
     "jamais ouvrir Chrome puis taper dans la barre.\n"
-    "- Pour une vidéo déjà vue, utilise historique_video ; pour un site retenu, favori.\n"
+    "- Pour une vidéo déjà vue, utilise historique_video ; pour ouvrir un site, site avec son nom.\n"
     "- « crée la routine X : … » -> cree_routine X puis les étapes de la routine.\n"
     "- Le moins d'étapes possible, " + str(MAX_STEPS) + " au plus.\n"
     "- Si la demande est impossible avec ces outils, ou dangereuse, ou incompréhensible : étapes vides et "
@@ -257,10 +265,15 @@ def check_step(outil, arg, app_names=None, ctx=None):
                 raise PlanError(f"interdit : {name}")
         return outil, name, ("Ouvrir " if outil == "ouvre_app" else "Fermer ") + name
     if outil == "site":
+        if not arg:
+            raise PlanError("site sans nom")
         url = normalize_url(arg)
         if url is None:
-            raise PlanError(f"adresse invalide : {arg}")
-        return outil, url, f"Ouvrir {url}"
+            from .outils import known_site
+            url = known_site(arg, (ctx or {}).get("favoris"))
+        if url is None:                      # inconnu : cherché sur internet au moment de l'ouvrir, puis retenu
+            return outil, ("?", arg), f"Ouvrir {arg} (cherché sur internet)"
+        return outil, url, f"Ouvrir {arg if ' ' in arg or '.' not in arg else url}"
     if outil in ("recherche_web", "youtube", "youtube_chaine", "rappel"):
         if not arg:
             raise PlanError(f"{outil} sans texte")
@@ -321,27 +334,18 @@ def _check_more(outil, arg, app_names, ctx):
     from . import outils as o
     favs, routines = ctx.get("favoris"), ctx.get("routines")
     needs_text = {"historique", "historique_video", "onglet", "ferme_onglets", "meteo", "heure_ville",
-                  "conversion", "oublie_routine", "oublie_favori", "favori", "devant"}
+                  "conversion", "oublie_routine", "devant"}
     if outil in needs_text and not arg:
         raise PlanError(f"{outil} : il manque le texte")
     if outil in EXPANDING or outil == "cree_routine":
         raise PlanError(f"{outil} mal placé")
-    if outil == "favori":
-        url = favs.get(arg) if favs is not None else None
-        if not url:
-            raise PlanError(f"favori inconnu : {arg}")
-        return outil, url, f"Favori « {arg} » ({url})"
-    if outil == "ajoute_favori":
-        pair = o.split_pair(arg, ("=", "|", "->"))
-        url = normalize_url(pair[1]) if pair else None
-        if url is None:
-            raise PlanError(f"favori incompris : {arg} (nom = adresse)")
-        return outil, (pair[0], url), f"Retenir le favori « {pair[0]} » = {url}"
-    if outil in ("oublie_favori", "oublie_routine"):
-        store = favs if outil == "oublie_favori" else routines
+    if outil == "aide":
+        return outil, "", "Exemples"
+    if outil == "oublie_routine":
+        store = routines
         if store is None or store.get(arg) is None:
             raise PlanError(f"inconnu : {arg}")
-        return outil, arg, ("Oublier le favori « " if outil == "oublie_favori" else "Oublier la routine « ") + arg + " »"
+        return outil, arg, "Oublier la routine « " + arg + " »"
     if outil == "recherche":
         url = o.search_url(arg)
         if url is None:
@@ -518,6 +522,9 @@ class Instructeur:
         if not phrase:
             self._q.put(("error", "", "rien entendu"))
             return
+        if is_help(phrase):                   # sans le modèle : toujours la même réponse, tout de suite
+            self._q.put(("help",))
+            return
         try:
             raw = self.ask(phrase + self._context())
             names = self.launcher.all if self.launcher is not None and self.launcher.all else None
@@ -531,6 +538,9 @@ class Instructeur:
             log.exception("instruction : modele")
             self._q.put(("error", phrase, str(e) if isinstance(e, RuntimeError) else "réponse du modèle illisible"))
             return
+        if any(o == "aide" for o, _, _ in plan):
+            self._q.put(("help",))
+            return
         log.info("instruction : %s -> %s", phrase, [lbl for _, _, lbl in plan])
         self._q.put(("plan", phrase, plan, flat))
 
@@ -540,7 +550,7 @@ class Instructeur:
         if self.routines is not None and self.routines.names():
             parts.append("Routines connues : " + ", ".join(self.routines.names()))
         if self.favoris is not None and self.favoris.names():
-            parts.append("Favoris connus : " + ", ".join(self.favoris.names()))
+            parts.append("Sites déjà retenus (outil site avec ce nom) : " + ", ".join(self.favoris.names()))
         return ("\n\n" + "\n".join(parts)) if parts else ""
 
     # ---- fil « instruction-exec » ----
@@ -570,6 +580,13 @@ class Instructeur:
             if err:
                 raise RuntimeError(err)
         elif outil == "site":
+            if isinstance(arg, tuple):
+                from .outils import find_site
+                url, searched = find_site(arg[1], self.favoris)
+                self.open_url(url)
+                if searched and self.favoris is not None:
+                    self.favoris.put(arg[1], url)        # retenu : la prochaine fois, ouvert directement
+                return url
             self.open_url(arg)
         elif outil == "recherche_web":
             self.open_url("https://www.google.com/search?q=" + urllib.parse.quote_plus(arg))
@@ -608,14 +625,7 @@ class Instructeur:
         if outil == "oublie_routine":
             self.routines.remove(arg)
             return None
-        if outil == "favori":
-            self.open_url(arg)
-        elif outil == "ajoute_favori":
-            self.favoris.put(*arg)
-            return f"« {arg[0]} » retenu"
-        elif outil == "oublie_favori":
-            self.favoris.remove(arg)
-        elif outil == "recherche":
+        if outil == "recherche":
             self.open_url(arg)
         elif outil in ("historique", "historique_video"):
             self.open_url(o.from_history(arg, video=outil == "historique_video"))
@@ -686,9 +696,14 @@ class Instructeur:
             kind = msg[0]
             if kind == "error":
                 self.plan, self.title = None, "INSTRUCTION IMPOSSIBLE"
-                self.lines = ([f"« {msg[1]} »"] if msg[1] else []) + [msg[2]]
+                self.lines = ([f"« {msg[1]} »"] if msg[1] else []) + [msg[2], HELP_HINT]
                 self.show_until = t + SHOW_DONE_S
                 core.last_gesture = (f"INSTRUCTION : {msg[2]}".upper()[:60], t)
+            elif kind == "help":
+                from .outils import EXAMPLES
+                self.plan, self.title = None, "INSTRUCTION : exemples à dire"
+                self.lines = list(EXAMPLES)
+                self.show_until = t + HELP_S
             elif kind == "plan":
                 self.phrase, self.plan = msg[1], msg[2]
                 self._pending_raw = msg[3] if len(msg) > 3 else None

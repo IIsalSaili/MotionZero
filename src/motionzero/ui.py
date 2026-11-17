@@ -865,7 +865,7 @@ def reminder_texts(kind, data):
     if kind == "list":
         return ("RAPPELS À VENIR", "\n".join(data), "« Iris rappel » pour en ajouter ou en supprimer")
     if kind == "plan":
-        return (data["title"], "\n".join(data["lines"]), "« envoie » : faire · « annule » : abandonner · « stop » : arrêter")
+        return (data["title"], "\n".join(data["lines"]), "« envoie » dans les 10 s : faire · sinon annulé · « stop » : arrêter")
     title = ("ALARME" if data.get("alarm") else "RAPPEL") + (" MANQUÉ" if data.get("missed") else "")
     title += f" · {data.get('when', '')}"
     meta = "« Iris merci » : noté · « Iris plus tard » : +10 min"

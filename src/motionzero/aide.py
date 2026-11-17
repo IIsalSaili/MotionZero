@@ -47,7 +47,7 @@ GROUPS = [
     ("Claude", [
         ("claude", "micro dans VS Code"),
         ("question", "réponse en haut"),
-        ("instruction", "une demande, plan puis « envoie »"),
+        ("instruction", "une demande ; « aide » : exemples"),
         ("quota", "quota affiché, oui / non"),
     ]),
     ("Discord", [

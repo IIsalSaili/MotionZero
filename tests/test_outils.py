@@ -78,20 +78,46 @@ def test_routine_trafiquee_revérifiee(tmp_path):
     assert expand([{"outil": "routine", "arg": "piege"}], routines)[0]["outil"] == "touche"
 
 
-# ---- favoris
-def test_favoris(tmp_path):
+# ---- sites : par leur nom, sans rien enregistrer avant
+def test_site_connu_d_office_ou_retenu(tmp_path):
     favs = o.Store(str(tmp_path / "f.json"))
-    _, (name, url), _ = check_step("ajoute_favori", "mes mails = mail.google.com", ctx={"favoris": favs})
-    assert url == "https://mail.google.com"
-    favs.put(name, url)
-    assert check_step("favori", "Mes mails", ctx={"favoris": favs})[1] == url
-    for bad in ("inconnu",):
-        with pytest.raises(PlanError):
-            check_step("favori", bad, ctx={"favoris": favs})
-    with pytest.raises(PlanError):
-        check_step("ajoute_favori", "sans adresse", ctx={"favoris": favs})
-    with pytest.raises(PlanError):
-        check_step("ajoute_favori", "local = file:///C:/Users", ctx={"favoris": favs})
+    assert check_step("site", "mes mails", ctx={"favoris": favs})[1] == "https://mail.google.com"
+    assert check_step("site", "le leboncoin")[1] == "https://www.leboncoin.fr"
+    assert check_step("site", "youtube.com")[1] == "https://youtube.com"
+    favs.put("ma banque", "https://www.credit-agricole.fr/")
+    assert check_step("site", "Ma banque", ctx={"favoris": favs})[1] == "https://www.credit-agricole.fr/"
+    assert check_step("site", "site du club de foot")[1] == ("?", "site du club de foot")
+
+
+def test_site_inconnu_cherche_puis_retenu(tmp_path):
+    from motionzero.instruction import Instructeur
+    favs = o.Store(str(tmp_path / "f.json"))
+    opened = []
+    i = Instructeur(lambda a: "", open_url=opened.append, favoris=favs)
+    o_find = o.find_site
+    try:
+        o.find_site = lambda name, f=None: ("https://club.example/", True)
+        i._run_tool("site", ("?", "club de foot"))
+    finally:
+        o.find_site = o_find
+    assert opened == ["https://club.example/"] and favs.get("club de foot") == "https://club.example/"
+
+
+def test_site_recherche_en_panne_ouvre_google():
+    def down(q):
+        raise OSError("réseau")
+    url, searched = o.find_site("truc introuvable", search=down)
+    assert url.startswith("https://www.google.com/search?q=") and not searched
+    assert o.find_site("truc", search=lambda q: None)[0].startswith("https://www.google.com/search")
+
+
+def test_aide_sans_modele():
+    from motionzero.instruction import Instructeur, is_help
+    assert is_help("qu'est-ce que tu sais faire") and is_help("aide") and not is_help("ouvre leboncoin")
+    asked = []
+    i = Instructeur(lambda a: "aide", ask=lambda p: asked.append(p))
+    i._think(b"")
+    assert i._q.get_nowait() == ("help",) and asked == []
 
 
 # ---- navigateur
