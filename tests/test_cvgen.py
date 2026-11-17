@@ -18,7 +18,7 @@ def test_routes_existent_dans_cvgen():
         pytest.skip("CVGEN absent de ce PC")
     src = server.read_text(encoding="utf-8")
     for name, (method, path) in cv.ROUTES.items():
-        motif = re.escape(path.replace("/", "\\/"))
+        motif = re.escape(path.replace("/", "\\/")).replace(re.escape("{id}"), re.escape("[^/]+"))
         assert re.search(rf"\['{method}', /\^{motif}\$/", src), name
 
 
@@ -36,8 +36,8 @@ class FauxCvgen:
         self.up, self.etat, self.refus, self.panne = up, etat, refus, panne
         self.calls = []
 
-    def __call__(self, method, path):
-        self.calls.append((method, path))
+    def __call__(self, method, path, body=None):
+        self.calls.append((method, path) if body is None else (method, path, body))
         if self.panne:
             raise self.panne
         if not self.up:
@@ -48,6 +48,8 @@ class FauxCvgen:
             self.etat = "en-cours"
         if path == "/api/agent/arreter":
             self.etat = "arrete"
+        if path == "/api/offres":
+            return OFFRES
         return {"/api/agent": {"etat": self.etat}, "/api/offres/compte": {"verif": 2},
                 "/api/preparation": {"offreId": None}}.get(path, {"ok": True})
 
@@ -206,3 +208,120 @@ def test_souris_sans_iris_dans_le_mode():
     core.voice("souris", 3.0)
     assert not core.mouse
 
+
+
+# ---- phase 2 : tri des offres
+def _offre(id, etat, note, url="https://exemple.fr/o"):
+    return {"id": id, "etat": etat, "poste": f"Poste {id}", "entreprise": "ACME", "source": "apec", "url": url,
+            "evaluation": {"globale": note, "verdict": "Bonne", "axes": [
+                {"libelle": "Adéquation", "note": 5, "detail": "très bien"},
+                {"libelle": "Niveau", "note": 2, "detail": "senior"}]}}
+
+
+OFFRES = [_offre("v1", "generee", 4.0), _offre("t1", "a-trier", 3.0), _offre("t2", "a-trier", 4.5, url=None),
+          _offre("x", "ecartee", 5.0)]
+
+
+def test_ordre_a_trier_puis_a_verifier():
+    assert [o["id"] for o in cv.a_parcourir(OFFRES)] == ["t2", "t1", "v1"]
+    assert cv.a_parcourir(None) == []
+
+
+def test_carte_d_une_offre():
+    titre, lignes = cv.card(cv.a_parcourir(OFFRES), 1)
+    assert titre == "Offre 2 / 2 à trier · 3 / 5"
+    assert lignes == ["Poste t1 · ACME", "Bonne (apec)", "+ Adéquation : très bien", "- Niveau : senior"]
+    assert cv.card(cv.a_parcourir(OFFRES), 2)[0] == "Offre 1 / 1 à vérifier · 4 / 5"
+    assert cv.card([], 0)[0] == "Aucune offre à trier ni à vérifier"
+    assert cv.fmt_note(4.5) == "4,5" and cv.fmt_note(None) == "?"
+
+
+def test_carte_offre_incomplete():
+    titre, lignes = cv.card([{"id": "a", "etat": "a-trier"}], 0)
+    assert titre == "Offre 1 / 1 à trier · ? / 5" and lignes == ["Poste ? · entreprise ?"]
+
+
+def _liste(ouvert=None):
+    faux = FauxCvgen()
+    c = cv.Candidature(http=faux, launch=lambda: None, open_url=ouvert.append if ouvert is not None else None)
+    core = Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    return c, core, faux
+
+
+def test_liste_suivante_precedente():
+    c, core, _ = _liste()
+    assert c.state(0.0)["lines"][0] == "Poste t2 · ACME"
+    c.ask("suivante", 1.0)
+    assert c.state(1.0)["lines"][0] == "Poste t1 · ACME"
+    c.ask("précédente", 2.0)
+    c.ask("précédente", 2.0)                       # boucle : de la première à la dernière
+    assert c.state(2.0)["lines"][0] == "Poste v1 · ACME"
+
+
+def test_garde_et_ecarte_passent_par_cvgen():
+    c, core, faux = _liste()
+    c.ask("garde", 0.0)
+    st = _attendre(c, core)
+    assert ("PATCH", "/api/offres/t2", {"etat": "gardee"}) in faux.calls
+    assert "Gardée" in st["lines"][-1] and st["lines"][0] == "Poste t1 · ACME"   # la suivante vient d'elle-même
+    c.ask("écarte", 0.0)
+    _attendre(c, core)
+    assert ("PATCH", "/api/offres/t1", {"etat": "ecartee"}) in faux.calls
+    assert [o["id"] for o in c.offres] == ["v1"]
+
+
+def test_garde_une_offre_a_verifier_refusee():
+    c, core, faux = _liste()
+    c.i = 2
+    c.ask("garde", 0.0)
+    assert "Déjà gardée" in c.state(0.0)["lines"][-1] and not c.busy
+    assert not [x for x in faux.calls if x[0] == "PATCH"]
+
+
+def test_ouvre_l_offre_et_sans_lien():
+    ouvert = []
+    c, core, _ = _liste(ouvert)
+    c.ask("lien", 0.0)
+    assert ouvert == [] and "pas de lien" in c.state(0.0)["lines"][-1]   # t2 n'a pas de lien
+    c.ask("suivante", 0.0)
+    c.ask("lien", 0.0)
+    assert ouvert == ["https://exemple.fr/o"]
+
+
+def test_mots_de_liste_sans_liste():
+    c = cv.Candidature(http=FauxCvgen(), launch=lambda: None)
+    c.ask("garde", 0.0)
+    assert "dis « liste »" in c.state(0.0)["lines"][0] and not c.busy
+
+
+def test_liste_vide():
+    c = cv.Candidature(http=lambda m, p, b=None: [] if p == "/api/offres" else {}, launch=lambda: None)
+    c.ask("liste", 0.0)
+    st = _attendre(c, Core(Config()))
+    assert st["title"] == "Aucune offre à trier ni à vérifier"
+    c.ask("suivante", 0.0)
+    assert "dis « liste »" in c.state(0.0)["lines"][0]
+
+
+def test_garde_refusee_par_cvgen_garde_l_offre():
+    c, core, faux = _liste()
+    faux.refus = ("/api/offres/t2", "Offre inconnue")
+    c.ask("garde", 0.0)
+    st = _attendre(c, core)
+    assert st["lines"] == ["Offre inconnue"] and c.offres[0]["id"] == "t2"
+
+
+def test_derniere_offre_traitee():
+    c, core, faux = _liste()
+    for _ in range(3):
+        c.ask("écarte", 0.0)
+        _attendre(c, core)
+    assert c.state(0.0)["title"] == "Aucune offre à trier ni à vérifier" and c.offres == []
+
+
+def test_quitter_le_mode_ferme_la_liste():
+    c, core, _ = _liste()
+    c.actions([("cand_off",)], core, 0.0)
+    assert c.offres is None and c.state(0.0) is None
