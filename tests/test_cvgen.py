@@ -455,7 +455,7 @@ def test_bas_de_carte_selon_l_etape():
     assert cv.next_hint({"etat": "generee"}).startswith("« prépare »")
     assert "en cours" in cv.next_hint({"etat": "generee"}, preparing=True)
     pret = cv.next_hint({"etat": "generee"}, cv.PREP_STEPS["pret"])
-    assert "« montre »" in pret and "« lien »" in pret
+    assert "« lien »" in pret and "« postulé »" in pret
     assert "« lien »" in cv.next_hint({"etat": "generee", "preparation": {"etape": "pret"}})
     assert "« liste »" in cv.next_hint(None)
     for h in (cv.next_hint(None), pret):
@@ -466,4 +466,120 @@ def test_carte_apres_preparation_propose_la_suite():
     c, core, faux = _sur_v1()
     c.ask("prépare", 0.0)
     st = _fin_prep(c, core)
-    assert "« montre »" in st["meta"] and "« lien »" in st["meta"]
+    assert "« lien »" in st["meta"] and "« cv »" in st["meta"] and "« postulé »" in st["meta"]
+
+
+# ---- phase 4 : remplir le formulaire du site, un champ quand tu le demandes
+PROFIL = {"identity": {"prenom": "Ada", "nom": "Lovelace", "email": "ada@exemple.fr", "telephone": "06 00 00 00 00",
+                       "ville": "", "liens": [{"label": "github.com/ada", "url": "https://github.com/ada"}]}}
+
+
+class FauxDepot(FauxCvgen):
+    def __init__(self, en_cours=None, **kw):
+        super().__init__(**kw)
+        self.en_cours = en_cours if en_cours is not None else {"cv": "C:\\en-cours\\CV Ada.pdf", "lettre": None}
+
+    def __call__(self, method, path, body=None):
+        if path == "/api/profile":
+            self.calls.append((method, path))
+            return PROFIL
+        if path.endswith("/en-cours"):
+            self.calls.append((method, path, body))
+            if self.refus and path == self.refus[0]:
+                raise cv.CvgenError(self.refus[1])
+            return self.en_cours
+        return super().__call__(method, path, body)
+
+
+def test_valeurs_du_profil():
+    assert cv.profile_value(PROFIL, "mail") == "ada@exemple.fr"
+    assert cv.profile_value(PROFIL, "github") == "https://github.com/ada"
+    assert cv.profile_value(PROFIL, "ville") is None              # vide : rien n'est écrit
+    assert cv.profile_value(PROFIL, "linkedin") is None
+    assert cv.profile_value(None, "nom") is None
+
+
+def _depot(fg="Chrome_WidgetWin_1", **kw):
+    ecrit = []
+    faux = FauxDepot(**kw)
+    c = cv.Candidature(http=faux, launch=lambda: None, typer=lambda s, enter=False: ecrit.append((s, enter)),
+                       fg_class=lambda: fg)
+    c.sleep = lambda s: None
+    core = Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    c.i = 2                                        # v1 : CV prêt
+    return c, core, faux, ecrit
+
+
+def test_champ_ecrit_a_la_demande():
+    c, core, faux, ecrit = _depot()
+    c.ask("mail", 0.0)
+    _attendre(c, core)
+    assert ecrit == [("ada@exemple.fr", False)]
+    c.ask("téléphone", 0.0)
+    _attendre(c, core)
+    assert ecrit[-1] == ("06 00 00 00 00", False)
+
+
+def test_champ_absent_du_profil():
+    c, core, faux, ecrit = _depot()
+    c.ask("linkedin", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [] and "absent de ton profil" in st["lines"][0]
+
+
+def test_champ_sans_liste_marche_aussi():
+    ecrit = []
+    c = cv.Candidature(http=FauxDepot(), launch=lambda: None, typer=lambda s, enter=False: ecrit.append(s))
+    c.ask("prénom", 0.0)
+    _attendre(c, Core(Config()))
+    assert ecrit == ["Ada"]
+
+
+def test_cv_dans_la_fenetre_choisir_un_fichier():
+    c, core, faux, ecrit = _depot(fg=cv.FILE_DIALOG)
+    c.ask("cv", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [("C:\\en-cours\\CV Ada.pdf", True)] and st["lines"][-1] == "CV joint"
+    c.ask("cv", 0.0)                                # chemin déjà connu : pas de nouvel appel
+    assert len([x for x in faux.calls if x[1].endswith("/en-cours")]) == 1 and len(ecrit) == 2
+
+
+def test_cv_sans_fenetre_de_fichier():
+    c, core, faux, ecrit = _depot()
+    c.ask("cv", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [] and "Choisir un fichier" in st["lines"][-1]
+
+
+def test_lettre_absente():
+    c, core, faux, ecrit = _depot(fg=cv.FILE_DIALOG)
+    c.ask("lettre", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [] and "dis « prépare » d'abord" in st["lines"][-1]
+
+
+def test_pdf_pas_encore_prepares():
+    c, core, faux, ecrit = _depot(fg=cv.FILE_DIALOG)
+    faux.refus = ("/api/offres/v1/en-cours", "Le dossier n'a pas encore été préparé")
+    c.ask("cv", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [] and st["lines"] == ["Le dossier n'a pas encore été préparé"]
+
+
+def test_cv_offre_sans_cv():
+    c, core, faux, ecrit = _depot(fg=cv.FILE_DIALOG)
+    c.i = 0                                        # t2 : à trier
+    for w in ("cv", "postulé"):
+        c.ask(w, 0.0)
+        assert "dis « garde » d'abord" in c.state(0.0)["lines"][-1]
+    assert ecrit == [] and not [x for x in faux.calls if x[0] == "PATCH"]
+
+
+def test_postule_note_la_candidature():
+    c, core, faux, ecrit = _depot()
+    c.ask("postulé", 0.0)
+    st = _attendre(c, core)
+    assert ("PATCH", "/api/offres/v1", {"etat": "postulee"}) in faux.calls
+    assert "postulée" in st["lines"][-1] and "v1" not in [o["id"] for o in c.offres]
