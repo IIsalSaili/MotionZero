@@ -1,0 +1,430 @@
+"""« iris instruction » (#45) : une phrase libre -> Whisper -> modèle local (Ollama) -> plan d'actions d'Iris.
+
+Le modèle ne fait rien lui-même : il choisit dans un catalogue FERMÉ d'outils écrits ici. Le plan est vérifié
+(outil connu, argument valide), affiché en haut de l'écran, et exécuté seulement après « envoie ».
+« annule » l'abandonne ; « stop » arrête un plan en cours entre deux étapes.
+
+Fils : la transcription et le modèle tournent dans le fil « instruction », l'exécution dans « instruction-exec ».
+Ils ne rendent compte que par la queue `_q`, lue par events() dans la boucle principale (jamais Core ailleurs).
+"""
+import json
+import logging
+import os
+import queue
+import re
+import subprocess
+import threading
+import time
+import urllib.parse
+import urllib.request
+
+log = logging.getLogger("motionzero.instruction")
+
+MODEL = "qwen3:4b"
+OLLAMA = "http://127.0.0.1:11434"
+KEEP_ALIVE = "5m"          # modèle déchargé de la carte graphique après 5 min sans instruction
+LLM_TIMEOUT_S = 60
+CONFIRM_S = 30.0           # temps pour lire le plan et dire « envoie »
+MAX_STEPS = 8
+STEP_PAUSE_S = 0.8         # entre deux étapes : la fenêtre ouverte a le temps de passer devant
+SHOW_DONE_S = 8.0          # le compte rendu reste affiché ce temps
+UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+      "Chrome/140.0 Safari/537.36")
+
+KEY_NAMES = {"entree": "enter", "entrée": "enter", "echap": "escape", "échap": "escape", "espace": "space",
+             "tab": "tab", "haut": "up", "bas": "down", "gauche": "left", "droite": "right",
+             "retour": "backspace", "ctrl": "ctrl", "alt": "alt", "maj": "shift", "shift": "shift", "win": "win"}
+
+# outil -> description pour le modèle. L'argument est toujours une chaîne (vide si inutile).
+TOOLS = {
+    "ouvre_app": "ouvre une application installée (arg : son nom, ex. « chrome », « discord », « word »)",
+    "ferme_app": "ferme une application (arg : son nom)",
+    "site": "ouvre une adresse web dans le navigateur (arg : l'adresse, ex. « youtube.com »)",
+    "recherche_web": "ouvre une recherche Google dans le navigateur (arg : les mots cherchés)",
+    "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche)",
+    "youtube_chaine": "ouvre directement la dernière vidéo publiée par une chaîne YouTube (arg : le nom de la chaîne)",
+    "touche": "appuie sur une touche ou un raccourci (arg : ex. « entrée », « ctrl+t », « alt+tab », « f5 »)",
+    "ecris": "écrit un texte là où se trouve le curseur (arg : le texte)",
+    "volume": "règle le son du PC (arg : « 40 », « plus fort », « moins fort », « coupe », « remets »)",
+    "discord": "micro Discord (arg : « coupe », « allume » ou « sourdine »)",
+    "timer": "lance un compte à rebours (arg : la durée, ex. « 5 minutes »)",
+    "rappel": "crée un rappel, à valider ensuite (arg : la demande, ex. « demain 9 h appeler le médecin »)",
+    "traducteur": "allume ou éteint les sous-titres traduits du son du PC (arg vide)",
+    "attends": "attend quelques secondes (arg : nombre de secondes, 10 au plus)",
+}
+
+SYSTEM = (
+    "Tu transformes une demande orale (transcrite, donc parfois approximative) en plan d'actions pour Iris, "
+    "l'assistant d'un utilisateur qui ne peut pas se servir de ses mains. Tu ne peux utiliser QUE ces outils :\n"
+    + "\n".join(f"- {k} : {v}" for k, v in TOOLS.items()) +
+    "\nRègles :\n"
+    "- Pour une vidéo YouTube, utilise youtube ou youtube_chaine directement (ils ouvrent eux-mêmes le navigateur) : "
+    "jamais ouvrir Chrome puis taper dans la barre.\n"
+    "- Le moins d'étapes possible, " + str(MAX_STEPS) + " au plus.\n"
+    "- Si la demande est impossible avec ces outils, ou dangereuse, ou incompréhensible : étapes vides et "
+    "explique en une courte phrase dans « refus ».\n"
+    "- N'invente aucun outil. Réponds uniquement par le JSON demandé."
+)
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "etapes": {"type": "array", "maxItems": MAX_STEPS, "items": {
+            "type": "object",
+            "properties": {"outil": {"type": "string", "enum": list(TOOLS)}, "arg": {"type": "string"}},
+            "required": ["outil", "arg"]}},
+        "refus": {"type": "string"},
+    },
+    "required": ["etapes", "refus"],
+}
+
+
+class PlanError(Exception):
+    """Plan refusé : le message est montré tel quel."""
+
+
+# ---------------------------------------------------------------- modèle local
+def _http(url, data=None, timeout=5):
+    body = None if data is None else json.dumps(data).encode()
+    req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def ensure_ollama(wait_s=15.0):
+    """Ollama répond ? Sinon le lance (sans fenêtre) et attend. False s'il est introuvable."""
+    try:
+        _http(OLLAMA + "/api/version", timeout=2)
+        return True
+    except Exception:
+        pass
+    try:
+        subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
+                         | getattr(subprocess, "DETACHED_PROCESS", 0))
+    except OSError:
+        log.exception("ollama introuvable")
+        return False
+    end = time.time() + wait_s
+    while time.time() < end:
+        time.sleep(0.5)
+        try:
+            _http(OLLAMA + "/api/version", timeout=2)
+            return True
+        except Exception:
+            continue
+    return False
+
+
+def ask_local(phrase):
+    """Plan brut (dict) du modèle local pour la phrase. Lève RuntimeError si le modèle est indisponible."""
+    if not ensure_ollama():
+        raise RuntimeError("modèle local indisponible (Ollama)")
+    try:
+        out = _http(OLLAMA + "/api/chat", {
+            "model": MODEL, "stream": False, "think": False, "keep_alive": KEEP_ALIVE, "format": SCHEMA,
+            "options": {"temperature": 0},
+            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": phrase}],
+        }, timeout=LLM_TIMEOUT_S)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise RuntimeError(f"modèle {MODEL} absent (ollama pull {MODEL})") from exc
+        raise RuntimeError(f"modèle local en erreur ({exc.code})") from exc
+    except Exception as exc:
+        raise RuntimeError("modèle local injoignable") from exc
+    return json.loads(out["message"]["content"])
+
+
+# ---------------------------------------------------------------- plan : vérification (pur, testable)
+def parse_keys(arg):
+    """« ctrl+t » -> ["ctrl", "t"] ; None si une touche est inconnue."""
+    from .output import VK
+    keys = []
+    for k in re.split(r"\s*\+\s*", arg.strip().lower()):
+        k = KEY_NAMES.get(k, k)
+        if k not in VK:
+            return None
+        keys.append(k)
+    return keys or None
+
+
+def normalize_url(arg):
+    u = arg.strip().strip(".")
+    if not u or " " in u or "." not in u:
+        return None
+    if not re.match(r"^https?://", u):
+        u = "https://" + u
+    return u if urllib.parse.urlparse(u).scheme in ("http", "https") else None
+
+
+def check_step(outil, arg, app_names=None):
+    """(outil, argument préparé, libellé) ou PlanError. app_names : applis connues (None : pas vérifié)."""
+    arg = (arg or "").strip()
+    if outil not in TOOLS:
+        raise PlanError(f"outil inconnu : {outil}")
+    if outil in ("ouvre_app", "ferme_app"):
+        if not arg:
+            raise PlanError("appli sans nom")
+        name = arg
+        if app_names is not None:
+            from .apps import best_match
+            name = best_match(arg, app_names)
+            if not name:
+                raise PlanError(f"appli introuvable : {arg}")
+        return outil, name, ("Ouvrir " if outil == "ouvre_app" else "Fermer ") + name
+    if outil == "site":
+        url = normalize_url(arg)
+        if url is None:
+            raise PlanError(f"adresse invalide : {arg}")
+        return outil, url, f"Ouvrir {url}"
+    if outil in ("recherche_web", "youtube", "youtube_chaine", "rappel"):
+        if not arg:
+            raise PlanError(f"{outil} sans texte")
+        return outil, arg, {"recherche_web": f"Rechercher « {arg} » sur Google",
+                            "youtube": f"YouTube : 1re vidéo pour « {arg} »",
+                            "youtube_chaine": f"YouTube : dernière vidéo de « {arg} »",
+                            "rappel": f"Rappel « {arg} » (à valider)"}[outil]
+    if outil == "touche":
+        keys = parse_keys(arg)
+        if keys is None:
+            raise PlanError(f"touche inconnue : {arg}")
+        return outil, keys, "Touche " + "+".join(keys)
+    if outil == "ecris":
+        if not arg:
+            raise PlanError("rien à écrire")
+        return outil, arg, f"Écrire « {arg} »"
+    if outil == "volume":
+        from .volume import parse_volume
+        cmd = parse_volume(arg)
+        if cmd is None:
+            raise PlanError(f"volume incompris : {arg}")
+        return outil, cmd, f"Volume : {arg}"
+    if outil == "discord":
+        act = {"coupe": "discord_mute", "allume": "discord_unmute", "sourdine": "discord_deafen"}.get(arg.lower())
+        if act is None:
+            raise PlanError(f"discord : {arg} ?")
+        return outil, act, f"Discord : {arg.lower()}"
+    if outil == "timer":
+        from .timers import parse_duration
+        if not parse_duration(arg):
+            raise PlanError(f"durée incomprise : {arg}")
+        return outil, arg, f"Timer {arg}"
+    if outil == "traducteur":
+        return outil, "", "Traducteur (allume / éteint)"
+    # attends
+    try:
+        s = float(arg.replace(",", ".").split()[0])
+    except (ValueError, IndexError):
+        raise PlanError(f"attente incomprise : {arg}") from None
+    s = max(0.5, min(10.0, s))
+    return outil, s, f"Attendre {s:g} s"
+
+
+def check_plan(raw, app_names=None):
+    """Plan du modèle -> [(outil, arg, libellé)] ; PlanError (refus du modèle compris)."""
+    if not isinstance(raw, dict):
+        raise PlanError("réponse illisible")
+    steps = raw.get("etapes") or []
+    if not steps:
+        raise PlanError((raw.get("refus") or "rien à faire").strip())
+    if len(steps) > MAX_STEPS:
+        raise PlanError("plan trop long")
+    return [check_step(s.get("outil"), s.get("arg"), app_names) for s in steps if isinstance(s, dict)]
+
+
+# ---------------------------------------------------------------- YouTube sans navigateur ni clic
+def _get(url):
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "fr-FR",
+                                               "Cookie": "SOCS=CAI; CONSENT=YES+1"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return r.read().decode("utf-8", "replace")
+
+
+def first_video_id(html):
+    m = re.search(r'"videoId":"([\w-]{11})"', html)
+    return m.group(1) if m else None
+
+
+def youtube_first(query, get=_get):
+    vid = first_video_id(get("https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)))
+    if not vid:
+        raise RuntimeError("aucune vidéo trouvée")
+    return "https://www.youtube.com/watch?v=" + vid
+
+
+def youtube_latest(channel, get=_get):
+    html = get("https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(channel))
+    m = re.search(r'"canonicalBaseUrl":"(/@[^"]+)"', html)
+    if not m:
+        raise RuntimeError("chaîne introuvable")
+    vid = first_video_id(get("https://www.youtube.com" + m.group(1) + "/videos"))
+    if not vid:
+        raise RuntimeError("aucune vidéo sur la chaîne")
+    return "https://www.youtube.com/watch?v=" + vid
+
+
+# ---------------------------------------------------------------- orchestration
+class Instructeur:
+    """submit(audio) depuis la boucle ; events / actions / state appelés par la boucle principale seulement."""
+
+    def __init__(self, transcribe, launcher=None, desk=None, ask=ask_local, open_url=None, runner=None):
+        self.transcribe, self.launcher, self.desk, self.ask = transcribe, launcher, desk, ask
+        self.open_url = open_url or os.startfile
+        self.runner = runner or self._run_tool
+        self._q = queue.Queue()
+        self.phrase = ""
+        self.plan = None          # [(outil, arg, libellé)] en attente d'« envoie »
+        self.lines = None         # lignes de la carte en haut
+        self.title = ""
+        self.show_until = -1e9
+        self.busy = False         # un plan s'exécute
+        self._cancel = threading.Event()
+
+    # ---- fil « instruction » : Whisper puis modèle ----
+    def submit(self, audio):
+        threading.Thread(target=self._think, args=(audio,), name="instruction", daemon=True).start()
+
+    def _think(self, audio):
+        try:
+            phrase = (self.transcribe(audio) or "").strip(" .")
+        except Exception:
+            log.exception("transcription instruction")
+            phrase = ""
+        if not phrase:
+            self._q.put(("error", "", "rien entendu"))
+            return
+        try:
+            raw = self.ask(phrase)
+            names = self.launcher.all if self.launcher is not None and self.launcher.all else None
+            plan = check_plan(raw, names)
+        except PlanError as e:
+            log.info("instruction refusee : %s -> %s", phrase, e)
+            self._q.put(("error", phrase, str(e)))
+            return
+        except Exception as e:
+            log.exception("instruction : modele")
+            self._q.put(("error", phrase, str(e) if isinstance(e, RuntimeError) else "réponse du modèle illisible"))
+            return
+        log.info("instruction : %s -> %s", phrase, [lbl for _, _, lbl in plan])
+        self._q.put(("plan", phrase, plan))
+
+    # ---- fil « instruction-exec » ----
+    def _execute(self, plan):
+        for i, (outil, arg, label) in enumerate(plan):
+            if self._cancel.is_set():
+                self._q.put(("step", i, "arrêté"))
+                break
+            self._q.put(("step", i, "en cours"))
+            try:
+                self.runner(outil, arg)
+                self._q.put(("step", i, "fait"))
+            except Exception as e:
+                log.exception("instruction : etape %s", label)
+                self._q.put(("step", i, f"échec ({str(e)[:40]})"))
+                self._q.put(("done", False, None))
+                return
+            if i < len(plan) - 1:
+                time.sleep(STEP_PAUSE_S)
+        self._q.put(("done", not self._cancel.is_set(), None))
+
+    def _run_tool(self, outil, arg):
+        if outil in ("ouvre_app", "ferme_app"):
+            from .apps import close_entry, open_entry
+            appid = self.launcher.all.get(arg) if self.launcher is not None else None
+            err = (open_entry if outil == "ouvre_app" else close_entry)(arg, appid)
+            if err:
+                raise RuntimeError(err)
+        elif outil == "site":
+            self.open_url(arg)
+        elif outil == "recherche_web":
+            self.open_url("https://www.google.com/search?q=" + urllib.parse.quote_plus(arg))
+        elif outil == "youtube":
+            self.open_url(youtube_first(arg))
+        elif outil == "youtube_chaine":
+            self.open_url(youtube_latest(arg))
+        elif outil == "touche":
+            from .output import VK
+            from .typer import _key, _send_inputs
+            vks = [VK[k] for k in arg]
+            _send_inputs([_key(v, False) for v in vks] + [_key(v, True) for v in reversed(vks)])
+        elif outil == "ecris":
+            from .typer import type_text
+            type_text(arg)
+        elif outil == "volume":
+            from .volume import WindowsVolume
+            WindowsVolume().apply(arg)
+        elif outil == "timer":
+            self.desk.submit_timer(arg)        # texte au lieu du son : Asker._transcribe le rend tel quel
+        elif outil == "rappel":
+            self.desk.submit(arg)              # le rappel demande ensuite son propre « envoie »
+        elif outil in ("discord", "traducteur"):
+            self._q.put(("main", outil, arg))  # état tenu par la boucle principale
+        elif outil == "attends":
+            time.sleep(arg)
+
+    # ---- boucle principale ----
+    def events(self, core, t):
+        """Résultats des fils ; renvoie les actions à faire par la boucle (Discord…)."""
+        acts = []
+        while True:
+            try:
+                msg = self._q.get_nowait()
+            except queue.Empty:
+                break
+            kind = msg[0]
+            if kind == "error":
+                self.plan, self.title = None, "INSTRUCTION IMPOSSIBLE"
+                self.lines = ([f"« {msg[1]} »"] if msg[1] else []) + [msg[2]]
+                self.show_until = t + SHOW_DONE_S
+                core.last_gesture = (f"INSTRUCTION : {msg[2]}".upper()[:60], t)
+            elif kind == "plan":
+                self.phrase, self.plan = msg[1], msg[2]
+                self.title = "INSTRUCTION : dis ENVOIE pour faire"
+                self.lines = [f"{i + 1}. {lbl}" for i, (_, _, lbl) in enumerate(self.plan)]
+                self.show_until = t + CONFIRM_S
+                core.ask_confirm("instruction", t, CONFIRM_S)
+            elif kind == "step":
+                i, status = msg[1], msg[2]
+                if self.lines and i < len(self.lines):
+                    base = self.lines[i].split(" — ")[0]
+                    self.lines[i] = f"{base} — {status}"
+                self.show_until = t + SHOW_DONE_S
+            elif kind == "done":
+                self.busy = False
+                self.title = "INSTRUCTION FAITE" if msg[1] else "INSTRUCTION INTERROMPUE"
+                self.show_until = t + SHOW_DONE_S
+            elif kind == "main":
+                if msg[1] == "discord":
+                    acts.append((msg[2],))
+                elif msg[1] == "traducteur":
+                    core._cmd_translator("traducteur", t, acts)
+        if self.plan is not None and not core.confirming(t) and not self.busy and t >= self.show_until:
+            self.plan = None                   # pas de réponse : plan abandonné
+        return acts
+
+    def actions(self, acts, core, t):
+        rest = []
+        for a in acts:
+            if a[0] == "instruction_ok":
+                if self.plan is None or self.busy:
+                    continue
+                plan, self.plan = self.plan, None
+                self.busy = True
+                self.title = "INSTRUCTION EN COURS"
+                self._cancel = threading.Event()
+                threading.Thread(target=self._execute, args=(plan,), name="instruction-exec", daemon=True).start()
+                core.last_gesture = ("INSTRUCTION LANCEE", t)
+            elif a[0] == "instruction_non":
+                self.plan, self.lines = None, None
+                core.last_gesture = ("INSTRUCTION ABANDONNEE", t)
+            else:
+                if a[0] == "release_all" and self.busy:   # « stop » : arrêt entre deux étapes
+                    self._cancel.set()
+                rest.append(a)
+        return rest
+
+    def state(self, t):
+        """Carte du haut : None ou {"title", "lines"}."""
+        if self.lines is None or (t >= self.show_until and not self.busy and self.plan is None):
+            return None
+        return {"title": self.title, "lines": list(self.lines)}

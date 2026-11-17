@@ -105,6 +105,7 @@ WORDS = {
     "pars": "pars",       # « iris pars » : il quitte le vocal
     "volume": "volume",   # « iris volume » puis « 40 », « plus fort », « coupe »… (Whisper)
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
+    "instruction": "instruction",  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
     "stop": "stop",
 }
 

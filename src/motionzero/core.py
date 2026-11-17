@@ -95,11 +95,11 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop", "timer": "timer_stop",
-             "volume": "volume_stop"}
+             "volume": "volume_stop", "instruction": "instruction_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
              "rappel": "RAPPEL : Iris reflechit…", "timer": "TIMER : je lis la duree…",
-             "volume": "VOLUME : je regle…"}
+             "volume": "VOLUME : je regle…", "instruction": "INSTRUCTION : Iris reflechit…"}
 
 
 # « iris + mot » sans état : une action, et un libellé (None = celui de VOICE_LABELS)
@@ -125,6 +125,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
+            "instruction": "listen",   # « iris instruction » puis une demande libre (#45)
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
@@ -632,6 +633,10 @@ class Core:
         elif self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
             # aucun verrou : toutes les autres commandes « iris + … » restent utilisables
             return self._confirm(word, t)
+        elif self.confirm_kind == "instruction" and word in ("envoie", "envoyé", "annule"):
+            self.confirm_until = -1e9
+            self.last_word = (word, t, True)
+            return [("instruction_non",)] if word == "annule" else [("instruction_ok",)]
         elif self.confirm_kind == "rappel" and word in ("envoie", "annule"):
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
@@ -1178,7 +1183,7 @@ class Core:
         close = kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
         # un message est une phrase : même silence que la dictée ; un nom (appli, salon) est court
-        silence = c.type_silence_s if kind in ("message", "rappel") else c.open_silence_s
+        silence = c.type_silence_s if kind in ("message", "rappel", "instruction") else c.open_silence_s
         if spoke and t - last_speech_t >= silence:
             self.opening = False
             self.last_gesture = (OPEN_WAIT[kind], t)
@@ -1190,7 +1195,8 @@ class Core:
                                       "salon": "RIEN ENTENDU : salon annule",
                                       "rappel": "RIEN ENTENDU : rappel annule",
                                       "timer": "RIEN ENTENDU : timer annule",
-                                      "volume": "RIEN ENTENDU : volume inchange"}[kind], t)
+                                      "volume": "RIEN ENTENDU : volume inchange",
+                                      "instruction": "RIEN ENTENDU : instruction annulee"}[kind], t)
             return [("open_cancel",)]
         return []
 

@@ -851,6 +851,8 @@ def reminder_view(st):
     rem = st.get("reminders") or {}
     if rem.get("current"):
         return "current", rem["current"]
+    if st.get("plan"):                       # « iris instruction » : ce qu'Iris va faire, avant de le faire
+        return "plan", st["plan"]
     if rem.get("calendar"):
         return "calendar", rem["calendar"]
     if rem.get("list"):
@@ -862,6 +864,8 @@ def reminder_texts(kind, data):
     """(titre, texte, ligne du bas) de la carte des rappels. Pur : testable."""
     if kind == "list":
         return ("RAPPELS À VENIR", "\n".join(data), "« Iris rappel » pour en ajouter ou en supprimer")
+    if kind == "plan":
+        return (data["title"], "\n".join(data["lines"]), "« envoie » : faire · « annule » : abandonner · « stop » : arrêter")
     title = ("ALARME" if data.get("alarm") else "RAPPEL") + (" MANQUÉ" if data.get("missed") else "")
     title += f" · {data.get('when', '')}"
     meta = "« Iris merci » : noté · « Iris plus tard » : +10 min"

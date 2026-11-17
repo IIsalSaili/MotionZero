@@ -1,0 +1,222 @@
+"""« iris instruction » (#45) : plan vérifié, affiché, exécuté après « envoie » ; échecs."""
+import time
+from types import SimpleNamespace
+
+import pytest
+
+from motionzero import instruction as ins
+from motionzero.instruction import Instructeur, PlanError, check_plan, check_step
+from motionzero.ui import reminder_texts, reminder_view
+
+
+class FakeCore:
+    def __init__(self):
+        self.confirm_until, self.confirm_kind, self.last_gesture = -1e9, None, None
+        self.cmds = []
+
+    def ask_confirm(self, kind, t, s):
+        self.confirm_kind, self.confirm_until = kind, t + s
+
+    def confirming(self, t):
+        return t < self.confirm_until
+
+    def _cmd_translator(self, word, t, acts):
+        self.cmds.append(word)
+        acts.append(("traducteur", True))
+
+
+def _pump(instr, core, t, until, timeout=2.0):
+    end = time.time() + timeout
+    acts = []
+    while time.time() < end:
+        acts += instr.events(core, t)
+        if until():
+            return acts
+        time.sleep(0.01)
+    raise AssertionError("delai depasse")
+
+
+def _instr(raw, ran=None, transcribe=lambda a: "ouvre la derniere video de one click studio", **kw):
+    ran = ran if ran is not None else []
+    return Instructeur(transcribe, ask=lambda phrase: raw,
+                       runner=lambda outil, arg: ran.append((outil, arg)), **kw), ran
+
+
+PLAN = {"etapes": [{"outil": "youtube_chaine", "arg": "One Click Studio"},
+                   {"outil": "touche", "arg": "f"}], "refus": ""}
+
+
+# ---- vérification du plan
+def test_plan_valide_et_libelles():
+    plan = check_plan(PLAN)
+    assert [o for o, _, _ in plan] == ["youtube_chaine", "touche"]
+    assert plan[1][1] == ["f"] and "One Click Studio" in plan[0][2]
+
+
+@pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("touche", "ctrl+bidule"), ("site", "pas une url"),
+                                       ("volume", "beaucoup"), ("discord", "danse"), ("timer", "bientôt"),
+                                       ("ecris", ""), ("attends", "longtemps"), ("ouvre_app", "")])
+def test_etape_refusee(outil, arg):
+    with pytest.raises(PlanError):
+        check_step(outil, arg)
+
+
+def test_refus_du_modele_et_plan_trop_long():
+    with pytest.raises(PlanError, match="impossible"):
+        check_plan({"etapes": [], "refus": "impossible avec mes outils"})
+    with pytest.raises(PlanError):
+        check_plan({"etapes": [{"outil": "touche", "arg": "f"}] * (ins.MAX_STEPS + 1), "refus": ""})
+    with pytest.raises(PlanError):
+        check_plan("pas un dict")
+
+
+def test_appli_inconnue_refusee_et_connue_resolue():
+    apps = {"Google Chrome": "id1", "Discord": "id2"}
+    assert check_step("ouvre_app", "chrome", apps)[1] == "Google Chrome"
+    with pytest.raises(PlanError):
+        check_step("ouvre_app", "zzzqqq", apps)
+
+
+def test_touches_et_adresse():
+    assert check_step("touche", "ctrl + t")[1] == ["ctrl", "t"]
+    assert check_step("touche", "entrée")[1] == ["enter"]
+    assert check_step("site", "youtube.com")[1] == "https://youtube.com"
+    assert check_step("attends", "60")[1] == 10.0
+
+
+# ---- YouTube sans clic
+def test_youtube_derniere_video_de_la_chaine():
+    pages = {"results": '"canonicalBaseUrl":"/@oneclick"', "/@oneclick/videos": '"videoId":"D93YJMy5fPE"'}
+    get = lambda url: next(v for k, v in pages.items() if k in url)
+    assert ins.youtube_latest("One Click Studio", get) == "https://www.youtube.com/watch?v=D93YJMy5fPE"
+    with pytest.raises(RuntimeError):
+        ins.youtube_latest("x", lambda url: "rien")
+    with pytest.raises(RuntimeError):
+        ins.youtube_first("x", lambda url: "rien")
+
+
+# ---- flux complet : affiché, rien fait avant « envoie »
+def test_plan_affiche_puis_execute_apres_envoie():
+    instr, ran = _instr(PLAN)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    assert ran == []                                         # rien fait avant la confirmation
+    assert core.confirm_kind == "instruction" and core.confirming(1.0)
+    st = instr.state(1.0)
+    assert st["lines"][0].startswith("1. YouTube") and "ENVOIE" in st["title"]
+    assert reminder_view({"plan": st})[0] == "plan"
+    assert "envoie" in reminder_texts("plan", st)[2]
+    rest = instr.actions([("instruction_ok",), ("autre",)], core, 1.0)
+    assert rest == [("autre",)]
+    _pump(instr, core, 2.0, lambda: not instr.busy)
+    assert [o for o, _ in ran] == ["youtube_chaine", "touche"]
+    assert instr.title == "INSTRUCTION FAITE" and all("fait" in l for l in instr.state(2.0)["lines"])
+
+
+def test_annule_rien_n_est_fait():
+    instr, ran = _instr(PLAN)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("instruction_non",)], core, 1.0)
+    instr.actions([("instruction_ok",)], core, 1.1)          # « envoie » trop tard : plus rien en attente
+    time.sleep(0.05)
+    assert ran == [] and instr.state(1.2) is None
+
+
+def test_plan_expire_sans_reponse():
+    instr, ran = _instr(PLAN)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.events(core, ins.CONFIRM_S + 1)
+    assert instr.plan is None and instr.state(ins.CONFIRM_S + 1) is None
+
+
+def test_rien_entendu():
+    instr, _ = _instr(PLAN, transcribe=lambda a: "  ")
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.lines is not None)
+    assert "rien entendu" in instr.lines and core.confirm_kind is None
+
+
+def test_modele_indisponible():
+    def down(phrase):
+        raise RuntimeError("modèle local indisponible (Ollama)")
+    instr = Instructeur(lambda a: "fais un truc", ask=down, runner=lambda o, a: None)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.lines is not None)
+    assert "Ollama" in instr.lines[-1] and instr.title == "INSTRUCTION IMPOSSIBLE"
+
+
+def test_reponse_illisible_et_whisper_en_panne():
+    def boom(a):
+        raise RuntimeError("CUDA")
+    for instr in (Instructeur(lambda a: "x", ask=lambda p: (_ for _ in ()).throw(ValueError("json"))),
+                  Instructeur(boom, ask=lambda p: PLAN)):
+        core = FakeCore()
+        instr.submit(b"")
+        _pump(instr, core, 0.0, lambda: instr.lines is not None)
+        assert instr.plan is None
+
+
+def test_etape_en_echec_arrete_la_suite():
+    calls = []
+
+    def runner(outil, arg):
+        calls.append(outil)
+        raise RuntimeError("aucune vidéo trouvée")
+    instr = Instructeur(lambda a: "x", ask=lambda p: PLAN, runner=runner)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("instruction_ok",)], core, 1.0)
+    _pump(instr, core, 2.0, lambda: not instr.busy)
+    assert calls == ["youtube_chaine"] and "échec" in instr.lines[0]
+
+
+def test_stop_arrete_entre_deux_etapes(monkeypatch):
+    monkeypatch.setattr(ins, "STEP_PAUSE_S", 0.3)
+    instr, ran = _instr(PLAN)
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("instruction_ok",)], core, 1.0)
+    _pump(instr, core, 1.0, lambda: len(ran) == 1)
+    assert instr.actions([("release_all",)], core, 1.1) == [("release_all",)]   # « stop » garde son effet
+    _pump(instr, core, 2.0, lambda: not instr.busy)
+    assert len(ran) == 1 and instr.title == "INSTRUCTION INTERROMPUE"
+
+
+def test_discord_et_traducteur_par_la_boucle_principale():
+    raw = {"etapes": [{"outil": "discord", "arg": "coupe"}, {"outil": "traducteur", "arg": ""}], "refus": ""}
+    instr = Instructeur(lambda a: "x", ask=lambda p: raw)
+    instr.open_url = None
+    core = FakeCore()
+    instr.submit(b"")
+    _pump(instr, core, 0.0, lambda: instr.plan is not None)
+    instr.actions([("instruction_ok",)], core, 1.0)
+    acts = _pump(instr, core, 2.0, lambda: not instr.busy)
+    acts += instr.events(core, 2.1)
+    assert ("discord_mute",) in acts and core.cmds == ["traducteur"]
+
+
+# ---- Core : écoute de la phrase et confirmation
+def test_core_instruction_ecoute_puis_confirmation():
+    from motionzero.core import COMMANDS, OPEN_STOP
+    from motionzero.voice import GRAMMAR, WORDS
+    assert COMMANDS["instruction"] == "listen" and OPEN_STOP["instruction"] == "instruction_stop"
+    assert WORDS["instruction"] == "instruction" and '"instruction"' in GRAMMAR
+
+
+def test_core_envoie_annule():
+    from motionzero.core import Core
+    core = Core.__new__(Core)
+    core.confirm_until, core.confirm_kind, core.type_erase_until = 10.0, "instruction", -1e9
+    assert core._v_confirm("envoie", 1.0, 1.0, []) == [("instruction_ok",)]
+    core.confirm_until = 10.0
+    assert core._v_confirm("annule", 2.0, 2.0, []) == [("instruction_non",)]
+    assert not core.confirming(3.0)

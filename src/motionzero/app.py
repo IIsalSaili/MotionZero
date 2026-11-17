@@ -366,6 +366,8 @@ class Engine:
             acts += core.front_app(foreground_exe(), t)
         acts += bot_events(d.bot, core, d.speaker, d.discord_voice, t, d.listener)
         d.desk.events(core, t)
+        if getattr(d, "instructeur", None) is not None:
+            acts += d.instructeur.events(core, t)   # « iris instruction » : plan prêt, étapes, Discord
         return acts
 
     # --- 3. voix ---
@@ -452,7 +454,10 @@ class Engine:
                                               # de 1,5 à 3 s attendus APRÈS la dictée, après 10 min sans usage)
             acts = question_actions(acts, d.listener, d.asker)
             acts = type_actions(acts, d.listener, d.typer, d.sounds)
-            acts = open_actions(acts, d.listener, d.launcher, d.asker, d.bot, d.app_message, d.desk)
+            acts = open_actions(acts, d.listener, d.launcher, d.asker, d.bot, d.app_message, d.desk,
+                                getattr(d, "instructeur", None))
+        if getattr(d, "instructeur", None) is not None:
+            acts = d.instructeur.actions(acts, d.core, t)
         acts = d.desk.actions(acts, d.core, t)
         acts = discord_actions(acts, d.speaker)
         acts = power_actions(acts)
@@ -552,6 +557,7 @@ class Engine:
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
             "quota": self._quota(t),
             "subs": d.traducteur.snapshot() if getattr(d, "traducteur", None) is not None else None,
+            "plan": d.instructeur.state(t) if getattr(d, "instructeur", None) is not None else None,
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 
@@ -682,6 +688,8 @@ def main(argv=None):
     desk = Desk(Reminders(os.path.join(ROOT, "reminders.json")).load(datetime.datetime.now()),
                 None, sounds, bot, ask=lambda q: ask_claude(q, system=PARSE_SYSTEM),   # rappels sans voix (12/11)
                 transcribe=lambda audio: asker._transcribe(audio, 16000))
+    from .instruction import Instructeur        # « iris instruction » -> Whisper -> modèle local -> plan (#45)
+    instructeur = Instructeur(lambda audio: asker._transcribe(audio, 16000), launcher, desk)
     # micro / sourdine Discord : simple mémoire tant que l'appli tourne (demande de l'utilisateur).
     # Au lancement : micro allumé, pas de sourdine. Rien n'est enregistré ni lu dans Discord.
     discord_voice = {"mute": False, "deaf": False}
@@ -812,7 +820,7 @@ def main(argv=None):
 
     engine = Engine(SimpleNamespace(
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
-        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, launcher=launcher,
+        face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, instructeur=instructeur, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
         quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
@@ -887,7 +895,7 @@ def question_actions(acts, listener, asker):
     return rest
 
 
-def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None):
+def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None, instructeur=None):
     """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
     for a in acts:
@@ -913,6 +921,10 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
             audio = listener.stop_capture()
             if desk is not None:
                 desk.submit(audio)
+        elif a[0] == "instruction_stop":
+            audio = listener.stop_capture()
+            if instructeur is not None:
+                instructeur.submit(audio)
         elif a[0] in ("message_stop", "salon_stop"):
             audio = listener.stop_capture()
             threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),

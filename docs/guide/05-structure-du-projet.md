@@ -63,6 +63,7 @@ graph LR
 | `web.py` | recherche internet : Chromium headless (Playwright), Startpage puis Bing, texte des 2 premières pages (12 000 car. au plus) | 120 | test_question_web |
 | `typer.py` | « iris type » : écrit le texte dicté | 99 | test_type |
 | `traducteur.py` | « iris traducteur » : son du PC (WASAPI loopback) coupé aux silences, traduit en anglais par le Whisper d'`ask.py`, sous-titres en bas d'écran | 180 | test_traducteur |
+| `instruction.py` | « iris instruction » : phrase -> modèle local (Ollama, catalogue d'outils fermé) -> plan vérifié, affiché, exécuté après « envoie » ; YouTube résolu sans clic | 330 | test_instruction |
 | `apps.py` | « iris ouvre / ferme » : applis du menu Démarrer | 246 | test_type |
 | `reminders.py` | rappels, alarmes, `Desk` | 554 | test_reminders |
 | `timers.py` | timer, chronomètre | 146 | test_timers |
