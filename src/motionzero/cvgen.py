@@ -38,7 +38,16 @@ ROUTES = {
     "preparation": ("GET", "/api/preparation"),
     "offres": ("GET", "/api/offres"),
     "maj_offre": ("PATCH", "/api/offres/{id}"),     # garder / écarter : comme les boutons de la page Offres
+    "offre": ("GET", "/api/offres/{id}"),           # suivi de la préparation (offre.preparation.etape)
+    "preparer": ("POST", "/api/offres/{id}/preparer"),   # « Préparer la candidature » : CV composé, PDF, pièces
 }
+# Pages ouvertes dans le navigateur (vérifiées par les tests : fichiers de public/ et route des PDF)
+PAGES = {"atelier": "/generate.html?id={cv}", "jury": "/jury.html?id={cv}",
+         "pdf_cv": "/api/offres/{id}/pdf/cv?voir=1"}
+PREP_POLL_S = 3.0
+PREP_MAX_S = 900.0       # au-delà, Iris arrête de suivre (CVGEN, lui, continue)
+PREP_STEPS = {"attente": "en attente", "cv": "Iris compose le CV…", "pdf-cv": "PDF du CV…",
+              "pret": "Prêt : CV et pièces en PDF", "erreur": "Échec"}
 
 # Mots du mode (sans « iris » tant qu'il est allumé). Tous présents dans le modèle Vosk (vérifié le 17/11).
 WORDS = {"cherche": "lance ou arrête la recherche",
@@ -48,11 +57,54 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          "liste": "les offres à trier puis à vérifier, une par une",
          "suivante": "offre suivante", "précédente": "offre précédente",
          "garde": "garder l'offre (CVGEN prépare le CV)", "écarte": "écarter l'offre",
-         "lien": "l'offre sur son site"}
-NAV = {"suivante", "précédente", "garde", "écarte", "lien"}   # n'ont de sens que liste ouverte
+         "lien": "l'offre sur son site",
+         # phase 3 : le CV et les pièces
+         "prépare": "CV composé, PDF et pièces prêts (comme « Préparer la candidature »)",
+         "montre": "le PDF prêt, sinon l'atelier du CV",
+         "relis": "la relecture par le jury",
+         "aide": "toutes les commandes du mode, par étape"}
+HELP_S = 40.0
+HELP_LINES = [
+    "Recherche : « cherche » (lance / arrête) · « état » · « offres » (la page)",
+    "Tri : « liste », puis « suivante » · « précédente » · « garde » · « écarte »",
+    "CV : « prépare » (CV et pièces en PDF) · « montre » (le PDF) · « relis » (jury)",
+    "Postuler : « lien » ouvre l'offre sur son site",
+    "Souris : « souris », puis « clic » · « scroll »… · « stop » arrête tout",
+    "Quitter le mode : « candidature »",
+]
+NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis"}   # liste ouverte
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
 A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier"}
-NAV_HINT = "« suivante » · « précédente » · « garde » · « écarte » · « lien »"
+
+
+def next_hint(o, prep_line=None, preparing=False):
+    """Bas de la carte : les 3 ou 4 mots utiles à l'étape de l'offre affichée (court : sinon illisible)."""
+    if o is None:
+        return "« liste » · « cherche » · « aide »"
+    if o.get("etat") == "a-trier":
+        return "« garde » · « écarte » · « suivante » · « aide »"
+    pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
+    if pret:
+        return "« montre » · « relis » · « lien » pour postuler · « aide »"
+    if preparing:
+        return "préparation en cours · « suivante » · « aide »"
+    return "« prépare » · « montre » · « écarte » · « aide »"
+
+
+def iris_says(msg):
+    """Messages de CVGEN montrés par Iris : jamais « Claude » (Iris parle en son nom)."""
+    return str(msg).replace("Claude", "Iris")
+
+
+def prep_text(prep):
+    """Ligne d'avancement de la préparation d'une offre. Pur : testable."""
+    prep = prep or {}
+    etape = prep.get("etape")
+    if etape == "erreur":
+        return "Échec : " + iris_says(prep.get("erreur") or "raison inconnue")
+    if etape in PREP_STEPS:
+        return "Préparation : " + PREP_STEPS[etape] if etape != "pret" else PREP_STEPS["pret"]
+    return "Préparation : " + (prep.get("libelle") or "pièces…")
 
 ETATS = (("verif", "à vérifier"), ("tri", "à trier"), ("ok", "postulées"), ("ref", "refusées"))
 
@@ -153,6 +205,8 @@ class Candidature:
         self.title = self.lines = self.meta = None
         self.show_until = -1e9
         self.offres, self.i = None, 0     # liste parcourue (None : pas ouverte) ; seulement boucle principale
+        self.preparing = None              # id de l'offre en préparation (une à la fois, comme CVGEN)
+        self.prep = {}                     # id -> dernière ligne d'avancement
 
     # ---- fil « cvgen » ----
     def _ensure(self):
@@ -172,6 +226,24 @@ class Candidature:
                 continue
         raise CvgenError("CVGEN n'a pas démarré")
 
+    def _follow(self, oid):
+        """Suit la préparation (lancée en fond par CVGEN) jusqu'à « prêt » ou « erreur »."""
+        end = self.clock() + PREP_MAX_S
+        last = None
+        while self.clock() < end:
+            self.sleep(PREP_POLL_S)
+            try:
+                prep = (call("offre", self.http, id=oid) or {}).get("preparation") or {}
+            except CvgenError:
+                continue                         # CVGEN occupé ou relancé : on réessaie
+            key = (prep.get("etape"), prep.get("libelle"))
+            if key != last:
+                self._q.put(("prep", oid, prep))
+                last = key
+            if prep.get("etape") in ("pret", "erreur"):
+                return
+        self._q.put(("prep", oid, {"etape": "erreur", "erreur": "trop long : regarde dans CVGEN"}))
+
     def _status(self):
         return summary(call("agent", self.http), call("compte", self.http), call("preparation", self.http))
 
@@ -189,6 +261,11 @@ class Candidature:
             elif word == "liste":
                 self._q.put(("liste", a_parcourir(call("offres", self.http))))
                 return
+            elif word == "prépare":
+                call("preparer", self.http, {}, id=arg["id"])
+                self._q.put(("prep", arg["id"], {"etape": "attente"}))
+                self._follow(arg["id"])
+                return
             elif word in ("garde", "écarte"):
                 etat = "gardee" if word == "garde" else "ecartee"
                 call("maj_offre", self.http, {"etat": etat}, id=arg["id"])
@@ -198,13 +275,19 @@ class Candidature:
                 title = "Candidature"
             self._q.put(("ok", title, self._status()))
         except CvgenError as e:
-            self._q.put(("error", str(e)))
+            if word == "prépare":
+                self._q.put(("prep", arg["id"], {"etape": "erreur", "erreur": str(e)}))
+            self._q.put(("error", iris_says(e)))
         except Exception as e:                 # jamais d'exception qui remonte : la carte le dit
             log.exception("cvgen")
             self._q.put(("error", f"Erreur inattendue ({type(e).__name__})"))
 
     # ---- boucle principale ----
     def ask(self, word, t):
+        if word == "aide":
+            self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
+            self.show_until = t + HELP_S
+            return
         if word in NAV:
             return self._nav(word, t)
         if self.busy:
@@ -238,16 +321,39 @@ class Candidature:
                 self._card(t, "Ouverte dans le navigateur")
         elif word == "garde" and o["etat"] != "a-trier":
             self._card(t, "Déjà gardée : son CV est prêt")
+        elif word in ("prépare", "montre", "relis") and not o.get("cvId"):
+            self._card(t, "Pas encore de CV : dis « garde » d'abord")
+        elif word == "prépare":
+            if self.preparing is not None:
+                self._card(t, "Une autre candidature est en préparation : patiente")
+            else:
+                self.preparing = o["id"]
+                self._send(word, t, o)
+        elif word in ("montre", "relis"):
+            if word == "relis":
+                url, note = PAGES["jury"].format(cv=o["cvId"]), "Relecture ouverte dans le navigateur"
+            elif ((o.get("preparation") or {}).get("etape") == "pret"
+                  or self.prep.get(o["id"]) == PREP_STEPS["pret"]):
+                url, note = PAGES["pdf_cv"].format(id=o["id"]), "PDF du CV ouvert"
+            else:
+                url, note = PAGES["atelier"].format(cv=o["cvId"]), "Pas encore préparé : atelier ouvert"
+            if self.open_url is not None:
+                self.open_url(BASE + url)
+            self._card(t, note)
         else:
             self._send(word, t, o)
 
     def _card(self, t, note=None):
         title, lines = card(self.offres or [], self.i)
-        self._show(title, lines + ([note] if note else []), t, meta=NAV_HINT + " · " + CLOSE_HINT)
+        if self.offres and self.offres[self.i]["id"] in self.prep:
+            lines.append(self.prep[self.offres[self.i]["id"]])
+        o = self.offres[self.i] if self.offres else None
+        hint = next_hint(o, self.prep.get(o["id"]) if o else None, o is not None and self.preparing == o["id"])
+        self._show(title, lines + ([note] if note else []), t, meta=hint)
 
     def _show(self, title, lines, t, meta=None):
         self.title, self.lines = title, list(lines)
-        self.meta = meta or " · ".join(f"« {w} »" for w in WORDS) + " · " + CLOSE_HINT
+        self.meta = meta or next_hint(None)
         self.show_until = t + SHOW_S
 
     def events(self, core, t):
@@ -275,6 +381,15 @@ class Candidature:
                 fait = "Gardée : CVGEN prépare son CV" if word == "garde" else "Écartée"
                 self._card(t, fait)
                 core.last_gesture = (f"CANDIDATURE : {fait}".upper()[:60], t)
+            elif msg[0] == "prep":
+                _, oid, prep = msg
+                self.busy = False
+                self.prep[oid] = prep_text(prep)
+                if prep.get("etape") in ("pret", "erreur") and self.preparing == oid:
+                    self.preparing = None
+                if self.offres and self.offres[self.i]["id"] == oid:
+                    self._card(t)              # l'offre affichée : la carte suit l'avancement
+                core.last_gesture = (f"CANDIDATURE : {self.prep[oid]}".upper()[:60], t)
             elif msg[0] == "error":
                 self.busy = False
                 self._show("Candidature impossible", [msg[1]], t)
