@@ -63,8 +63,23 @@ SYSTEM = (
     "- Le moins d'étapes possible, " + str(MAX_STEPS) + " au plus.\n"
     "- Si la demande est impossible avec ces outils, ou dangereuse, ou incompréhensible : étapes vides et "
     "explique en une courte phrase dans « refus ».\n"
+    "- Interdit, même en combinant des outils : supprimer, déplacer ou modifier des fichiers, taper des commandes "
+    "(terminal, invite de commandes, PowerShell, explorateur), payer, changer des réglages. "
+    "Pour ces demandes : étapes vides et refus.\n"
+    "- Chaque étape doit servir directement la demande : jamais d'étape de remplacement quand le vrai but est "
+    "impossible.\n"
+    "Exemples de refus :\n"
+    "« supprime mes fichiers » -> {\"etapes\": [], \"refus\": \"Je ne touche pas aux fichiers.\"}\n"
+    "« achète ce livre » -> {\"etapes\": [], \"refus\": \"Je ne fais pas de paiement.\"}\n"
+    "« éteins l'ordinateur » -> {\"etapes\": [], \"refus\": \"Je ne sais pas éteindre l'ordinateur.\"}\n"
     "- N'invente aucun outil. Réponds uniquement par le JSON demandé."
 )
+
+# garde-fous du code, quoi que dise le modèle : pas de console, pas de commande tapée
+BLOCKED_APPS = re.compile(r"\b(cmd|invite de commandes|powershell|terminal|regedit|registre|explorateur|explorer"
+                          r"|gestionnaire des t[aâ]ches|taskmgr)\b", re.I)
+BLOCKED_TEXT = re.compile(r"(^|[\s&|;])(del|erase|rd|rmdir|rm|format|shutdown|reg|taskkill|powershell|cmd|curl|"
+                          r"iwr|wget)(\s|$)|[a-z]:\\|\\\\", re.I)
 
 SCHEMA = {
     "type": "object",
@@ -165,12 +180,16 @@ def check_step(outil, arg, app_names=None):
     if outil in ("ouvre_app", "ferme_app"):
         if not arg:
             raise PlanError("appli sans nom")
+        if BLOCKED_APPS.search(arg):
+            raise PlanError(f"interdit : {arg}")
         name = arg
         if app_names is not None:
             from .apps import best_match
             name = best_match(arg, app_names)
             if not name:
                 raise PlanError(f"appli introuvable : {arg}")
+            if BLOCKED_APPS.search(name):
+                raise PlanError(f"interdit : {name}")
         return outil, name, ("Ouvrir " if outil == "ouvre_app" else "Fermer ") + name
     if outil == "site":
         url = normalize_url(arg)
@@ -192,6 +211,8 @@ def check_step(outil, arg, app_names=None):
     if outil == "ecris":
         if not arg:
             raise PlanError("rien à écrire")
+        if BLOCKED_TEXT.search(arg):
+            raise PlanError("interdit : ressemble à une commande")
         return outil, arg, f"Écrire « {arg} »"
     if outil == "volume":
         from .volume import parse_volume

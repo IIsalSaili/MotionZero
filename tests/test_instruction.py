@@ -70,6 +70,22 @@ def test_refus_du_modele_et_plan_trop_long():
         check_plan("pas un dict")
 
 
+@pytest.mark.parametrize("outil,arg", [("ouvre_app", "explorer"), ("ouvre_app", "PowerShell"),
+                                       ("ouvre_app", "invite de commandes"), ("ecris", "del *.*"),
+                                       ("ecris", "C:\\Users\\moi\\Documents\\"), ("ecris", "rm -rf /")])
+def test_garde_fous_console_et_commandes(outil, arg):
+    with pytest.raises(PlanError, match="interdit"):
+        check_step(outil, arg)
+
+
+def test_plan_dangereux_du_modele_refuse_en_entier():
+    raw = {"etapes": [{"outil": "ouvre_app", "arg": "explorer"}, {"outil": "ecris", "arg": "del"},
+                      {"outil": "touche", "arg": "entrée"}], "refus": ""}
+    with pytest.raises(PlanError):
+        check_plan(raw)
+    assert check_step("ecris", "bonjour, je rentre vers 18 h")[1].startswith("bonjour")
+
+
 def test_appli_inconnue_refusee_et_connue_resolue():
     apps = {"Google Chrome": "id1", "Discord": "id2"}
     assert check_step("ouvre_app", "chrome", apps)[1] == "Google Chrome"
