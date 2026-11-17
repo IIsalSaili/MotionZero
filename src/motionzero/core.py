@@ -95,11 +95,11 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop", "timer": "timer_stop",
-             "volume": "volume_stop"}
+             "volume": "volume_stop", "instruction": "instruction_stop"}
 OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
              "rappel": "RAPPEL : Iris reflechit…", "timer": "TIMER : je lis la duree…",
-             "volume": "VOLUME : je regle…"}
+             "volume": "VOLUME : je regle…", "instruction": "INSTRUCTION : Iris reflechit…"}
 
 
 # « iris + mot » sans état : une action, et un libellé (None = celui de VOICE_LABELS)
@@ -117,6 +117,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
                   "sourdine": (("discord_deafen",), None)}
+BYPASS_IDLE_S = 600.0    # « iris bypass » éteint seul après 10 min sans commande, comme le focus
 FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
 
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
@@ -125,10 +126,11 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "type": "type", "ferme": "close", "timer": "timer", "calendrier": "calendar",
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
+            "instruction": "listen",   # « iris instruction » puis une demande libre (#45)
             "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
-            "traducteur": "translator"}
+            "traducteur": "translator", "bypass": "bypass"}
 
 
 
@@ -218,6 +220,7 @@ class Core:
         self.ask_t0 = -1e9
         # voix
         self.listen_until = -1e9
+        self.bypass_until = -1e9         # « iris bypass » : mots acceptés même mal dits jusqu'à cet instant
         self.focus_until = -1e9          # mode focus : commandes sans « iris » jusqu'à cet instant
         self.voice_scroll_until = -1e9
         self.voice_scroll_armed = False       # la main est passée dans la bande du centre
@@ -632,6 +635,10 @@ class Core:
         elif self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
             # aucun verrou : toutes les autres commandes « iris + … » restent utilisables
             return self._confirm(word, t)
+        elif self.confirm_kind == "instruction" and word in ("envoie", "envoyé", "annule"):
+            self.confirm_until = -1e9
+            self.last_word = (word, t, True)
+            return [("instruction_non",)] if word == "annule" else [("instruction_ok",)]
         elif self.confirm_kind == "rappel" and word in ("envoie", "annule"):
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
@@ -789,6 +796,8 @@ class Core:
     def _v_command(self, word, t, acts):
         if self.focus_on(t) and word != "focus":
             self.focus_until = t + FOCUS_IDLE_S   # chaque commande prolonge le mode focus
+        if self.bypass_on(t) and word != "bypass":
+            self.bypass_until = t + BYPASS_IDLE_S # pareil pour le bypass
         return self._v_command_run(word, t, acts)
 
     def _v_command_run(self, word, t, acts):
@@ -945,6 +954,18 @@ class Core:
         self.translating = not self.translating
         acts.append(("traducteur", self.translating))
         return "TRADUCTEUR ALLUME" if self.translating else "TRADUCTEUR ETEINT"
+
+    def bypass_on(self, t):
+        return self.mode != Mode.DISABLED and t < self.bypass_until
+
+    def _cmd_bypass(self, word, t, acts):
+        """« iris bypass » : reconnaissance plus permissive (voir voice.BYPASS_*) ; redit, éteint ; seul après
+        10 min sans commande. S'ajoute au mode focus sans le changer."""
+        if self.bypass_on(t):
+            self.bypass_until = -1e9
+            return "BYPASS ETEINT"
+        self.bypass_until = t + BYPASS_IDLE_S
+        return "BYPASS : mots acceptes meme mal dits"
 
     def _cmd_quota(self, word, t, acts):
         self.quota_shown = not self.quota_shown
@@ -1178,7 +1199,7 @@ class Core:
         close = kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
         # un message est une phrase : même silence que la dictée ; un nom (appli, salon) est court
-        silence = c.type_silence_s if kind in ("message", "rappel") else c.open_silence_s
+        silence = c.type_silence_s if kind in ("message", "rappel", "instruction") else c.open_silence_s
         if spoke and t - last_speech_t >= silence:
             self.opening = False
             self.last_gesture = (OPEN_WAIT[kind], t)
@@ -1190,7 +1211,8 @@ class Core:
                                       "salon": "RIEN ENTENDU : salon annule",
                                       "rappel": "RIEN ENTENDU : rappel annule",
                                       "timer": "RIEN ENTENDU : timer annule",
-                                      "volume": "RIEN ENTENDU : volume inchange"}[kind], t)
+                                      "volume": "RIEN ENTENDU : volume inchange",
+                                      "instruction": "RIEN ENTENDU : instruction annulee"}[kind], t)
             return [("open_cancel",)]
         return []
 

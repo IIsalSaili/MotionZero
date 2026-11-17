@@ -12,6 +12,8 @@ config.json*
 # modèles téléchargés (73 Mo), non versionnés : hand_landmarker.task et vosk-model-small-fr-0.22
 models/
 reminders.json*
+routines.json*
+favoris.json*
 pointeur.txt
 voix_basse.txt
 volume_iris.txt

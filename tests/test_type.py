@@ -108,7 +108,8 @@ def test_slash():
 
 def test_nom_d_appli_seul_ne_fait_rien():
     from motionzero import voice
-    assert "steam" not in voice.WORDS and "ouvre" in voice.WORDS   # seul « iris ouvre » ouvre une appli
+    # 17/11 : « ouvre » passe par « iris instruction » (plus guetté) ; un nom d appli seul ne fait toujours rien
+    assert "steam" not in voice.WORDS and "ouvre" not in voice.WORDS and "ouvre" in voice.VIA_INSTRUCTION
 
 
 def test_ouvre():

@@ -122,3 +122,63 @@ def test_alarme_ignore_le_volume_general():
     m.start_alarm(np.full(RATE * 6, 0.5, np.float32))
     m.fill(RATE * 5)
     assert m.fill(10).max() > 0.35
+
+
+# ---- 17/11 : plus aucun son après « micro figé » / « réparer le son » (sd._terminate tuait la sortie)
+def test_sortie_rouverte_apres_relance_du_micro():
+    made = []
+
+    class S:
+        def __init__(self, mixer):
+            self.active, self.closed = True, False
+            made.append(self)
+
+        def close(self):
+            self.closed = True
+    s = Sounds(ROOT, stream_factory=S)
+    s.play("OK")
+    assert len(made) == 1
+    s.reopen()                                  # ce que fait le fil voix après PortAudio relancé
+    s.play("OK")
+    assert len(made) == 2 and made[0].closed and s.stream is made[1]
+    s.play("OK")
+    assert len(made) == 2                       # pas rouverte sans raison
+
+
+def test_sortie_morte_rouverte_au_son_suivant():
+    made = []
+
+    class S:
+        def __init__(self, mixer):
+            self.active = True
+            made.append(self)
+
+        def close(self):
+            raise RuntimeError("PortAudio not initialized")   # flux déjà invalide : sans effet
+    s = Sounds(ROOT, stream_factory=S)
+    s.play("OK")
+    made[0].active = False                       # flux arrêté (périphérique débranché…)
+    s.play("OK")
+    assert len(made) == 2
+
+
+def test_micro_rouvert_previent_les_sons(monkeypatch):
+    from motionzero import voice
+    called = []
+    lis = voice.VoiceListener.__new__(voice.VoiceListener)
+    lis.after_reopen = lambda: called.append(1)
+    lis.stream, lis.sr, lis._callback = None, 16000, lambda *a: None
+    import sounddevice as sd
+
+    class FakeIn:
+        def __init__(self, **kw):
+            pass
+
+        def start(self):
+            pass
+    monkeypatch.setattr(sd, "_terminate", lambda: None)
+    monkeypatch.setattr(sd, "_initialize", lambda: (_ for _ in ()).throw(OSError("PortAudio")))   # échec aussi
+    monkeypatch.setattr(sd, "RawInputStream", FakeIn)
+    monkeypatch.setattr(sd, "query_devices", lambda kind=None: {"name": "micro"})
+    lis.reopen()
+    assert called == [1]

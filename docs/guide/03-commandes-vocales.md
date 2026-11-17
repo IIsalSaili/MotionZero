@@ -88,10 +88,10 @@ Mode : « tous » sauf mention.
 | `suivant` / `précédent` | onglet suivant / précédent de VS Code (par exemple les onglets Claude), par l'extension « Iris (pont) » : commande de VS Code, pas de touche, marche où que soit le focus ; l'île dit « ECHEC » si l'onglet n'a pas changé. Sans l'extension : Ctrl+Page suivante / précédente, VS Code devant seulement. Installer : `tools/installer_pont.py` | oui VS Code devant ; répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris (le mode Chrome s'arrête quand Discord ou VS Code passe devant ; l'accueil ne le quitte pas) | non | tous |
-| `ouvre` | puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
+| `ouvre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « ouvre Spotify ». Ancien fonctionnement : puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
 | `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | oui si quelque chose est affiché en haut | hors Chrome (en Chrome : ferme l'onglet) |
 | `réveil` | rallume l'écran éteint | non | tous |
-| `volume` | puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
+| `volume` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « volume à 40 ». Ancien fonctionnement : puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
 
 ## Claude
 
@@ -130,8 +130,8 @@ sequenceDiagram
 | `mute` (`muet`) | coupe le micro Discord | non | tous |
 | `démute` (« des mute ») | rallume le micro | non | tous |
 | `sourdine` | sourdine casque + micro | non | tous |
-| `message` | puis « dans général, … » : envoyé par le bot | non | tous |
-| `salon` | puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
+| `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
+| `salon` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « mets-moi dans le salon jeux ». Ancien fonctionnement : puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
 | `activation` | lance le bot vocal, charge Whisper | non | tous |
 | `viens` / `pars` | le bot rejoint / quitte ton salon vocal | non | tous |
@@ -151,15 +151,17 @@ Les commandes suivies d'une phrase prennent la suite du MP à la place du micro 
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `rappel` | puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
+| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
 | `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
 | `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
-| `timer` | puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
-| `chronomètre` | démarre ; redit : arrête | non | tous |
+| `timer` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « timer de 10 minutes ». Ancien fonctionnement : puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
+| `chronomètre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « lance le chronomètre ». Ancien fonctionnement : démarre ; redit : arrête | non | tous |
 | `calendrier` | la semaine en 7 cartes (se ferme seul après 1 min) | non | tous |
 | `heure` / `date` | jour, date et heure affichés 5 s | non | tous |
 | `quota` | quota Claude : session de 5 h et semaine (pourcentage utilisé, heure du reset), logo Claude, collé au coin haut gauche, en permanence ; redire `quota` le masque (choix gardé au redémarrage) | non | tous |
 | `traducteur` | sous-titres du son qui sort du PC (vidéo, appel…), traduits en anglais par Whisper (langue détectée seule), dans un bandeau en bas de l'écran que les clics traversent ; environ 3-5 s de retard ; redire `traducteur` l'éteint. Utilise le même Whisper que la voix : une commande dictée fait patienter les sous-titres | non | tous |
+| `bypass` | reconnaissance permissive, pour les moments où tu ne parles pas à côté : une commande après « iris » acceptée dès 0,4 de certitude (au lieu de 0,6), un mot seul en focus dès 0,55 (au lieu de 0,8), sans 2e vérification. Jamais pour les mots définitifs (`ferme`, `envoie`, `envoyé`, `annule`, `efface`, `coupe`, `recharge`, `stop`, `agrippe`, `instruction`). S'ajoute au focus (« FOCUS · BYPASS ») ; redire `bypass` l'éteint, seul après 10 min sans commande | non | tous |
+| `instruction` | puis une demande libre (« ouvre la dernière vidéo de One Click Studio ») : Whisper transcrit, un modèle local (Qwen3 4B via Ollama) en fait un plan avec les seuls outils d'Iris : applis (ouvrir, fermer, devant, à gauche / à droite), sites par leur nom (« ouvre mes mails », « ouvre leboncoin » : connus d'office, sinon cherchés sur internet puis retenus), recherches ciblées (Amazon, Maps, itinéraire, Wikipédia, Twitch, Spotify), YouTube (vidéo, dernière vidéo d'une chaîne, vidéo déjà vue dans l'historique), onglets de Chrome, commandes de la vidéo et de la musique, touches de navigation, texte, volume, Discord, timer, rappel, traducteur, météo, heure d'une ville, calcul, conversions, rappels à venir. Routines : « crée la routine mode travail : … » puis « lance la routine mode travail » ; « refais » rejoue la dernière instruction. Jamais : fichiers, arrêt de l'ordinateur, réglages (bloqué dans le code). Le plan s'affiche en haut ; `envoie` l'exécute, `annule` l'abandonne, sans réponse il est annulé au bout de 10 s ; `stop` l'arrête entre deux étapes. Rien n'est jamais fait sans `envoie`. « iris instruction » puis « aide » : carte d'exemples à dire | non | tous |
 
 ```mermaid
 sequenceDiagram
