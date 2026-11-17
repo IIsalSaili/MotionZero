@@ -75,9 +75,23 @@ SYSTEM = (
     "- N'invente aucun outil. Réponds uniquement par le JSON demandé."
 )
 
-# garde-fous du code, quoi que dise le modèle : pas de console, pas de commande tapée
-BLOCKED_APPS = re.compile(r"\b(cmd|invite de commandes|powershell|terminal|regedit|registre|explorateur|explorer"
-                          r"|gestionnaire des t[aâ]ches|taskmgr)\b", re.I)
+# Garde-fous du code, quoi que dise le modèle (demande de l'utilisateur, 17/11) : JAMAIS modifier de fichiers,
+# éteindre / redémarrer l'ordinateur ou changer ses réglages. Aucun outil ne le fait, et les outils génériques
+# (touches, applis, texte) sont bridés pour qu'aucune combinaison n'y mène.
+BLOCKED_APPS = re.compile(
+    r"\b(cmd|invite de commandes|powershell|terminal|console|regedit|registre|explorateur|explorer|fichiers"
+    r"|gestionnaire|taskmgr|param[eè]tres|settings|r[eé]glages|panneau de configuration|control|msconfig"
+    r"|configuration|services|gpedit|strat[eé]gie|diskpart|disques?|partition|bios|uefi|mise[s]? [aà] jour|update"
+    r"|s[eé]curit[eé]|defender|pare-feu|firewall|alimentation|power|arr[eê]t|shutdown|red[eé]marr|veille|sleep"
+    r"|d[eé]sinstall|uninstall|installer|setup|nettoyage|cleanup|corbeille|recycle|sauvegarde|backup"
+    r"|r[eé]cup[eé]ration|recovery|ex[eé]cuter|run|wsl|bash|python|ollama|motionzero|iris)\b", re.I)
+# touches permises : navigation et lecture seulement. Pas de Windows (Win+X : arrêter), pas d'Alt+F4,
+# pas de Suppr, pas de Ctrl+S / Ctrl+Maj+Échap… : tout le reste est refusé.
+SAFE_SINGLE = {"enter", "escape", "space", "tab", "up", "down", "left", "right", "pageup", "pagedown", "home",
+               "end", "f5", "backspace"} | set("abcdefghijklmnopqrstuvwxyz0123456789")
+SAFE_COMBOS = {("ctrl", "t"), ("ctrl", "w"), ("ctrl", "l"), ("ctrl", "tab"), ("ctrl", "shift", "tab"),
+               ("alt", "tab"), ("alt", "left"), ("alt", "right"), ("ctrl", "plus"), ("ctrl", "minus"),
+               ("ctrl", "f"), ("shift", "tab")}
 BLOCKED_TEXT = re.compile(r"(^|[\s&|;])(del|erase|rd|rmdir|rm|format|shutdown|reg|taskkill|powershell|cmd|curl|"
                           r"iwr|wget)(\s|$)|[a-z]:\\|\\\\", re.I)
 
@@ -158,9 +172,12 @@ def parse_keys(arg):
     for k in re.split(r"\s*\+\s*", arg.strip().lower()):
         k = KEY_NAMES.get(k, k)
         if k not in VK:
-            return None
+            return "interdit"                 # touche hors liste : refusée comme une interdite
         keys.append(k)
-    return keys or None
+    if not keys:
+        return None
+    ok = (len(keys) == 1 and keys[0] in SAFE_SINGLE) or tuple(keys) in SAFE_COMBOS
+    return keys if ok else "interdit"
 
 
 def normalize_url(arg):
@@ -205,6 +222,8 @@ def check_step(outil, arg, app_names=None):
                             "rappel": f"Rappel « {arg} » (à valider)"}[outil]
     if outil == "touche":
         keys = parse_keys(arg)
+        if keys == "interdit":
+            raise PlanError(f"interdit : touche {arg}")
         if keys is None:
             raise PlanError(f"touche inconnue : {arg}")
         return outil, keys, "Touche " + "+".join(keys)

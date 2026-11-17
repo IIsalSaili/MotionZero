@@ -1,4 +1,5 @@
 """« iris instruction » (#45) : plan vérifié, affiché, exécuté après « envoie » ; échecs."""
+import re
 import time
 from types import SimpleNamespace
 
@@ -53,7 +54,7 @@ def test_plan_valide_et_libelles():
     assert plan[1][1] == ["f"] and "One Click Studio" in plan[0][2]
 
 
-@pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("touche", "ctrl+bidule"), ("site", "pas une url"),
+@pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("site", "pas une url"),
                                        ("volume", "beaucoup"), ("discord", "danse"), ("timer", "bientôt"),
                                        ("ecris", ""), ("attends", "longtemps"), ("ouvre_app", "")])
 def test_etape_refusee(outil, arg):
@@ -72,7 +73,17 @@ def test_refus_du_modele_et_plan_trop_long():
 
 @pytest.mark.parametrize("outil,arg", [("ouvre_app", "explorer"), ("ouvre_app", "PowerShell"),
                                        ("ouvre_app", "invite de commandes"), ("ecris", "del *.*"),
-                                       ("ecris", "C:\\Users\\moi\\Documents\\"), ("ecris", "rm -rf /")])
+                                       ("ecris", "C:\\Users\\moi\\Documents\\"), ("ecris", "rm -rf /"),
+                                       # jamais : fichiers, arrêt de l'ordinateur, réglages (17/11)
+                                       ("touche", "win+x"), ("touche", "win"), ("touche", "alt+f4"),
+                                       ("touche", "ctrl+s"), ("touche", "delete"), ("touche", "shift+delete"),
+                                       ("touche", "ctrl+shift+escape"), ("touche", "ctrl+alt+delete"),
+                                       ("touche", "win+r"), ("touche", "ctrl+a"), ("touche", "ctrl+x"),
+                                       ("ouvre_app", "Paramètres"), ("ouvre_app", "Panneau de configuration"),
+                                       ("ouvre_app", "Gestionnaire des tâches"), ("ouvre_app", "Options d'alimentation"),
+                                       ("ouvre_app", "Windows Update"), ("ouvre_app", "Corbeille"),
+                                       ("ouvre_app", "Explorateur de fichiers"), ("ouvre_app", "Exécuter"),
+                                       ("ferme_app", "Iris")])
 def test_garde_fous_console_et_commandes(outil, arg):
     with pytest.raises(PlanError, match="interdit"):
         check_step(outil, arg)
@@ -84,6 +95,15 @@ def test_plan_dangereux_du_modele_refuse_en_entier():
     with pytest.raises(PlanError):
         check_plan(raw)
     assert check_step("ecris", "bonjour, je rentre vers 18 h")[1].startswith("bonjour")
+    for k in ("f", "k", "entrée", "ctrl+t", "alt+tab", "espace", "f5"):   # lecture, navigation : permis
+        assert check_step("touche", k)
+    for app in ("Discord", "Google Chrome", "PowerPoint", "Spotify"):
+        assert check_step("ouvre_app", app)
+
+
+def test_aucun_outil_de_fichier_d_arret_ou_de_reglage():
+    banned = re.compile(r"fichier|supprim|dossier|eteind|arret|redemarr|reglage|parametre|shell|commande", re.I)
+    assert not [t for t in ins.TOOLS if banned.search(t)]
 
 
 def test_appli_inconnue_refusee_et_connue_resolue():
