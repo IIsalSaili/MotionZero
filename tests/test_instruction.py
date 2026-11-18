@@ -343,3 +343,32 @@ def test_mots_passes_plus_guettes_mais_compris_en_mp():
         assert all(w not in json.loads(g) for g in GRAMMARS.values())
     assert "chronomètre" in VOCAB and parse("chronomètre")[0] == "chronomètre"
     assert parse("timer 10 minutes")[:2] == ("timer", "10 minutes")
+
+
+def _ollama_absent(monkeypatch):
+    from motionzero import instruction
+    def no_http(*a, **k):
+        raise OSError("pas de serveur")
+    monkeypatch.setattr(instruction, "_http", no_http)
+    monkeypatch.setattr(instruction.time, "sleep", lambda s: None)
+    return instruction
+
+
+def test_ollama_lance_avec_console_cachee_jamais_detache(monkeypatch):
+    """Sans console (DETACHED_PROCESS), ses enfants ouvraient chacun une fenêtre visible (18/11)."""
+    import subprocess
+    instruction = _ollama_absent(monkeypatch)
+    seen = {}
+    monkeypatch.setattr(instruction.subprocess, "Popen", lambda cmd, **k: seen.update(k))
+    assert instruction.ensure_ollama(wait_s=0.0) is False      # jamais répondu : échec, pas d'exception
+    flags = seen["creationflags"]
+    assert flags & getattr(subprocess, "CREATE_NO_WINDOW", 0) == getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    assert not flags & getattr(subprocess, "DETACHED_PROCESS", 0x8)
+
+
+def test_ollama_introuvable_renvoie_false(monkeypatch):
+    instruction = _ollama_absent(monkeypatch)
+    def absent(*a, **k):
+        raise OSError("introuvable")
+    monkeypatch.setattr(instruction.subprocess, "Popen", absent)
+    assert instruction.ensure_ollama(wait_s=0.0) is False
