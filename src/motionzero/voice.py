@@ -43,7 +43,7 @@ WORDS = {
     "scroll": "scroll",   # « iris scroll » : défilement à la main / tête (ex-« défile », pris pour « défun » le 14/11)
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
-    "espace": "espace",   # « iris espace » / « iris space » : touche Espace
+    # « espace » retiré le 19/11 (#50) : « iris space » seul
     "space": "space",
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
@@ -76,12 +76,11 @@ WORDS = {
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
-    "muet": "muet",       # « iris muet » : pareil, en français
     "sourdine": "sourdine",  # « iris sourdine » : sourdine Discord, casque + micro
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",
     "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
-    "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
+    # « activation » et « favori » retirés le 19/11 (#50) : « viens » suffit, le bot est relancé seul
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
     "lis": "lis",         # « iris lis » : la remet
@@ -311,6 +310,14 @@ def rejection(res, min_conf=0.6):
                     and _gap(w, n) > IRIS_GAP_S else "") for w, n in zip(words, words[1:] + [words[-1]]))
 
 
+def apercu(text, n=4):
+    """Les n premiers mots seulement (#49) : le journal ne garde pas les conversations privées."""
+    words = (text or "").split()
+    if len(words) <= n:
+        return "'%s'" % " ".join(words)
+    return "'%s…' (%d mots)" % (" ".join(words[:n]), len(words))
+
+
 @dataclass
 class VoiceEvent:
     word: str
@@ -476,7 +483,7 @@ class VoiceListener:
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
                                                    self.quiet, relaxed, bypass):
             said = " ".join(w["word"] for w in words)
-            log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
+            log.info("non confirme : %s (entendu librement : %s)", said, apercu(free_text))
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())
             return
         # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et

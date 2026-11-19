@@ -102,6 +102,7 @@ class Quota:
     def __init__(self, token_reader=read_token, fetcher=fetch):
         self.token_reader, self.fetcher = token_reader, fetcher
         self.five, self.week, self.ok = None, None, False
+        self.expired = False                  # jeton refusé (401) : il faut rouvrir Claude Code (#55)
         self.loaded = False                   # au moins une lecture terminée (réussie ou non)
         self.next_t = -1e9
         self._busy = False
@@ -111,12 +112,14 @@ class Quota:
         """Lecture synchrone (utilisée par le fil et les tests). Ne lève jamais."""
         try:
             five, week = parse(self.fetcher(self.token_reader()))
-            ok = True
+            ok, expired = True, False
         except Exception as e:                # réseau, jeton, format : tout finit en « indisponible »
             _log.warning("quota illisible : %s", e)
             five, week, ok = None, None, False
+            expired = getattr(e, "code", None) == 401
         with self._lock:
             self.five, self.week, self.ok, self.loaded = five, week, ok, True
+            self.expired = expired
         return ok
 
     def tick(self, t, shown):
@@ -145,7 +148,8 @@ class Quota:
             if not self.loaded:
                 return [("", "Quota…")]
             if not self.ok:
-                return [("", "Quota indisponible")]
+                # 401 : le jeton lu dans les identifiants a expiré ; Claude Code le renouvelle à sa prochaine ouverture
+                return [("", "Quota : rouvre Claude Code" if self.expired else "Quota indisponible")]
             out = [("5 h", quota_text(*self.five, now))]
             if self.week:
                 out.append(("Semaine", quota_text(*self.week, now)))

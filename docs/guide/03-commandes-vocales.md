@@ -67,7 +67,7 @@ Mode : « tous » sauf mention.
 | `entrée` | touche Entrée | non | tous |
 | `envoie` (`envoyé`) | Entrée ; après une dictée : envoie le texte | oui après dictée / rappel | tous |
 | `annule` | VS Code devant : vide le message de Claude ; sinon Échap. Après « iris type » : efface la dictée seule, même avec « iris » dans les 30 s (tant qu'aucune autre commande n'a suivi) | oui après dictée / rappel | tous |
-| `espace` / `space` | touche Espace (pause vidéo) | répétable Chrome | tous |
+| `space` | touche Espace (pause vidéo) | répétable Chrome | tous |
 | `copie` / `colle` | Ctrl+C / Ctrl+V | non | tous |
 | `sélection` | tout sélectionner (Ctrl+A) | non | tous |
 | `coupe` | Ctrl+X | non | tous |
@@ -127,13 +127,12 @@ sequenceDiagram
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `mute` (`muet`) | coupe le micro Discord | non | tous |
+| `mute` | coupe le micro Discord | non | tous |
 | `démute` (« des mute ») | rallume le micro | non | tous |
 | `sourdine` | sourdine casque + micro | non | tous |
 | `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
 | `salon` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « mets-moi dans le salon jeux ». Ancien fonctionnement : puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
-| `activation` | lance le bot vocal, charge Whisper | non | tous |
 | `viens` / `pars` | le bot rejoint / quitte ton salon vocal | non | tous |
 
 ### Commandes écrites en MP au bot
@@ -151,7 +150,7 @@ Les commandes suivies d'une phrase prennent la suite du MP à la place du micro 
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
+| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku). Depuis le 19/11 : une heure seule (« 17 h ») crée un rappel « Rappel » ; plusieurs rappels dans une phrase sont récapitulés puis validés ensemble (10 au plus) | non | tous |
 | `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
 | `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
 | `timer` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « timer de 10 minutes ». Ancien fonctionnement : puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
@@ -212,13 +211,12 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `ferme` | Ctrl+W | ferme l'onglet ; si une réponse, un rappel, une liste ou l'heure est affiché en haut, il est d'abord retiré (redire `ferme` pour l'onglet) |
 | `rouvre` | Ctrl+Maj+T | rouvre l'onglet fermé |
 | `recharge` | F5 | recharge |
-| `favori` | Ctrl+D | favori |
 | `haut` / `bas` | Début / Fin | haut / bas de page |
 | `monte` / `descends` | Page haut / Page bas | une page |
 | `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |
 | `recherche` | Ctrl+L puis dictée | barre d'adresse |
 
-Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `double`.
+Aussi sans « iris » en Chrome : `skip`, `back`, `space`, `clic`, `double`.
 
 ## <a id="mots-sans-iris"></a>Récapitulatif : mots sans « iris »
 
@@ -231,7 +229,7 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 | VS Code devant (hors Chrome) | `suivant`, `précédent` |
 | Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
 | Rappel affiché | `plus tard` |
-| Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
+| Mode CHROME | mots du tableau Chrome + `skip`, `back`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |
 | Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |
 | Après la répétition d'un rappel (20 s) | `envoie`, `annule` |

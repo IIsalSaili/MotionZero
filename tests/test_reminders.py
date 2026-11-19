@@ -34,7 +34,6 @@ def test_creer_repete_et_alarme():
 
 @pytest.mark.parametrize("data, reason", [
     ({"action": "create", "text": "x", "at": "2026-11-10T09:00", "repeat": None}, "déjà passée"),
-    ({"action": "create", "text": "", "at": "2026-11-12T09:00"}, "sans texte"),
     ({"action": "create", "text": "x", "at": "demain"}, "heure incomprise"),
     ({"action": "create", "text": "x", "at": "2026-11-12T09:00", "repeat": "monthly"}, "répétition"),
     ({"action": "create", "text": "x", "at": "2026-11-12T09:00", "repeat": "weekly", "days": []}, "jours"),

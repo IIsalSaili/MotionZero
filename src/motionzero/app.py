@@ -203,6 +203,28 @@ def detect_period(disabled, last_hand_t, t):
 
 CONFIRM_WORDS = frozenset({"envoie", "envoyé", "annule"})
 
+
+# dernière erreur à montrer dans l'îlot (#51) : écrite par la boucle, les crochets d'erreur et les fils,
+# lue seulement par la boucle principale (pas d'état de Core touché)
+ERROR_NOTICE = {"t": [], "notice": None}
+
+
+def note_error(where):
+    """Retient une erreur pour l'îlot : « ERREUR » simple, « ERREUR REPETEE » si 5 en moins de 10 s."""
+    t = time.perf_counter()
+    ts = [x for x in ERROR_NOTICE["t"] if t - x < 10.0][-4:] + [t]
+    ERROR_NOTICE["t"] = ts
+    text = ("ERREUR REPETEE (%s) : dis STOP puis reessaie, sinon relance Iris" if len(ts) >= 5
+            else "ERREUR (%s) : la commande n'a pas marche") % where
+    ERROR_NOTICE["notice"] = (text, t)
+
+
+def pick_toast(*items):
+    """Le message le plus récent parmi (texte, instant) ou None."""
+    items = [i for i in items if i]
+    return max(items, key=lambda i: i[1]) if items else None
+
+
 class Engine:
     """Boucle principale (fil « moteur ») : caméra -> détection -> Core -> actions -> affichage.
     Un tour = tick() : détecter, écouter, faire, montrer. `d` porte les services créés par main()
@@ -242,6 +264,7 @@ class Engine:
                     # on relâche tout ce qui est tenu, et on continue (l'utilisateur en dépend)
                     self.errors.append(time.perf_counter())
                     _log.exception("erreur dans la boucle principale (on continue)")
+                    note_error("boucle")
                     d.ctl.release_all()
                     if len(self.errors) >= 20 and self.errors[-1] - self.errors[-20] < 10.0:
                         raise   # erreur en boucle : inutile d'insister
@@ -426,7 +449,7 @@ class Engine:
                     d.sounds.play("NON")
             if core.dictating and t - self.last_level_log >= 1.0:
                 self.last_level_log = t
-                _log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
+                _log.debug("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
                          listener.last_rms, listener.ambient, t - listener.last_speech_t)
         lg = core.last_gesture
         if lg is not None and lg is not self.last_fail_seen:
@@ -515,7 +538,7 @@ class Engine:
                 d.sounds.play("SOURIS" if a[1] else "REPOS")
                 _log.info("souris %s", "allumee" if a[1] else "eteinte")
             elif a[0] == "scroll":
-                _log.info("scroll %s", a[1])
+                _log.debug("scroll %s", a[1])   # ~35 000 lignes en 12 jours : noyait les erreurs (#49)
             elif a[0] == "hotkey":
                 _log.info("touches %s", "+".join(a[1]))
             elif a[0] in ("key", "click"):
@@ -543,10 +566,13 @@ class Engine:
             d.bridge.home.emit(self.home(status, t))
         prog = core.progress()
         # île : la dernière chose comprise (ou refusée), la plus récente des deux
-        toast = core.last_gesture
         rej = d.listener.last_rejected if d.listener is not None else None
-        if rej and (not toast or rej[1] > toast[1]):
-            toast = rej
+        # caméra en panne (#48) et erreurs (#51) : montrées comme le reste, 6 s au plus pour une erreur
+        cam = getattr(d.cam, "problem", None)
+        err = ERROR_NOTICE["notice"]
+        if err and t - err[1] > 6.0:
+            err = None
+        toast = pick_toast(core.last_gesture, rej, cam, err)
         d.bridge.state.emit({
             "show_cursor": core.mouse and not core.scrolling(t),  # défile : curseur dans la jauge
             "mouse": core.mouse,
@@ -641,9 +667,16 @@ def main(argv=None):
     # erreurs dans l'interface (Qt) ou dans un fil : notées dans le journal, jamais silencieuses
     # (lancé par le raccourci du bureau, sans console, elles étaient perdues)
     import sys
-    sys.excepthook = lambda *e: log.error("erreur non rattrapee", exc_info=e)
-    threading.excepthook = lambda a: log.error("erreur dans le fil %s", a.thread.name if a.thread else "?",
-                                               exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
+    def _hook(*e):
+        log.error("erreur non rattrapee", exc_info=e)
+        note_error("affichage")
+
+    def _thread_hook(a):
+        name = a.thread.name if a.thread else "?"
+        log.error("erreur dans le fil %s", name, exc_info=(a.exc_type, a.exc_value, a.exc_traceback))
+        note_error(name)
+    sys.excepthook = _hook
+    threading.excepthook = _thread_hook
 
     set_dpi_aware()
     cfg = load_config(args.config)
@@ -924,6 +957,13 @@ def question_actions(acts, listener, asker):
     return rest
 
 
+def bot_absent(bot):
+    """Message quand le bot ne répond pas : on relance tout de suite s'il peut l'être (#57)."""
+    if bot is not None and getattr(bot, "enabled", False) and bot.launch_now():
+        return "BOT DISCORD ABSENT : il demarre, redis dans 30 s"
+    return "BOT DISCORD ABSENT"
+
+
 def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None, instructeur=None):
     """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
@@ -937,10 +977,10 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
         elif a[0] == "volume_show":
             from .volume import volume_peek
             threading.Thread(target=volume_peek, name="volume", daemon=True).start()
-        elif a[0] in ("bot_join", "bot_leave", "bot_activate"):
-            order = {"bot_join": "join", "bot_leave": "leave", "bot_activate": "activate"}[a[0]]
+        elif a[0] in ("bot_join", "bot_leave"):
+            order = {"bot_join": "join", "bot_leave": "leave"}[a[0]]
             if bot is None or bot.send({"t": order}) is None:
-                on_message("BOT DISCORD ABSENT")
+                on_message(bot_absent(bot))
         elif a[0] == "volume_stop":
             from .volume import volume_spoken
             audio = listener.stop_capture()
@@ -956,6 +996,9 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
                 instructeur.submit(audio)
         elif a[0] in ("message_stop", "salon_stop"):
             audio = listener.stop_capture()
+            if bot is None or not bot.connected:   # #57 : dit tout de suite, sans attendre la transcription
+                on_message(bot_absent(bot))
+                continue
             threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),
                              name="discord", daemon=True).start()
         elif a[0] == "open_stop":
@@ -980,7 +1023,7 @@ def discord_spoken(kind, audio, asker, bot, on_message):
         on_message("RIEN ENTENDU")
         return
     if bot is None or not bot.connected:
-        on_message("BOT DISCORD ABSENT")
+        on_message(bot_absent(bot))
         return
     msg = {"t": "send", "text": text} if kind == "message_stop" else {"t": "move", "channel": text}
     if bot.send(msg) is None:

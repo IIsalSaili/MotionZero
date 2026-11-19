@@ -20,8 +20,8 @@ PHRASE_NEEDED = {"ouvre", "type", "question", "message", "salon", "rappel", "cla
 REFUSED = {"stop"}
 WAIT_S = 1.5          # temps laissé à la commande pour s'exécuter avant de lire l'île
 WAIT_PHRASE_S = 8.0   # appli à lancer, message à envoyer, rappel compris par Haiku… : plus long
-WAIT_BOT_S = 20.0     # viens / pars / activation / message / salon : on attend la réponse du bot lui-même
-BOT_WORDS = {"viens", "pars", "activation", "message", "salon"}
+WAIT_BOT_S = 20.0     # viens / pars / message / salon : on attend la réponse du bot lui-même
+BOT_WORDS = {"viens", "pars", "message", "salon"}
 VOCAB = (set(WORDS) | set(SPLIT.values()) | VIA_INSTRUCTION) - {"iris"}
 EXAMPLES = {"ouvre": "ouvre spotify", "type": "type bonjour", "question": "question quel temps fait-il",
             "message": "message dans général, salut", "salon": "salon jeux", "rappel": "rappel dans 10 minutes, pâtes",

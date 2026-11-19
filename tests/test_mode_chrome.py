@@ -258,13 +258,13 @@ def test_video_sans_iris_en_mode_chrome():
     core = _chrome()
     assert core.voice("skip", 2.5) == [("hotkey", ["right"])]
     assert core.voice("back", 3.0) == [("hotkey", ["left"])]
-    assert core.voice("espace", 3.5) == [("hotkey", ["space"])]
+    assert core.voice("espace", 3.5) == []   # retiré (#50) : « space » seul
     assert core.voice("space", 4.0) == [("hotkey", ["space"])]
 
 
 def test_video_garde_iris_hors_chrome():
     core = Core(Config())
-    for w in ("skip", "back", "espace", "space"):
+    for w in ("skip", "back", "space"):
         assert core.voice(w, 1.0) == [], w
 
 

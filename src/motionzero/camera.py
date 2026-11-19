@@ -40,6 +40,11 @@ def frame_is_valid(frame, max_grain_ratio=0.7, min_grain=8.0, min_std=2.0):
     return True
 
 
+def reconnect_delay(fails):
+    """Pause avant la n-ième reconnexion ratée d'affilée : 1, 2, 4, 8, 16, puis 30 s au plus."""
+    return min(2.0 ** max(fails - 1, 0), 30.0)
+
+
 class _SingleInstance:
     """Mutex Windows nommé : empêche deux ouvertures simultanées de la caméra."""
 
@@ -72,6 +77,8 @@ class Camera:
         self.status = STOPPED
         self.rejected = 0
         self.reconnections = 0
+        self.fails = 0              # reconnexions ratées d'affilée (remis à 0 à la première bonne image)
+        self.problem = None         # (texte pour l'îlot, instant) : pourquoi la caméra ne donne plus d'image
         self.info = {}
         self.running = False
         self.cond = threading.Condition()
@@ -112,7 +119,7 @@ class Camera:
 
     # --- lecture -----------------------------------------------------------
     def _run(self):
-        last_good = time.perf_counter()
+        last_good, seen_bad = time.perf_counter(), False
         while self.running:
             try:
                 ok, frame = self.cap.read() if self.cap is not None else (False, None)
@@ -125,11 +132,17 @@ class Camera:
                         self.status = OK
                         self.cond.notify_all()
                     last_good = now
+                    if self.fails:
+                        log.info("camera revenue apres %d reconnexion(s)", self.fails)
+                    self.fails, self.problem = 0, None
+                    seen_bad = False
                     continue
                 if ok:
                     self.rejected += 1
+                    seen_bad = True
                 if now - last_good > self.lost_after_s:
-                    self._reconnect()
+                    self._reconnect(seen_bad)
+                    seen_bad = False
                     last_good = time.perf_counter()
                 else:
                     time.sleep(0.02)  # jamais de boucle active à 100 %
@@ -137,14 +150,26 @@ class Camera:
                 log.exception("erreur de capture")
                 time.sleep(0.2)
 
-    def _reconnect(self):
+    def _reconnect(self, seen_bad=False):
+        """Attente croissante (1, 2, 4… jusqu'à 30 s) : 18/11, 86 reconnexions en 11 min sans rien dire (#48)."""
         self.status = RECONNECTING
         self.reconnections += 1
-        log.warning("camera perdue : reconnexion n°%d", self.reconnections)
+        self.fails += 1
+        if seen_bad:
+            why = "CAMERA : image illisible (trop sombre ? objectif cache ?)"
+        elif self.cap is None:
+            why = "CAMERA introuvable : prise par une autre appli ? (la voix marche)"
+        else:
+            why = "CAMERA : plus d'image (autre appli ?) - la voix marche"
+        self.problem = (why, time.perf_counter())
+        if self.fails <= 3 or self.fails & (self.fails - 1) == 0:   # 1, 2, 3, 4, 8, 16… : pas de déluge au journal
+            log.warning("camera perdue : reconnexion n°%d (%s)", self.reconnections, why)
         if self.cap is not None:
             self.cap.release()
             self.cap = None
-        time.sleep(1.0)
+        end = time.perf_counter() + reconnect_delay(self.fails)
+        while self.running and time.perf_counter() < end:
+            time.sleep(0.1)
         if self.running:
             self.cap = self._open()
             if self.cap is None:

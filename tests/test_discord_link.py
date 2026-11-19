@@ -319,11 +319,13 @@ def test_iris_viens_et_pars():
 def test_francais_et_anglais_font_pareil():
     from motionzero.config import Config
     from motionzero.core import Core
-    for fr, en in (("muet", "mute"),):
-        a, b = Core(Config()), Core(Config())
-        a.voice("iris", 1.0)
-        b.voice("iris", 1.0)
-        assert a.voice(fr, 1.2) == b.voice(en, 1.2) != [], fr
+    # « muet » retiré le 19/11 (#50) : « mute » seul
+    a = Core(Config())
+    a.voice("iris", 1.0)
+    assert a.voice("mute", 1.2) != []
+    b = Core(Config())
+    b.voice("iris", 1.0)
+    assert b.voice("muet", 1.2) == []
 
 
 def test_iris_activation():
@@ -332,6 +334,4 @@ def test_iris_activation():
     from motionzero.discord_link import result_label
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("activation", 1.2) == [("bot_activate",)]
-    assert core.voice("activation", 2.0) == []            # sans « iris » : rien
-    assert "PRET" in result_label({"ok": True}, "activate")
+    assert core.voice("activation", 1.2) == []            # retiré le 19/11 (#50)

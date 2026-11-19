@@ -183,6 +183,13 @@ class BotLink:
             except (queue.Empty, queue.Full):
                 pass
 
+    def launch_now(self):
+        """Commande vocale alors que le bot est absent : relance tout de suite, mais jamais deux fois
+        dans la minute (un bot en train de démarrer ne doit pas être doublé). Vrai s'il démarre."""
+        if not self.launch_enabled:
+            return False
+        return self._maybe_launch() is not False
+
     def _maybe_launch(self):
         if not self.launch_enabled or self.clock() - self._last_launch < LAUNCH_EVERY_S:
             return
@@ -190,13 +197,15 @@ class BotLink:
         exe = os.path.join(self.bot_dir, ".venv", "Scripts", "pythonw.exe")
         if not os.path.exists(exe):
             log.warning("bot Discord : %s introuvable, pas de lancement", exe)
-            return
+            return False
         try:
             subprocess.Popen([exe, "-m", "iris_discord_bot"], cwd=self.bot_dir,
                              creationflags=0x08000000 | 0x00000008, close_fds=True)
             log.info("bot Discord lance")
+            return True
         except OSError:
             log.exception("lancement du bot Discord")
+            return False
 
 
 def _line(msg):
