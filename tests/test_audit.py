@@ -104,3 +104,17 @@ def test_transcription_apres_dechargement_recharge_sous_le_verrou():
     a._load_locked = fake_locked
     assert a._transcribe(b"\x00\x00" * 160, 16000) == "bonjour"
     assert loads == [1]
+
+
+def test_quota_jeton_expire_dit_quoi_faire():
+    import urllib.error
+    from motionzero.quota import Quota
+
+    def refuse(token):
+        raise urllib.error.HTTPError("u", 401, "Unauthorized", None, None)
+    q = Quota(token_reader=lambda: "x", fetcher=refuse)
+    assert q.refresh_now() is False
+    assert q.lines() == [("", "Quota : rouvre Claude Code")]
+    q.fetcher = lambda tok: (_ for _ in ()).throw(OSError("reseau"))
+    q.refresh_now()
+    assert q.lines() == [("", "Quota indisponible")]
