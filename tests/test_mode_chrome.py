@@ -202,8 +202,8 @@ def test_mots_chrome_absents_de_la_liste_de_base():
     from motionzero.core import CHROME_KEYS
     from motionzero.voice import GRAMMARS
     base, chrome = json.loads(GRAMMARS["base"]), json.loads(GRAMMARS["chrome"])
-    assert "haut" not in chrome                    # retiré le 19/11 : une syllabe, déclenché sans le vouloir
-    for w in ("bas", "retour", "recharge", "descends"):
+    assert "haut" not in chrome and "bas" not in chrome                   # retiré le 19/11 : une syllabe, déclenché sans le vouloir
+    for w in ("retour", "recharge", "descends"):
         assert w not in base and w in chrome, w
     assert all(w in chrome for w in CHROME_KEYS)
     # en mode Chrome, les commandes habituelles restent (« iris clic » : « clic » y est seul)

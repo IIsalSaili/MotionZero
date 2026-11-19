@@ -77,7 +77,7 @@ GROUPS = [
 CHROME_HELP = {"retour": "page précédente", "avance": "page suivante", "suivant": "onglet suivant",
                "précédent": "onglet précédent", "onglet": "nouvel onglet", "ferme": "ferme l'onglet",
                "rouvre": "onglet rouvert", "recharge": "recharge",
-               "bas": "bas de page", "descends": "une page plus bas", "monte": "une page plus haut",
+               "descends": "une page plus bas", "monte": "une page plus haut",
                "agrandis": "zoom +", "réduis": "zoom −", "recherche": "barre d'adresse"}
 
 

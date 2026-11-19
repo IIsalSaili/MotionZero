@@ -48,14 +48,14 @@ from .calendar_view import WORDS as CAL_WORDS
 CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
                "suivant": ["ctrl", "tab"], "précédent": ["ctrl", "shift", "tab"],
                "onglet": ["ctrl", "t"], "ferme": ["ctrl", "w"], "rouvre": ["ctrl", "shift", "t"],
-               "recharge": ["f5"], "bas": ["end"],
+               "recharge": ["f5"],
                "descends": ["pagedown"], "monte": ["pageup"],
                "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
                "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
 CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
                  "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
                  "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE",
-                 "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
+                 "descends": "PAGE BAS", "monte": "PAGE HAUT",
                  "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 # fenêtres d'Iris (fenêtre invisible des raccourcis Discord, accueil, aide…) : ne comptent jamais comme

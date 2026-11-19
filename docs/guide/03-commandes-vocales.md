@@ -211,7 +211,6 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `ferme` | Ctrl+W | ferme l'onglet ; si une réponse, un rappel, une liste ou l'heure est affiché en haut, il est d'abord retiré (redire `ferme` pour l'onglet) |
 | `rouvre` | Ctrl+Maj+T | rouvre l'onglet fermé |
 | `recharge` | F5 | recharge |
-| `bas` | Fin | bas de page (« haut » retiré le 19/11 : une syllabe, déclenché sans le vouloir) |
 | `monte` / `descends` | Page haut / Page bas | une page |
 | `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |
 | `recherche` | Ctrl+L puis dictée | barre d'adresse |
