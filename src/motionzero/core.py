@@ -48,13 +48,13 @@ from .calendar_view import WORDS as CAL_WORDS
 CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
                "suivant": ["ctrl", "tab"], "précédent": ["ctrl", "shift", "tab"],
                "onglet": ["ctrl", "t"], "ferme": ["ctrl", "w"], "rouvre": ["ctrl", "shift", "t"],
-               "recharge": ["f5"], "favori": ["ctrl", "d"], "haut": ["home"], "bas": ["end"],
+               "recharge": ["f5"], "haut": ["home"], "bas": ["end"],
                "descends": ["pagedown"], "monte": ["pageup"],
                "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
                "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
 CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
                  "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
-                 "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE", "favori": "FAVORI",
+                 "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE",
                  "haut": "HAUT DE PAGE", "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
                  "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
@@ -111,7 +111,6 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "réveil": (("wake",), "ECRAN RALLUME"),
                   "chronomètre": (("chrono",), "CHRONOMETRE"),
                   "plus tard": (("rappel_tard",), None),
-                  "activation": (("bot_activate",), "BOT VOCAL : ACTIVATION"),   # lance le bot, charge Whisper
                   "viens": (("bot_join",), "IRIS : J'ARRIVE EN VOCAL"),
                   "pars": (("bot_leave",), "IRIS QUITTE LE VOCAL"),
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),

@@ -39,7 +39,7 @@ flowchart TD
 | Deux Iris en même temps | lancée deux fois à la main | raccourci « Iris » (tue les `-m motionzero`, jamais `/T`) |
 | Chrome ou le bot fermés avec Iris | `taskkill /T` utilisé | ne jamais utiliser `/T` |
 | Overlay visible dans un partage d'écran | réglage par défaut | bouton **œil** à côté de STOP |
-| Commande Discord sans effet | bot non lancé ou non connecté | « iris activation » ; Iris relance le bot au plus une fois par minute |
+| Commande Discord sans effet | bot non lancé ou non connecté | « iris viens » (si absent, Iris le relance) ; Iris relance le bot au plus une fois par minute |
 
 ## Les fichiers de `logs/`
 

@@ -80,7 +80,7 @@ WORDS = {
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",
     "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
-    "activation": "activation",  # « iris activation » : prépare le bot vocal Discord (sinon il ne tourne pas)
+    # « activation » et « favori » retirés le 19/11 (#50) : « viens » suffit, le bot est relancé seul
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
     "lis": "lis",         # « iris lis » : la remet

@@ -334,6 +334,4 @@ def test_iris_activation():
     from motionzero.discord_link import result_label
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("activation", 1.2) == [("bot_activate",)]
-    assert core.voice("activation", 2.0) == []            # sans « iris » : rien
-    assert "PRET" in result_label({"ok": True}, "activate")
+    assert core.voice("activation", 1.2) == []            # retiré le 19/11 (#50)

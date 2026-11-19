@@ -133,7 +133,6 @@ sequenceDiagram
 | `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
 | `salon` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « mets-moi dans le salon jeux ». Ancien fonctionnement : puis le nom d'un salon vocal : le bot t'y déplace | non | tous |
 | `silence` / `lis` | coupe / remet la lecture à voix haute des messages | non | tous |
-| `activation` | lance le bot vocal, charge Whisper | non | tous |
 | `viens` / `pars` | le bot rejoint / quitte ton salon vocal | non | tous |
 
 ### Commandes écrites en MP au bot
@@ -212,7 +211,6 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `ferme` | Ctrl+W | ferme l'onglet ; si une réponse, un rappel, une liste ou l'heure est affiché en haut, il est d'abord retiré (redire `ferme` pour l'onglet) |
 | `rouvre` | Ctrl+Maj+T | rouvre l'onglet fermé |
 | `recharge` | F5 | recharge |
-| `favori` | Ctrl+D | favori |
 | `haut` / `bas` | Début / Fin | haut / bas de page |
 | `monte` / `descends` | Page haut / Page bas | une page |
 | `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |

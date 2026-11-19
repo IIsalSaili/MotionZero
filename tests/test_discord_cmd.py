@@ -158,7 +158,6 @@ def test_transcription_sautee():
     ("viens", "join", True, None, True, "EN VOCAL"),
     ("viens", "join", False, "pas_en_vocal", False, "PAS EN VOCAL"),        # pas un « échec » de l'île : vu quand même
     ("pars", "leave", True, None, True, "QUITTE"),
-    ("activation", "activate", False, "permission_manquante", False, "PERMISSION"),
 ])
 def test_vocal_reponse_du_bot(word, kind, ok, error, expect_ok, part):
     core, link = Core(Config()), FakeLink()

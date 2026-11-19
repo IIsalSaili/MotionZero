@@ -977,8 +977,8 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
         elif a[0] == "volume_show":
             from .volume import volume_peek
             threading.Thread(target=volume_peek, name="volume", daemon=True).start()
-        elif a[0] in ("bot_join", "bot_leave", "bot_activate"):
-            order = {"bot_join": "join", "bot_leave": "leave", "bot_activate": "activate"}[a[0]]
+        elif a[0] in ("bot_join", "bot_leave"):
+            order = {"bot_join": "join", "bot_leave": "leave"}[a[0]]
             if bot is None or bot.send({"t": order}) is None:
                 on_message(bot_absent(bot))
         elif a[0] == "volume_stop":

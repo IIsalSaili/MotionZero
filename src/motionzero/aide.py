@@ -55,7 +55,6 @@ GROUPS = [
         ("mute / démute", "le micro"),
         ("sourdine", "sourdine complète"),
         ("silence / lis", "lus / pas lus"),
-        ("activation", "lance le bot vocal"),
         ("viens / pars", "le bot te suit / part"),
     ]),
     ("Temps", [
@@ -77,7 +76,7 @@ GROUPS = [
 
 CHROME_HELP = {"retour": "page précédente", "avance": "page suivante", "suivant": "onglet suivant",
                "précédent": "onglet précédent", "onglet": "nouvel onglet", "ferme": "ferme l'onglet",
-               "rouvre": "onglet rouvert", "recharge": "recharge", "favori": "favori", "haut": "haut de page",
+               "rouvre": "onglet rouvert", "recharge": "recharge", "haut": "haut de page",
                "bas": "bas de page", "descends": "une page plus bas", "monte": "une page plus haut",
                "agrandis": "zoom +", "réduis": "zoom −", "recherche": "barre d'adresse"}
 
