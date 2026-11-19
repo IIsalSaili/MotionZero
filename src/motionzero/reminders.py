@@ -28,6 +28,7 @@ PARSE_SYSTEM = (
     "Formats possibles :\n"
     '{"action":"create","text":"<ce qu\'il faut rappeler, court>","at":"AAAA-MM-JJTHH:MM",'
     '"repeat":null|"daily"|"weekdays"|"weekly","days":[0-6],"times":["HH:MM",...],"alarm":true|false}\n'
+    '{"action":"create_many","items":[<objets create sans action>, ...]}' + chr(10) +
     '{"action":"list"}\n'
     '{"action":"cancel","id":"<id d\'un rappel existant>"}\n'
     '{"action":"error","reason":"<pourquoi, en quelques mots>"}\n'
@@ -41,6 +42,8 @@ PARSE_SYSTEM = (
     "alarm = true seulement si la demande parle de réveil, d'alarme ou de sonnerie. "
     "« text » reprend l'objet du rappel sans les mots de temps (« appeler le médecin »). "
     "Pour annuler, choisis l'id du rappel existant qui correspond ; aucun ne correspond : error. "
+    "Une heure seule sans objet (« 17 h ») : create avec text « Rappel ». "
+    "Plusieurs rappels distincts dans la même demande : create_many (10 au plus). "
     "Demande incompréhensible ou sans moment : error."
 )
 
@@ -131,6 +134,8 @@ def pending_text(pending, now: datetime) -> str | None:
     if not pending:
         return None
     what, r = pending
+    if what == "create_many":
+        return (f"{len(r)} rappels · " + " · ".join(f"{describe(x, now)} {x.text}" for x in r))[:110]
     when = describe(r, now)
     if when.startswith("à "):
         when = "aujourd'hui " + when
@@ -166,11 +171,19 @@ def validate(data: dict, now: datetime, known_ids) -> tuple[str, object]:
         return ("cancel", rid) if rid in known_ids else ("error", "rappel introuvable")
     if action == "error":
         return "error", str(data.get("reason") or "pas compris")[:60]
+    if action == "create_many":                 # #56 : plusieurs rappels dans une phrase
+        out = []
+        for x in [x for x in (data.get("items") or []) if isinstance(x, dict)][:10]:
+            kind, r = validate(dict(x, action="create"), now, known_ids)
+            if kind != "create":
+                return "error", r
+            out.append(r)
+        if not out:
+            return "error", "pas compris"
+        return ("create", out[0]) if len(out) == 1 else ("create_many", out)
     if action != "create":
         return "error", "pas compris"
-    text = str(data.get("text") or "").strip()
-    if not text:
-        return "error", "rappel sans texte"
+    text = str(data.get("text") or "").strip() or "Rappel"   # « 17 h » seul : rappel sans objet (#56)
     try:
         at = datetime.strptime(str(data.get("at", ""))[:16], FMT)
     except ValueError:
@@ -384,7 +397,7 @@ class Desk:
             log.warning("rappel incompris (%s) : %s", e.__class__.__name__, phrase)
             result = ("error", "Iris indisponible" if isinstance(e, RuntimeError) else "pas compris")
         log.info("rappel : %s -> %s", phrase, result[0])
-        if not confirm and result[0] in ("create", "cancel"):
+        if not confirm and result[0] in ("create", "create_many", "cancel"):
             result = (result[0] + "_direct", result[1])
         self._q.put(result)
 
@@ -464,6 +477,19 @@ class Desk:
             target = self.r.cancel(obj)
             core.last_gesture = (f"RAPPEL SUPPRIME : {target.text}"[:60] if target else "RAPPEL INTROUVABLE", t)
             return
+        if kind == "create_many_direct":
+            for r in obj:
+                self.r.add(r)
+            core.last_gesture = (f"{len(obj)} RAPPELS ENREGISTRES", t)
+            self._say(f"{len(obj)} rappels enregistrés.")
+            return
+        if kind == "create_many":
+            self.pending = ("create_many", obj)
+            core.ask_confirm("rappel", t, CONFIRM_S)
+            core.last_gesture = (f"{len(obj)} RAPPELS : dis ENVOIE pour valider", t)
+            self._say(f"{len(obj)} rappels : " + ". ".join(f"{describe(r, now)}, {r.text}" for r in obj)
+                      + ". Dis envoie pour valider.")
+            return
         if kind == "create":
             self.pending = ("create", obj)
             core.ask_confirm("rappel", t, CONFIRM_S)
@@ -505,7 +531,11 @@ class Desk:
                     continue
                 what, r = self.pending
                 self.pending = None
-                if what == "create":
+                if what == "create_many":
+                    for x in r:
+                        self.r.add(x)
+                    core.last_gesture = (f"{len(r)} RAPPELS ENREGISTRES", t)
+                elif what == "create":
                     self.r.add(r)
                     core.last_gesture = (f"RAPPEL ENREGISTRE : {describe(r, now)}"[:60], t)
                 else:

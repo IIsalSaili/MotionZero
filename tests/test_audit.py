@@ -118,3 +118,21 @@ def test_quota_jeton_expire_dit_quoi_faire():
     q.fetcher = lambda tok: (_ for _ in ()).throw(OSError("reseau"))
     q.refresh_now()
     assert q.lines() == [("", "Quota indisponible")]
+
+
+def test_rappel_heure_seule_et_plusieurs_rappels():
+    from datetime import datetime
+    from motionzero.reminders import validate, pending_text
+    now = datetime(2026, 11, 19, 12, 0)
+    kind, r = validate({"action": "create", "text": "", "at": "2026-11-19T17:00"}, now, set())
+    assert kind == "create" and r.text == "Rappel"
+    kind, rs = validate({"action": "create_many", "items": [
+        {"text": "glace", "at": "2026-11-19T18:00"}, {"text": "attelle", "at": "2026-11-20T09:00"}]}, now, set())
+    assert kind == "create_many" and [x.text for x in rs] == ["glace", "attelle"]
+    assert pending_text(("create_many", rs), now).startswith("2 rappels")
+    # un seul mauvais : tout est refusé (pas de demi-enregistrement)
+    kind, why = validate({"action": "create_many", "items": [
+        {"text": "a", "at": "2026-11-19T18:00"}, {"text": "b", "at": "hier"}]}, now, set())
+    assert kind == "error" and "heure" in why
+    assert validate({"action": "create_many", "items": []}, now, set())[0] == "error"
+    assert validate({"action": "create_many", "items": [{"text": "a", "at": "2026-11-19T18:00"}]}, now, set())[0] == "create"
