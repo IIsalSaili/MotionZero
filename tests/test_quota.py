@@ -66,7 +66,8 @@ def test_echecs_affichent_indisponible_sans_planter():
               quota.Quota(token_reader=lambda: "x", fetcher=lambda t: {"autre": 1}),
               quota.Quota(token_reader=lambda: "x", fetcher=_fail(json.JSONDecodeError("x", "", 0)))):
         assert q.refresh_now() is False
-        assert q.lines(NOW) == [("", "Quota indisponible")]
+        attendu = "Quota : rouvre Claude Code" if q.expired else "Quota indisponible"   # 401 : #55
+        assert q.lines(NOW) == [("", attendu)]
 
 
 def test_reussite_puis_echec_n_affiche_pas_de_vieux_chiffre():
