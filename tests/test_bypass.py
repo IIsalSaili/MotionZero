@@ -52,12 +52,11 @@ def test_iris_bypass_allume_eteint_et_s_ajoute_au_focus():
     assert not core.bypass_on(5.0) and core.focus_on(5.0)
 
 
-def test_bypass_s_eteint_seul_et_se_prolonge():
-    core = Core(Config())
+def test_bypass_ne_s_eteint_jamais_seul():
+    core = Core(Config())                          # 19/11 : éteint seulement par « bypass » redit
     core.voice("iris", 1.0)
     core.voice("bypass", 1.3)
-    assert core.bypass_on(1.3 + BYPASS_IDLE_S - 1)
-    assert not core.bypass_on(1.3 + BYPASS_IDLE_S + 1)
+    assert core.bypass_on(1.3 + 24 * 3600)
     core.voice("iris", 100.0)
-    core.voice("centre", 100.3)                    # une commande prolonge
-    assert core.bypass_on(100.3 + BYPASS_IDLE_S - 1)
+    core.voice("bypass", 100.3)
+    assert not core.bypass_on(101.0)

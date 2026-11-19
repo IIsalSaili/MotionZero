@@ -23,12 +23,10 @@ def test_focus_commandes_sans_iris_puis_eteint():
     assert c.voice("chrome", 32.0) == [] and not c.last_word[2]
 
 
-def test_focus_s_eteint_seul_et_jamais_en_pause():
+def test_focus_ne_s_eteint_jamais_seul_ni_en_pause():
     c = Core(Config())
     _say(c, 0.0, "iris", "focus")
-    c.voice("quota", 100.0)                                         # une commande prolonge
-    assert c.focus_on(100.0 + FOCUS_IDLE_S - 1)
-    assert not c.focus_on(100.0 + FOCUS_IDLE_S + 1)                 # 10 min sans commande : éteint
+    assert c.focus_on(24 * 3600.0)                                  # 19/11 : plus de minuteur
     c2 = Core(Config())
     _say(c2, 0.0, "iris", "focus")
     c2.set_mode(Mode.DISABLED, 1.0, [])
@@ -53,7 +51,7 @@ def test_agrippe_enfonce_puis_relache():
     c = Core(Config())
     c.set_mouse(True, 1.0, [])
     acts = c.voice("agrippe", 5.0, t_start=4.8)                     # souris : sans « iris »
-    assert c.dragging and ("press", "mouse", "left") in acts
+    assert c.dragging and ("press", "mouse", "left", "sticky") in acts
     acts = c.voice("agrippe", 8.0, t_start=7.8)                     # redit : relâché
     assert not c.dragging and ("release", "mouse", "left") in acts
     c2 = Core(Config())                                             # souris éteinte, sans « iris » : rien

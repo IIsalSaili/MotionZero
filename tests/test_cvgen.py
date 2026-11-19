@@ -179,13 +179,11 @@ def test_mots_du_mode_sans_effet_hors_mode():
     assert ("cand", "cherche") not in core.voice("cherche", 1.0)
 
 
-def test_mode_s_eteint_seul_et_se_prolonge():
-    core = Core(Config())
+def test_mode_ne_s_eteint_jamais_seul():
+    core = Core(Config())                          # 19/11 : éteint seulement par « candidature » redit
     core.voice("iris", 1.0)
     core.voice("candidature", 1.3)
-    assert not core.cand_on(1.3 + CAND_IDLE_S + 1)
-    core.voice("état", 100.0)
-    assert core.cand_on(100.0 + CAND_IDLE_S - 1)
+    assert core.cand_on(1.3 + 24 * 3600)
 
 
 def test_pause_eteint_le_mode():

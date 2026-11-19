@@ -114,6 +114,7 @@ class Controller:
         self.b = backend
         self.cfg = cfg
         self.held = {}  # ("mouse"|"key", nom) -> instant d'appui
+        self.sticky = set()   # « agrippe » : tenu jusqu'à « agrippe » redit, « stop » ou la pause (19/11)
 
     def _press(self, kind, name, t):
         if (kind, name) in self.held:
@@ -122,12 +123,15 @@ class Controller:
         self.held[(kind, name)] = t
 
     def _release(self, kind, name):
+        self.sticky.discard((kind, name))
         if self.held.pop((kind, name), None) is not None:
             (self.b.button if kind == "mouse" else self.b.key)(name, False)
 
-    def release_all(self):
+    def release_all(self, force=False):
+        """Relâche tout, sauf le bouton d'« agrippe » (main sortie, souris éteinte…) ; force : lui aussi."""
         for kind, name in list(self.held):
-            self._release(kind, name)
+            if force or (kind, name) not in self.sticky:
+                self._release(kind, name)
 
     def execute(self, acts, t):
         for a in acts:
@@ -153,10 +157,12 @@ class Controller:
                     self.b.key(k, False)
             elif kind == "press":
                 self._press(a[1], a[2], t)
+                if a[3:] == ("sticky",):
+                    self.sticky.add((a[1], a[2]))
             elif kind == "release":
                 self._release(a[1], a[2])
             elif kind == "release_all":
-                self.release_all()
+                self.release_all(force=a[1:] == ("force",))
         for (kind, name), t0 in list(self.held.items()):
-            if t - t0 > self.cfg.max_hold_s:
+            if t - t0 > self.cfg.max_hold_s and (kind, name) not in self.sticky:
                 self._release(kind, name)

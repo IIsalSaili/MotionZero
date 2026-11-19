@@ -1109,6 +1109,8 @@ def island_text(st):
         mode = f"{mode} · BYPASS" if mode else "BYPASS"
     if st.get("candidature"):
         mode = f"{mode} · CANDIDATURE" if mode else "CANDIDATURE"
+    if st.get("dragging"):                    # « agrippe » : bouton tenu, visible tant qu'il l'est (19/11)
+        mode = f"{mode} · AGRIPPE" if mode else "AGRIPPE"
     qa = st.get("qa") or {}
     if qa.get("phase") == "listening":
         return mode, "Pose ta question…", True
