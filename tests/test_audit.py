@@ -80,3 +80,27 @@ def test_journal_ne_garde_que_le_debut_de_la_phrase():
     assert apercu("comment je pourrais soulever cent kilos") == "'comment je pourrais soulever…' (6 mots)"
     assert apercu("deux mots") == "'deux mots'"
     assert apercu(None) == "''"
+
+
+def test_transcription_apres_dechargement_recharge_sous_le_verrou():
+    from motionzero import ask
+
+    class Seg:
+        text = " bonjour "
+
+    class Model:
+        def transcribe(self, *a, **k):
+            return [Seg()], None
+    a = ask.Asker.__new__(ask.Asker)
+    import threading
+    a._model_lock, a._whisper, a._used_t = threading.Lock(), None, 0.0
+    loads = []
+
+    def fake_locked():
+        assert a._model_lock.locked()          # jamais hors du verrou
+        if a._whisper is None:
+            loads.append(1)
+            a._whisper = Model()
+    a._load_locked = fake_locked
+    assert a._transcribe(b"\x00\x00" * 160, 16000) == "bonjour"
+    assert loads == [1]

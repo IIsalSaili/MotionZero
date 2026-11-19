@@ -171,22 +171,26 @@ class Asker:
     def _load(self):
         # un seul chargement à la fois (plusieurs commandes pouvaient charger deux modèles en même temps)
         with self._model_lock:
-            if self._whisper is not None:
-                return
-            from faster_whisper import WhisperModel
-            t0 = time.perf_counter()
-            try:
-                _nvidia_dlls()
-                model = WhisperModel(WHISPER, device="cuda", compute_type="float16", local_files_only=True)
-                model.transcribe(np.zeros(16000, np.float32), language="fr")   # échauffement (1re passe lente)
-                log.info("whisper pret (carte graphique, %.1f s)", time.perf_counter() - t0)
-            except Exception:
-                log.exception("whisper sur carte graphique impossible : processeur (plus lent)")
-                # 4 cœurs au plus : sans limite, la transcription prenait tout le processeur
-                model = WhisperModel(WHISPER, device="cpu", compute_type="int8", cpu_threads=WHISPER_CPU_THREADS,
-                                     local_files_only=True)
-            self._whisper = model
-            self._used_t = time.perf_counter()
+            self._load_locked()
+
+    def _load_locked(self):
+        """Charge le modèle ; le verrou est déjà tenu (#54 : transcrire juste après un déchargement plantait)."""
+        if self._whisper is not None:
+            return
+        from faster_whisper import WhisperModel
+        t0 = time.perf_counter()
+        try:
+            _nvidia_dlls()
+            model = WhisperModel(WHISPER, device="cuda", compute_type="float16", local_files_only=True)
+            model.transcribe(np.zeros(16000, np.float32), language="fr")   # échauffement (1re passe lente)
+            log.info("whisper pret (carte graphique, %.1f s)", time.perf_counter() - t0)
+        except Exception:
+            log.exception("whisper sur carte graphique impossible : processeur (plus lent)")
+            # 4 cœurs au plus : sans limite, la transcription prenait tout le processeur
+            model = WhisperModel(WHISPER, device="cpu", compute_type="int8", cpu_threads=WHISPER_CPU_THREADS,
+                                 local_files_only=True)
+        self._whisper = model
+        self._used_t = time.perf_counter()
 
     def _reaper(self):
         while True:
@@ -201,10 +205,10 @@ class Asker:
     def _transcribe(self, audio, sr):
         if isinstance(audio, str):    # texte écrit en MP au bot (#43) : déjà transcrit
             return audio
-        self._load()          # rechargé à la demande s'il a été déchargé
         pcm = np.frombuffer(audio, dtype=np.int16).astype(np.float32) / 32768.0
         # une transcription à la fois : jamais deux en même temps sur la carte graphique
         with self._model_lock:
+            self._load_locked()   # rechargé à la demande, sous le verrou : le ramasseur ne peut pas passer entre
             self._used_t = time.perf_counter()
             segments, _ = self._whisper.transcribe(pcm, language="fr", beam_size=1, vad_filter=True)
             text = " ".join(s.text.strip() for s in segments).strip()
@@ -214,8 +218,8 @@ class Asker:
     def translate(self, pcm):
         """« iris traducteur » : son du PC (float32 16 kHz), langue détectée, traduit en anglais.
         Même modèle et même verrou que la voix : une commande dictée passe entre deux phrases."""
-        self._load()
         with self._model_lock:
+            self._load_locked()
             self._used_t = time.perf_counter()
             # beam 5 : plus précis (demande de l'utilisateur) ; sans le texte précédent, moins d'hallucinations
             segments, _ = self._whisper.transcribe(pcm, task="translate", beam_size=5, vad_filter=True,
