@@ -35,7 +35,7 @@ class Mode:
 
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "SOURIS ETEINTE"}
 WAKE_WORD = "iris"
-VOICE_HOTKEYS = {"entrée": ["enter"], "espace": ["space"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
+VOICE_HOTKEYS = {"entrée": ["enter"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"],   # flèches : ±10 s sur YouTube
                  # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
                  "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
@@ -62,9 +62,8 @@ CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avan
 # « une autre appli devant » (14/11 : « iris mute » faisait quitter le mode Chrome, 53 « iris chrome » redits en 4 jours)
 IRIS_EXES = ("python.exe", "pythonw.exe")
 
-ALIASES = {"envoyé": "envoie",   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
-           # français et anglais font la même chose (12/11) ; « défun » retiré le 14/11 : « sourdine » seul
-           "muet": "mute"}   # « ok / okay » retirés le 14/11 (jamais utilisés)
+ALIASES = {"envoyé": "envoie"}   # « envoyé » vient plus naturellement (demande de l'utilisateur, 12/11)
+           # « muet » et « espace » retirés le 19/11 (#50) : « mute » et « space » suffisent   # « ok / okay » retirés le 14/11 (jamais utilisés)
 EDITOR_TABS = {"suivant": ["ctrl", "pagedown"], "précédent": ["ctrl", "pageup"]}   # VS Code (pas Ctrl+Tab :
                           # il ouvre une liste qui attend qu'on relâche Ctrl)
 HELP_S = 90.0             # « iris aide » : fermée seule après ce temps
@@ -73,11 +72,11 @@ CAL_IDLE_S = 60.0         # calendrier ouvert sans commande : fermé
 # (onglets de VS Code), souvent redits avec « iris » (6 fois chacun en 4 jours) ; en Chrome ils sont déjà libres
 TYPE_WAIT_S = 20.0        # « iris type » : attente maximale du texte (Whisper) avant d'abandonner la confirmation
 TYPE_ERASE_S = 30.0       # « iris annule » dit après la confirmation : efface encore la dictée seule (pas tout le champ)
-REPEATABLE = ("skip", "back", "efface", "undo", "redo", "espace", "space", "suivant", "précédent")
+REPEATABLE = ("skip", "back", "efface", "undo", "redo", "space", "suivant", "précédent")
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
                 "agrippe": "BOUTON TENU (redis AGRIPPE pour lacher)", "entrée": "TOUCHE ENTREE",
-                "espace": "TOUCHE ESPACE", "space": "TOUCHE ESPACE",
+                "space": "TOUCHE ESPACE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
                 "type": "DICTEE : parle",
@@ -770,7 +769,7 @@ class Core:
         if word == "plus tard" and self.reminder_shown:
             self._heard_alone(word, t, VOICE_LABELS["plus tard"])     # rappel affiché : « plus tard » sans « iris »
             return [("rappel_tard",)]
-        if chrome and word in ("skip", "back", "espace", "space"):
+        if chrome and word in ("skip", "back", "space"):
             # mode Chrome : vidéo (±10 s, pause) sans « iris » (demande de l'utilisateur, 12/11)
             self._heard_alone(word, t, VOICE_LABELS[word])
             return [("hotkey", VOICE_HOTKEYS[word])]

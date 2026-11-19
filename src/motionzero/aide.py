@@ -21,7 +21,7 @@ GROUPS = [
         ("type", "dictée au curseur"),
         ("entrée / envoie", "touche Entrée"),
         ("annule", "touche Échap"),
-        ("espace", "touche Espace"),
+        ("space", "touche Espace"),
         ("copie / colle", "Ctrl+C / Ctrl+V"),
         ("sélection", "tout sélectionner"),
         ("coupe", "couper"),

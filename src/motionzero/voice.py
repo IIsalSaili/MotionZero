@@ -43,7 +43,7 @@ WORDS = {
     "scroll": "scroll",   # « iris scroll » : défilement à la main / tête (ex-« défile », pris pour « défun » le 14/11)
     # « page » retiré : le geste (paume au bord) le fait déjà. La voix sert à ce que la main ne fait pas.
     "entrée": "entrée",
-    "espace": "espace",   # « iris espace » / « iris space » : touche Espace
+    # « espace » retiré le 19/11 (#50) : « iris space » seul
     "space": "space",
     "annule": "annule",   # touche Échap (« échap » n'existe pas dans le modèle)
     "copie": "copie",
@@ -76,7 +76,6 @@ WORDS = {
     "question": "question",  # « iris question » : poser une question à Claude (réponse dans l'île)
     "ferme": "ferme",     # « iris ferme » : retirer la réponse affichée
     "mute": "mute",       # « iris mute » : coupe Discord
-    "muet": "muet",       # « iris muet » : pareil, en français
     "sourdine": "sourdine",  # « iris sourdine » : sourdine Discord, casque + micro
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",

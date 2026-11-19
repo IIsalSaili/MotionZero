@@ -67,7 +67,7 @@ Mode : « tous » sauf mention.
 | `entrée` | touche Entrée | non | tous |
 | `envoie` (`envoyé`) | Entrée ; après une dictée : envoie le texte | oui après dictée / rappel | tous |
 | `annule` | VS Code devant : vide le message de Claude ; sinon Échap. Après « iris type » : efface la dictée seule, même avec « iris » dans les 30 s (tant qu'aucune autre commande n'a suivi) | oui après dictée / rappel | tous |
-| `espace` / `space` | touche Espace (pause vidéo) | répétable Chrome | tous |
+| `space` | touche Espace (pause vidéo) | répétable Chrome | tous |
 | `copie` / `colle` | Ctrl+C / Ctrl+V | non | tous |
 | `sélection` | tout sélectionner (Ctrl+A) | non | tous |
 | `coupe` | Ctrl+X | non | tous |
@@ -127,7 +127,7 @@ sequenceDiagram
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `mute` (`muet`) | coupe le micro Discord | non | tous |
+| `mute` | coupe le micro Discord | non | tous |
 | `démute` (« des mute ») | rallume le micro | non | tous |
 | `sourdine` | sourdine casque + micro | non | tous |
 | `message` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « dis dans général que j'arrive ». Ancien fonctionnement : puis « dans général, … » : envoyé par le bot | non | tous |
@@ -218,7 +218,7 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |
 | `recherche` | Ctrl+L puis dictée | barre d'adresse |
 
-Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `double`.
+Aussi sans « iris » en Chrome : `skip`, `back`, `space`, `clic`, `double`.
 
 ## <a id="mots-sans-iris"></a>Récapitulatif : mots sans « iris »
 
@@ -231,7 +231,7 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `espace`, `space`, `clic`, `do
 | VS Code devant (hors Chrome) | `suivant`, `précédent` |
 | Réponse, rappel, liste ou heure affichés en haut | `ferme`, `merci` (le retirent) |
 | Rappel affiché | `plus tard` |
-| Mode CHROME | mots du tableau Chrome + `skip`, `back`, `espace`, `space`, `clic`, `double` |
+| Mode CHROME | mots du tableau Chrome + `skip`, `back`, `space`, `clic`, `double` |
 | Après « iris claude » (30 s) | `envoie`, `annule`, `claude` |
 | Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |
 | Après la répétition d'un rappel (20 s) | `envoie`, `annule` |

@@ -91,10 +91,12 @@ def test_rien_dit():
 
 
 def test_espace_et_space():
-    for word in ("espace", "space"):
-        core = Core(Config())
-        core.voice("iris", 1.0)
-        assert core.voice(word, 1.5) == [("hotkey", ["space"])]
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("space", 1.5) == [("hotkey", ["space"])]
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    assert core.voice("espace", 1.5) == []      # retiré le 19/11 (#50)
 
 
 def test_slash():

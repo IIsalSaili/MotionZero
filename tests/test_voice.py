@@ -533,8 +533,8 @@ def test_espace_et_onglet_vs_code_repetables():
     from motionzero.core import Core
     core = Core(Config())
     core.voice("iris", 1.0)
-    core.voice("espace", 1.2)
-    assert core.voice("espace", 2.0) == [("hotkey", ["space"])]        # sans « iris », dans les 2 s
+    core.voice("space", 1.2)
+    assert core.voice("space", 2.0) == [("hotkey", ["space"])]        # sans « iris », dans les 2 s
     core = Core(Config())
     core.voice("iris", 1.0)
     first = core.voice("suivant", 1.2)
