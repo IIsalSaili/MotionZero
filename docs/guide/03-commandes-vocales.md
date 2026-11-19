@@ -151,7 +151,7 @@ Les commandes suivies d'une phrase prennent la suite du MP à la place du micro 
 
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
-| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku) | non | tous |
+| `rappel` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « rappelle-moi demain à 9 h… ». Ancien fonctionnement : puis la demande : créer, lister, annuler (Whisper + Haiku). Depuis le 19/11 : une heure seule (« 17 h ») crée un rappel « Rappel » ; plusieurs rappels dans une phrase sont récapitulés puis validés ensemble (10 au plus) | non | tous |
 | `merci` | retire ce qui est affiché en haut, valide le rappel ; ferme le calendrier | oui si quelque chose est affiché ou calendrier ouvert | tous |
 | `plus tard` | le rappel affiché revient dans 10 min | oui rappel affiché | tous |
 | `timer` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « timer de 10 minutes ». Ancien fonctionnement : puis la durée (« cinq minutes ») ; redit pendant qu'il tourne : annulé | non | tous |
