@@ -136,3 +136,28 @@ def test_rappel_heure_seule_et_plusieurs_rappels():
     assert kind == "error" and "heure" in why
     assert validate({"action": "create_many", "items": []}, now, set())[0] == "error"
     assert validate({"action": "create_many", "items": [{"text": "a", "at": "2026-11-19T18:00"}]}, now, set())[0] == "create"
+
+
+def test_bot_absent_dit_quoi_faire_sans_doubler_le_lancement():
+    from motionzero.app import bot_absent
+    from motionzero.discord_link import BotLink
+    assert bot_absent(None) == "BOT DISCORD ABSENT"
+    b = BotLink.__new__(BotLink)
+    b.conf, b.launch_enabled, b._last_launch = {}, True, 0.0
+    b.clock = lambda: 1000.0
+    b.bot_dir = "C:/nulle-part"
+    assert bot_absent(b) == "BOT DISCORD ABSENT"           # exécutable introuvable : pas de promesse
+    b.launch_enabled = False
+    assert bot_absent(b) == "BOT DISCORD ABSENT"
+
+
+def test_message_discord_bot_absent_repond_tout_de_suite():
+    from motionzero.app import open_actions
+
+    class L:
+        def stop_capture(self):
+            return b""
+    said = []
+    assert open_actions([("message_stop",), ("autre",)], L(), None, asker=None, bot=None,
+                        on_message=said.append) == [("autre",)]
+    assert said == ["BOT DISCORD ABSENT"]

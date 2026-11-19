@@ -957,6 +957,13 @@ def question_actions(acts, listener, asker):
     return rest
 
 
+def bot_absent(bot):
+    """Message quand le bot ne répond pas : on relance tout de suite s'il peut l'être (#57)."""
+    if bot is not None and getattr(bot, "enabled", False) and bot.launch_now():
+        return "BOT DISCORD ABSENT : il demarre, redis dans 30 s"
+    return "BOT DISCORD ABSENT"
+
+
 def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None, instructeur=None):
     """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
@@ -973,7 +980,7 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
         elif a[0] in ("bot_join", "bot_leave", "bot_activate"):
             order = {"bot_join": "join", "bot_leave": "leave", "bot_activate": "activate"}[a[0]]
             if bot is None or bot.send({"t": order}) is None:
-                on_message("BOT DISCORD ABSENT")
+                on_message(bot_absent(bot))
         elif a[0] == "volume_stop":
             from .volume import volume_spoken
             audio = listener.stop_capture()
@@ -989,6 +996,9 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
                 instructeur.submit(audio)
         elif a[0] in ("message_stop", "salon_stop"):
             audio = listener.stop_capture()
+            if bot is None or not bot.connected:   # #57 : dit tout de suite, sans attendre la transcription
+                on_message(bot_absent(bot))
+                continue
             threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),
                              name="discord", daemon=True).start()
         elif a[0] == "open_stop":
@@ -1013,7 +1023,7 @@ def discord_spoken(kind, audio, asker, bot, on_message):
         on_message("RIEN ENTENDU")
         return
     if bot is None or not bot.connected:
-        on_message("BOT DISCORD ABSENT")
+        on_message(bot_absent(bot))
         return
     msg = {"t": "send", "text": text} if kind == "message_stop" else {"t": "move", "channel": text}
     if bot.send(msg) is None:
