@@ -591,6 +591,7 @@ class Engine:
             "focus": core.focus_on(t),
             "bypass": core.bypass_on(t),
             "candidature": core.cand_on(t),
+            "dragging": core.dragging,
             "dictating": core.dictating,
             "typing": core.typing or core.opening,
             "confirming": core.confirming(t),

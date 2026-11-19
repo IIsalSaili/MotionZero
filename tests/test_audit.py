@@ -161,3 +161,40 @@ def test_message_discord_bot_absent_repond_tout_de_suite():
     assert open_actions([("message_stop",), ("autre",)], L(), None, asker=None, bot=None,
                         on_message=said.append) == [("autre",)]
     assert said == ["BOT DISCORD ABSENT"]
+
+
+def test_agrippe_tient_jusqu_a_etre_redit():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    from motionzero.output import Controller, FakeBackend
+    cfg = Config()
+    ctl = Controller(FakeBackend(), cfg)
+    c = Core(cfg)
+    c.set_mouse(True, 1.0, [])
+    ctl.execute(c.voice("agrippe", 5.0, t_start=4.8), 5.0)
+    assert ("mouse", "left") in ctl.held
+    ctl.execute([("release_all",)], 6.0)                    # main sortie, souris éteinte… : tient
+    ctl.execute([], 5.0 + cfg.max_hold_s + 60)               # aucun délai maximal
+    assert ("mouse", "left") in ctl.held and c.dragging
+    ctl.execute(c.voice("agrippe", 9999.0, t_start=9998.8), 9999.0)   # redit : relâché
+    assert ("mouse", "left") not in ctl.held and not c.dragging
+
+
+def test_stop_et_pause_relachent_l_agrippe():
+    from motionzero.config import Config
+    from motionzero.core import Core
+    from motionzero.output import Controller, FakeBackend
+    for fin in ("stop", "pause"):
+        cfg = Config()
+        ctl, c = Controller(FakeBackend(), cfg), Core(cfg)
+        c.set_mouse(True, 1.0, [])
+        ctl.execute(c.voice("agrippe", 5.0, t_start=4.8), 5.0)
+        acts = c.voice(fin, 6.0) if fin == "stop" else (c.voice("iris", 6.0) + c.voice("pause", 6.2))
+        ctl.execute(acts, 6.3)
+        assert ("mouse", "left") not in ctl.held and not c.dragging, fin
+
+
+def test_ilot_montre_agrippe():
+    from motionzero.ui import island_text
+    assert "AGRIPPE" in island_text({"mode": "NEUTRE", "mouse": True, "dragging": True})[0]
+    assert "AGRIPPE" not in island_text({"mode": "NEUTRE", "mouse": True})[0]

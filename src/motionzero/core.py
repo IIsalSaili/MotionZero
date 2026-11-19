@@ -48,14 +48,14 @@ from .calendar_view import WORDS as CAL_WORDS
 CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
                "suivant": ["ctrl", "tab"], "précédent": ["ctrl", "shift", "tab"],
                "onglet": ["ctrl", "t"], "ferme": ["ctrl", "w"], "rouvre": ["ctrl", "shift", "t"],
-               "recharge": ["f5"], "haut": ["home"], "bas": ["end"],
+               "recharge": ["f5"], "bas": ["end"],
                "descends": ["pagedown"], "monte": ["pageup"],
                "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
                "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
 CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
                  "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
                  "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE",
-                 "haut": "HAUT DE PAGE", "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
+                 "bas": "BAS DE PAGE", "descends": "PAGE BAS", "monte": "PAGE HAUT",
                  "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 # fenêtres d'Iris (fenêtre invisible des raccourcis Discord, accueil, aide…) : ne comptent jamais comme
@@ -75,7 +75,7 @@ TYPE_ERASE_S = 30.0       # « iris annule » dit après la confirmation : effac
 REPEATABLE = ("skip", "back", "efface", "undo", "redo", "space", "suivant", "précédent")
 # mot dit -> ce qui se passe (affiché en grand, et dans le panneau d'aide)
 VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DROIT",
-                "agrippe": "BOUTON TENU (redis AGRIPPE pour lacher)", "entrée": "TOUCHE ENTREE",
+                "agrippe": "AGRIPPE : bouton tenu (redis AGRIPPE pour lacher)", "entrée": "TOUCHE ENTREE",
                 "space": "TOUCHE ESPACE",
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
@@ -116,9 +116,8 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "silence": (("discord_hush",), None), "lis": (("discord_read",), None),
                   "mute": (("discord_mute",), None), "démute": (("discord_unmute",), None),
                   "sourdine": (("discord_deafen",), None)}
-CAND_IDLE_S = 1800.0     # « iris candidature » éteint seul après 30 min sans commande du mode
-BYPASS_IDLE_S = 600.0    # « iris bypass » éteint seul après 10 min sans commande, comme le focus
-FOCUS_IDLE_S = 600.0     # mode focus éteint seul après 10 min sans commande (une conversation a pu reprendre)
+# focus, bypass, candidature : allumés jusqu'à ce que l'utilisateur les éteigne lui-même (19/11 : plus de minuteur)
+CAND_IDLE_S = BYPASS_IDLE_S = FOCUS_IDLE_S = math.inf
 
 # « iris + mot » avec de l'état : mot -> méthode Core._cmd_<nom>
 COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "grip",
@@ -363,7 +362,8 @@ class Core:
         acts.append(("move", *self.cursor))
 
     def disable(self, t):
-        acts = [("release_all",)]
+        self.dragging = False
+        acts = [("release_all", "force")]
         self.set_mode(Mode.DISABLED, t, acts)
         return acts
 
@@ -687,7 +687,8 @@ class Core:
     def _v_stop(self, word, t, t_start, acts):
         """« stop » : toujours écouté, prioritaire. « lâche » : un bouton tenu doit toujours pouvoir être relâché."""
         if word == "stop":
-            acts += [("release_all",), ("alarm_stop",)]   # une alarme qui sonne se tait aussi
+            acts += [("release_all", "force"), ("alarm_stop",)]   # une alarme qui sonne se tait aussi
+            self.dragging = False                 # « stop » : relâche aussi le bouton d'« agrippe »
             self._quiet()
             scrolling = t < self.voice_scroll_until
             self.voice_scroll_until = self.listen_until = -1e9
@@ -901,7 +902,7 @@ class Core:
     def _cmd_grip(self, word, t, acts):
         """« agrippe » : enfonce le bouton gauche (glisser) ; redit, il est relâché (voir _v_stop)."""
         self._aim(self.wake_t, acts)
-        acts.append(("press", "mouse", "left"))
+        acts.append(("press", "mouse", "left", "sticky"))   # tenu jusqu'à « agrippe » redit (ni délai ni main)
         self.dragging = True
 
     def _cmd_scroll(self, word, t, acts):
@@ -1036,7 +1037,8 @@ class Core:
         # accueil (fenêtre d'Iris) ne le fait plus quitter
 
     def _cmd_pause(self, word, t, acts):
-        acts.append(("release_all",))
+        self.dragging = False
+        acts.append(("release_all", "force"))
         self.set_mode(Mode.DISABLED, t, acts, why="pause")
         self.listen_until = -1e9
         if t < self.calendar_until:           # rien ne reste ouvert pendant la pause
