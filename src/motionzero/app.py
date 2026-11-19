@@ -449,7 +449,7 @@ class Engine:
                     d.sounds.play("NON")
             if core.dictating and t - self.last_level_log >= 1.0:
                 self.last_level_log = t
-                _log.info("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
+                _log.debug("dictee : micro rms %.0f (bruit de fond %.0f), parole il y a %.1f s",
                          listener.last_rms, listener.ambient, t - listener.last_speech_t)
         lg = core.last_gesture
         if lg is not None and lg is not self.last_fail_seen:
@@ -538,7 +538,7 @@ class Engine:
                 d.sounds.play("SOURIS" if a[1] else "REPOS")
                 _log.info("souris %s", "allumee" if a[1] else "eteinte")
             elif a[0] == "scroll":
-                _log.info("scroll %s", a[1])
+                _log.debug("scroll %s", a[1])   # ~35 000 lignes en 12 jours : noyait les erreurs (#49)
             elif a[0] == "hotkey":
                 _log.info("touches %s", "+".join(a[1]))
             elif a[0] in ("key", "click"):

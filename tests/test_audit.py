@@ -73,3 +73,10 @@ def test_erreur_simple_puis_repetee():
 def test_toast_le_plus_recent_gagne():
     assert pick_toast(None, ("a", 1.0), ("b", 3.0), ("c", 2.0)) == ("b", 3.0)
     assert pick_toast(None, None) is None
+
+
+def test_journal_ne_garde_que_le_debut_de_la_phrase():
+    from motionzero.voice import apercu
+    assert apercu("comment je pourrais soulever cent kilos") == "'comment je pourrais soulever…' (6 mots)"
+    assert apercu("deux mots") == "'deux mots'"
+    assert apercu(None) == "''"

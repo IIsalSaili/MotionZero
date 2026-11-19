@@ -311,6 +311,14 @@ def rejection(res, min_conf=0.6):
                     and _gap(w, n) > IRIS_GAP_S else "") for w, n in zip(words, words[1:] + [words[-1]]))
 
 
+def apercu(text, n=4):
+    """Les n premiers mots seulement (#49) : le journal ne garde pas les conversations privées."""
+    words = (text or "").split()
+    if len(words) <= n:
+        return "'%s'" % " ".join(words)
+    return "'%s…' (%d mots)" % (" ".join(words[:n]), len(words))
+
+
 @dataclass
 class VoiceEvent:
     word: str
@@ -476,7 +484,7 @@ class VoiceListener:
         if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
                                                    self.quiet, relaxed, bypass):
             said = " ".join(w["word"] for w in words)
-            log.info("non confirme : %s (entendu librement : '%s')", said, free_text)
+            log.info("non confirme : %s (entendu librement : %s)", said, apercu(free_text))
             self.last_rejected = (f"« {said} » ignoré : pas sûr de l'avoir entendu", time.perf_counter())
             return
         # Dates sur l'horloge de l'appli, pas sur celle du flux audio : celle-ci dérive avec le temps et
