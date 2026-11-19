@@ -30,6 +30,9 @@ CLOSE_HINT = "« iris merci » pour fermer"
 HELP_WORDS = ("aide", "exemple", "sais faire", "tu sais faire", "peux faire", "comment ca marche", "quoi dire")
 
 
+OLLAMA_FLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)   # console cachée, héritée par ses enfants
+
+
 def is_help(phrase):
     from .outils import norm_name
     p = norm_name(phrase)
@@ -191,8 +194,9 @@ def ensure_ollama(wait_s=15.0):
         pass
     try:
         subprocess.Popen(["ollama", "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)
-                         | getattr(subprocess, "DETACHED_PROCESS", 0))
+                         # console cachée seulement : ses enfants (gpu-discover, llama-server) la reprennent.
+                         # DETACHED_PROCESS (sans console) leur faisait ouvrir chacun une fenêtre (18/11).
+                         creationflags=OLLAMA_FLAGS)
     except OSError:
         log.exception("ollama introuvable")
         return False

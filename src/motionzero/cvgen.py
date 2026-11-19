@@ -40,6 +40,8 @@ ROUTES = {
     "maj_offre": ("PATCH", "/api/offres/{id}"),     # garder / écarter : comme les boutons de la page Offres
     "offre": ("GET", "/api/offres/{id}"),           # suivi de la préparation (offre.preparation.etape)
     "preparer": ("POST", "/api/offres/{id}/preparer"),   # « Préparer la candidature » : CV composé, PDF, pièces
+    "profil": ("GET", "/api/profile"),              # nom, mail, téléphone… lus à la demande, jamais recopiés
+    "en_cours": ("POST", "/api/offres/{id}/en-cours"),   # PDF de l'offre dans le dossier fixe, et leurs chemins
 }
 # Pages ouvertes dans le navigateur (vérifiées par les tests : fichiers de public/ et route des PDF)
 PAGES = {"atelier": "/generate.html?id={cv}", "jury": "/jury.html?id={cv}",
@@ -62,17 +64,30 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          "prépare": "CV composé, PDF et pièces prêts (comme « Préparer la candidature »)",
          "montre": "le PDF prêt, sinon l'atelier du CV",
          "relis": "la relecture par le jury",
-         "aide": "toutes les commandes du mode, par étape"}
+         "aide": "toutes les commandes du mode, par étape",
+         # phase 4 : remplir le formulaire du site, un champ à la fois, quand tu le demandes
+         "mail": "écrit ton e-mail dans le champ choisi", "téléphone": "ton téléphone", "prénom": "ton prénom",
+         "nom": "ton nom", "ville": "ta ville", "github": "ton lien GitHub", "linkedin": "ton lien LinkedIn",
+         "cv": "le PDF du CV, dans la fenêtre « Choisir un fichier »",
+         "lettre": "le PDF de la lettre, dans la fenêtre « Choisir un fichier »",
+         "postulé": "candidature notée envoyée (relance à J+7)"}
+FIELDS = {"mail": "email", "téléphone": "telephone", "prénom": "prenom", "nom": "nom", "ville": "ville"}
+LINKS = {"github", "linkedin"}
+FILES = {"cv", "lettre"}
+FILE_DIALOG = "#32770"   # classe Windows des fenêtres « Ouvrir » / « Choisir un fichier »
 HELP_S = 40.0
 HELP_LINES = [
     "Recherche : « cherche » (lance / arrête) · « état » · « offres » (la page)",
     "Tri : « liste », puis « suivante » · « précédente » · « garde » · « écarte »",
     "CV : « prépare » (CV et pièces en PDF) · « montre » (le PDF) · « relis » (jury)",
-    "Postuler : « lien » ouvre l'offre sur son site",
+    "Postuler : « lien » ouvre l'offre sur son site ; clique dans un champ, puis dis",
+    "  « mail » · « téléphone » · « prénom » · « nom » · « ville » · « github » · « linkedin »",
+    "  « cv » / « lettre » dans la fenêtre « Choisir un fichier » ; « postulé » une fois envoyé",
     "Souris : « souris », puis « clic » · « scroll »… · « stop » arrête tout",
     "Quitter le mode : « candidature »",
 ]
-NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis"}   # liste ouverte
+NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis", "cv", "lettre",
+       "postulé"}   # liste ouverte
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
 A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier"}
 
@@ -85,10 +100,37 @@ def next_hint(o, prep_line=None, preparing=False):
         return "« garde » · « écarte » · « suivante » · « aide »"
     pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
     if pret:
-        return "« montre » · « relis » · « lien » pour postuler · « aide »"
+        return "« lien » · « mail » · « cv » · « postulé » · « aide »"
     if preparing:
         return "préparation en cours · « suivante » · « aide »"
     return "« prépare » · « montre » · « écarte » · « aide »"
+
+
+def profile_value(profile, word):
+    """Texte à écrire pour « mail », « github »… ; None s'il manque au profil. Pur : testable."""
+    ident = (profile or {}).get("identity") or {}
+    if word in FIELDS:
+        v = str(ident.get(FIELDS[word]) or "").strip()
+        return v or None
+    for lien in ident.get("liens") or []:
+        url = str((lien or {}).get("url") or "") if isinstance(lien, dict) else str(lien)
+        if word in url.lower() or word in str((lien or {}).get("label", "") if isinstance(lien, dict) else "").lower():
+            return url or None
+    return None
+
+
+def _fg_class():
+    import ctypes
+    buf = ctypes.create_unicode_buffer(64)
+    ctypes.windll.user32.GetClassNameW(ctypes.windll.user32.GetForegroundWindow(), buf, 64)
+    return buf.value
+
+
+def _type(text, enter=False):
+    from .typer import press, type_text
+    type_text(text)
+    if enter:
+        press("enter")
 
 
 def iris_says(msg):
@@ -197,8 +239,10 @@ def summary(agent, compte, prep):
 
 
 class Candidature:
-    def __init__(self, http=_http, launch=_launch, open_url=None, clock=time.monotonic, sleep=time.sleep):
+    def __init__(self, http=_http, launch=_launch, open_url=None, clock=time.monotonic, sleep=time.sleep,
+                 typer=_type, fg_class=_fg_class):
         self.http, self.launch, self.open_url = http, launch, open_url
+        self.typer, self.fg_class = typer, fg_class
         self.clock, self.sleep = clock, sleep
         self._q = queue.Queue()
         self.busy = False
@@ -207,6 +251,7 @@ class Candidature:
         self.offres, self.i = None, 0     # liste parcourue (None : pas ouverte) ; seulement boucle principale
         self.preparing = None              # id de l'offre en préparation (une à la fois, comme CVGEN)
         self.prep = {}                     # id -> dernière ligne d'avancement
+        self.files = {}                    # id -> {"cv": chemin, "lettre": chemin} (dossier fixe de CVGEN)
 
     # ---- fil « cvgen » ----
     def _ensure(self):
@@ -266,6 +311,17 @@ class Candidature:
                 self._q.put(("prep", arg["id"], {"etape": "attente"}))
                 self._follow(arg["id"])
                 return
+            elif word in FIELDS or word in LINKS:
+                self._q.put(("field", word, profile_value(call("profil", self.http), word)))
+                return
+            elif word in FILES:
+                r = call("en_cours", self.http, {}, id=arg["id"]) or {}
+                self._q.put(("files", arg["id"], {k: r.get(k) for k in FILES}, word))
+                return
+            elif word == "postulé":
+                call("maj_offre", self.http, {"etat": "postulee"}, id=arg["id"])
+                self._q.put(("verdict", arg["id"], word))
+                return
             elif word in ("garde", "écarte"):
                 etat = "gardee" if word == "garde" else "ecartee"
                 call("maj_offre", self.http, {"etat": etat}, id=arg["id"])
@@ -284,6 +340,10 @@ class Candidature:
 
     # ---- boucle principale ----
     def ask(self, word, t):
+        if (word in FIELDS or word in LINKS) and not self.busy:
+            self.busy = True                    # le champ garde le focus : rien n'est affiché devant avant d'écrire
+            threading.Thread(target=self._work, args=(word,), name="cvgen", daemon=True).start()
+            return
         if word == "aide":
             self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
             self.show_until = t + HELP_S
@@ -321,6 +381,15 @@ class Candidature:
                 self._card(t, "Ouverte dans le navigateur")
         elif word == "garde" and o["etat"] != "a-trier":
             self._card(t, "Déjà gardée : son CV est prêt")
+        elif word in FILES or word == "postulé":
+            if not o.get("cvId"):
+                self._card(t, "Pas encore de CV : dis « garde » d'abord")
+            elif word == "postulé":
+                self._send(word, t, o)
+            elif self.files.get(o["id"], {}).get(word):
+                self._file(o["id"], word, t)
+            else:
+                self._send(word, t, o)         # PDF posés par CVGEN, puis collés
         elif word in ("prépare", "montre", "relis") and not o.get("cvId"):
             self._card(t, "Pas encore de CV : dis « garde » d'abord")
         elif word == "prépare":
@@ -342,6 +411,17 @@ class Candidature:
             self._card(t, note)
         else:
             self._send(word, t, o)
+
+    def _file(self, oid, word, t):
+        """Écrit le chemin du PDF dans la fenêtre « Choisir un fichier » (une fenêtre de Windows, pas le site)."""
+        path = self.files.get(oid, {}).get(word)
+        if not path:
+            self._card(t, f"Pas de PDF {'du CV' if word == 'cv' else 'de la lettre'} : dis « prépare » d'abord")
+        elif self.fg_class() != FILE_DIALOG:
+            self._card(t, "Ouvre d'abord la fenêtre « Choisir un fichier » du site, puis redis-le")
+        else:
+            self.typer(path, enter=True)
+            self._card(t, f"{'CV' if word == 'cv' else 'Lettre'} joint{'' if word == 'cv' else 'e'}")
 
     def _card(self, t, note=None):
         title, lines = card(self.offres or [], self.i)
@@ -373,12 +453,26 @@ class Candidature:
                 self.offres, self.i = msg[1], 0
                 self._card(t)
                 core.last_gesture = (f"CANDIDATURE : {len(msg[1])} OFFRES", t)
+            elif msg[0] == "field":
+                self.busy = False
+                _, word, value = msg
+                if value is None:
+                    self._show(self.title or "Candidature", [f"« {word} » : absent de ton profil CVGEN"], t, self.meta)
+                else:
+                    self.typer(value)
+                    core.last_gesture = (f"CANDIDATURE : {word.upper()} ECRIT", t)
+            elif msg[0] == "files":
+                self.busy = False
+                _, oid, paths, word = msg
+                self.files[oid] = paths
+                self._file(oid, word, t)
             elif msg[0] == "verdict":
                 self.busy = False
                 _, oid, word = msg
                 self.offres = [o for o in self.offres or [] if o["id"] != oid]
                 self.i = min(self.i, max(len(self.offres) - 1, 0))
-                fait = "Gardée : CVGEN prépare son CV" if word == "garde" else "Écartée"
+                fait = {"garde": "Gardée : CVGEN prépare son CV", "écarte": "Écartée",
+                        "postulé": "Notée postulée : relance dans 7 jours"}[word]
                 self._card(t, fait)
                 core.last_gesture = (f"CANDIDATURE : {fait}".upper()[:60], t)
             elif msg[0] == "prep":
