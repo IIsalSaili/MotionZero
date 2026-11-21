@@ -106,6 +106,63 @@ def next_hint(o, prep_line=None, preparing=False):
     return "« prépare » · « montre » · « écarte » · « aide »"
 
 
+def hint_words(o, prep_line=None, preparing=False):
+    """Les mots utiles à l'étape de l'offre affichée, le plus probable en tête (boutons du panneau). Pur."""
+    if o is None:
+        return ["liste", "cherche", "état", "offres"]
+    if o.get("etat") == "a-trier":
+        return ["garde", "écarte", "suivante", "lien"]
+    pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
+    if pret:
+        return ["lien", "mail", "cv", "postulé"]
+    if preparing:
+        return ["suivante", "précédente", "lien", "relis"]
+    return ["prépare", "montre", "écarte", "suivante"]
+
+
+CONTRATS = {"FULL_TIME": "Temps plein", "PART_TIME": "Temps partiel", "INTERN": "Stage", "CONTRACTOR": "Freelance",
+            "TEMPORARY": "CDD", "APPRENTICESHIP": "Alternance"}
+
+
+def fmt_contrat(v):
+    """« FULL_TIME, CONTRACTOR » -> « Temps plein · Freelance » ; None si absent. Pur : testable."""
+    parts = [CONTRATS.get(x.strip(), x.strip().capitalize()) for x in str(v or "").split(",") if x.strip()]
+    return " · ".join(parts) or None
+
+
+def fmt_age(date, today):
+    """« 2026-10-09 19:02:28 +0200 » -> « il y a 3 j » ; None si illisible. Pur : testable."""
+    import datetime as _dt
+    try:
+        d = _dt.date.fromisoformat(str(date)[:10])
+    except ValueError:
+        return None
+    n = (today - d).days
+    return "aujourd'hui" if n <= 0 else "hier" if n == 1 else f"il y a {n} j"
+
+
+def offer_view(offres, i, today, prep_line=None):
+    """Ce que le panneau montre de l'offre i. Pur : testable."""
+    o = offres[i]
+    ev = o.get("evaluation") or {}
+    total = sum(1 for x in offres if x["etat"] == o["etat"])
+    k = sum(1 for x in offres[:i + 1] if x["etat"] == o["etat"])
+    chips = [c for c in (fmt_contrat(o.get("contrat")), ev.get("verdict"), fmt_age(o.get("datePubliee"), today)) if c]
+    axes = [a for a in ev.get("axes") or [] if isinstance(a.get("note"), (int, float))]
+    plus = minus = None
+    if axes:
+        fort, faible = max(axes, key=lambda a: a["note"]), min(axes, key=lambda a: a["note"])
+        plus = f"{fort.get('libelle')} : {fort.get('detail', '')}"[:120]
+        if faible is not fort:
+            minus = f"{faible.get('libelle')} : {faible.get('detail', '')}"[:120]
+    note = ev.get("globale")
+    return {"pos": f"Offre {k} sur {total} {A_PARCOURIR[o['etat']]}", "source": o.get("source") or "",
+            "poste": o.get("poste") or "Poste ?", "entreprise": o.get("entreprise") or "entreprise ?",
+            "chips": chips, "note": fmt_note(note),
+            "frac": min(max(note / 5, 0.0), 1.0) if isinstance(note, (int, float)) else 0.0,
+            "plus": plus, "minus": minus, "prep": prep_line}
+
+
 def profile_value(profile, word):
     """Texte à écrire pour « mail », « github »… ; None s'il manque au profil. Pur : testable."""
     ident = (profile or {}).get("identity") or {}
@@ -149,6 +206,8 @@ def prep_text(prep):
     return "Préparation : " + (prep.get("libelle") or "pièces…")
 
 ETATS = (("verif", "à vérifier"), ("tri", "à trier"), ("ok", "postulées"), ("ref", "refusées"))
+TILES = (("tri", "à trier", "a-trier"), ("verif", "à vérifier", "generee"), ("ok", "postulées", None),
+         ("ref", "refusées", None))   # tuiles du panneau, dans l'ordre du travail
 
 
 class CvgenError(Exception):
@@ -252,6 +311,9 @@ class Candidature:
         self.preparing = None              # id de l'offre en préparation (une à la fois, comme CVGEN)
         self.prep = {}                     # id -> dernière ligne d'avancement
         self.files = {}                    # id -> {"cv": chemin, "lettre": chemin} (dossier fixe de CVGEN)
+        self.view = "msg"                  # le panneau montre l'offre (« card ») ou un message (« msg »)
+        self.note = None                   # retour de la dernière commande, sous l'offre
+        self.compte = self.agent = None    # derniers chiffres et état de la recherche reçus de CVGEN
 
     # ---- fil « cvgen » ----
     def _ensure(self):
@@ -290,7 +352,9 @@ class Candidature:
         self._q.put(("prep", oid, {"etape": "erreur", "erreur": "trop long : regarde dans CVGEN"}))
 
     def _status(self):
-        return summary(call("agent", self.http), call("compte", self.http), call("preparation", self.http))
+        agent, compte = call("agent", self.http), call("compte", self.http)
+        self._q.put(("chiffres", agent, compte))
+        return summary(agent, compte, call("preparation", self.http))
 
     def _work(self, word, arg=None):
         try:
@@ -304,6 +368,7 @@ class Candidature:
                     self.open_url(BASE + "/")
                 title = "Offres ouvertes"
             elif word == "liste":
+                self._q.put(("chiffres", None, call("compte", self.http)))
                 self._q.put(("liste", a_parcourir(call("offres", self.http))))
                 return
             elif word == "prépare":
@@ -329,7 +394,10 @@ class Candidature:
                 return
             else:
                 title = "Candidature"
-            self._q.put(("ok", title, self._status()))
+            lines = self._status()
+            if (arg or {}).get("liste"):           # ouverture du mode : la première offre tout de suite
+                self._q.put(("liste", a_parcourir(call("offres", self.http))))
+            self._q.put(("ok", title, lines))
         except CvgenError as e:
             if word == "prépare":
                 self._q.put(("prep", arg["id"], {"etape": "erreur", "erreur": str(e)}))
@@ -353,7 +421,7 @@ class Candidature:
         if self.busy:
             self._show("Candidature", ["Patiente : la demande d'avant n'est pas finie"], t)
             return
-        self._send(word, t)
+        self._send(word, t, {"liste": True} if word == "état" and self.offres is None else None)
 
     def _send(self, word, t, arg=None):
         self.busy = True
@@ -430,11 +498,13 @@ class Candidature:
         o = self.offres[self.i] if self.offres else None
         hint = next_hint(o, self.prep.get(o["id"]) if o else None, o is not None and self.preparing == o["id"])
         self._show(title, lines + ([note] if note else []), t, meta=hint)
+        self.view, self.note = ("card" if o is not None else "msg"), note
 
     def _show(self, title, lines, t, meta=None):
         self.title, self.lines = title, list(lines)
         self.meta = meta or next_hint(None)
         self.show_until = t + SHOW_S
+        self.view = "msg"
 
     def events(self, core, t):
         while True:
@@ -444,6 +514,12 @@ class Candidature:
                 break
             if msg[0] == "wait":
                 self._show("Candidature", [msg[1]], t)
+            elif msg[0] == "chiffres":
+                self.agent = msg[1] if msg[1] is not None else self.agent
+                self.compte = msg[2]
+            elif msg[0] == "ok" and self.offres and msg[1] == "Candidature":
+                self.busy = False                   # « état » avec une offre affichée : les chiffres suffisent
+                self._card(t)
             elif msg[0] == "ok":
                 self.busy = False
                 self._show(msg[1], msg[2], t)
@@ -503,6 +579,34 @@ class Candidature:
             else:
                 rest.append(a)
         return rest
+
+    def panel(self, t, today=None):
+        """Panneau de droite (maquette A1), affiché tant que le mode est allumé. Seulement boucle principale."""
+        import datetime as _dt
+        today = today or _dt.date.today()
+        o = self.offres[self.i] if self.offres else None
+        msg = None
+        if self.view == "msg" and self.lines is not None and (t < self.show_until or self.busy or o is None):
+            msg = {"title": self.title, "lines": list(self.lines)}
+        elif o is None:
+            msg = {"title": "Candidature", "lines": ["« liste » pour parcourir les offres"]}
+        etat = (self.agent or {}).get("etat")
+        status = ("Recherche en cours" if etat == "en-cours" else "Recherche en train de s'arrêter"
+                  if etat == "arret-demande" else "Recherche arrêtée" if self.agent else "")
+        compte = self.compte or {}
+        tiles = [(int(compte.get(k) or 0), lbl, o is not None and o["etat"] == e) for k, lbl, e in TILES]
+        nxt = []
+        if self.offres and len(self.offres) > 1:
+            for j in range(1, min(3, len(self.offres))):
+                x = self.offres[(self.i + j) % len(self.offres)]
+                nxt.append((f"{x.get('poste') or 'Poste ?'} · {x.get('entreprise') or '?'}",
+                            fmt_note((x.get("evaluation") or {}).get("globale"))))
+        prep_line = self.prep.get(o["id"]) if o else None
+        return {"status": status, "tiles": tiles, "msg": msg, "next": nxt, "busy": self.busy,
+                "words": hint_words(o, prep_line, o is not None and self.preparing == o["id"]),
+                "offer": offer_view(self.offres, self.i, today, prep_line) if o is not None and msg is None else None,
+                "note": self.note if msg is None else None,
+                "foot": "« aide » · « candidature » pour quitter"}
 
     def state(self, t):
         if self.lines is None or (t >= self.show_until and not self.busy):

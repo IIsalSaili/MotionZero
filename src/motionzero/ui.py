@@ -366,7 +366,7 @@ class GlassOverlay(QWidget):
                     self.hand_icon = QSvgRenderer(QByteArray(f.read().replace("currentColor", "#d0d0d0").encode()))
             except OSError:
                 self.hand_icon = None     # sans l'icône : un simple disque gris
-        self.island = _IslandPainter(self.width()) if role == "ui" else None   # île Dot Iris
+        self.island = _IslandPainter(self.width(), self.height()) if role == "ui" else None   # île Dot Iris
         self.subs = None          # « iris traducteur » : {"lines", "error"} ou None
         self.vol = None           # barre de volume (« iris volume ») : {"level", "muted"} ou None
         self._last_st = {}
@@ -803,6 +803,10 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 
 
 REMINDER_W = 560
+PANEL_W = 452            # « iris candidature » : panneau à droite (maquette A1, 21/11)
+PANEL_MARGIN = 16
+PANEL_BOTTOM = 64        # au-dessus de la barre des tâches
+CAND = QColor(124, 212, 184)   # vert d'eau du mode candidature
 CAL_W = 1060             # calendrier : 7 cartes
 CAL_H = 470
 HELP_W = 1060            # « iris aide »
@@ -1167,8 +1171,11 @@ def paint_claude_logo(p, cx, cy, r):
 class _IslandPainter:
     """Dessine l'île dans le verre. Ne garde que ce qu'il faut pour l'estomper au repos."""
 
-    def __init__(self, width):
+    def __init__(self, width, height=1080):
         load_fonts()
+        self.height = height
+        self.panel = None
+        self.panel_gone = False
         self.font_mode = QFont("Atkinson Hyperlegible", 15, QFont.Weight.Bold)
         self.font_mode.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.5)
         self.font_msg = QFont("Atkinson Hyperlegible", 15)
@@ -1213,7 +1220,12 @@ class _IslandPainter:
         if getattr(self, "quota", None) or getattr(self, "quota_gone", False):   # pastille du quota (ou à effacer)
             w, x = w + x, 0
             self.quota_gone = False
-        return QRect(x, ISLAND_TOP - 4, int(w), h)
+        r = QRect(x, ISLAND_TOP - 4, int(w), h)
+        if getattr(self, "panel", None) or getattr(self, "panel_gone", False):   # panneau candidature (ou à effacer)
+            self.panel_gone = False
+            r = r.united(QRect(int(self.width - PANEL_W - 2 * PANEL_MARGIN), 0, PANEL_W + 2 * PANEL_MARGIN,
+                               int(self.height)))
+        return r
 
     def update(self, st, now):
         mode, msg, active = island_text(st)
@@ -1249,8 +1261,14 @@ class _IslandPainter:
         if getattr(self, "quota", None) and not q:
             self.quota_gone = True             # masquée : repeindre le coin gauche une fois pour l'effacer
         self.quota = tuple(q) if q else None
+        panel = st.get("cand_panel")
+        if getattr(self, "panel", None) and not panel:
+            self.panel_gone = True             # mode éteint : repeindre la droite une fois pour l'effacer
+        self.panel = panel
+        if panel:
+            active = True
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
-                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota)
+                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota, repr(panel) if panel else None)
         if content != self.content:
             self.content, self.last_change = content, now
         if st.get("ok_flash"):
@@ -1288,6 +1306,190 @@ class _IslandPainter:
         self._paint_main(p)
         if getattr(self, "quota", None):
             self._paint_quota(p, self.quota)
+        if getattr(self, "panel", None):
+            self._paint_cand_panel(p, self.panel)
+
+    def _wrap(self, p, font, color, x, y, w, text, max_h=10000):
+        """Texte sur plusieurs lignes ; renvoie la hauteur utilisée (bornée à max_h)."""
+        flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+        h = min(QFontMetrics(font).boundingRect(QRect(0, 0, int(w), 100000), flags, text).height(), max_h)
+        p.setFont(font)
+        p.setPen(color)
+        p.drawText(QRectF(x, y, w, h), flags, text)
+        return h
+
+    def _paint_cand_panel(self, p, pn):
+        """« iris candidature » : panneau à droite, le site reste visible à gauche (maquette A1)."""
+        big = QFont("Atkinson Hyperlegible", 20, QFont.Weight.Bold)
+        num = QFont("Atkinson Hyperlegible", 18, QFont.Weight.Bold)
+        word = QFont("Atkinson Hyperlegible", 15, QFont.Weight.Bold)
+        small, msgf = self.font_small, self.font_msg
+        grey, light, white = QColor(166, 166, 176), QColor(201, 201, 209), QColor(242, 242, 245)
+        surf, chip = QColor(23, 23, 28), QColor(36, 36, 43)
+        x0 = self.width - PANEL_W - PANEL_MARGIN
+        h = self.height - PANEL_MARGIN - PANEL_BOTTOM
+        pad = 24
+        x, inner = x0 + pad, PANEL_W - 2 * pad
+        p.save()
+        p.setPen(QColor(42, 42, 50))
+        p.setBrush(QColor(11, 11, 14, 245))
+        p.drawRoundedRect(QRectF(x0, PANEL_MARGIN, PANEL_W, h), 18, 18)
+        y = PANEL_MARGIN + 22
+        # en-tête
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(CAND)
+        p.drawEllipse(QPointF(x + 5, y + 12), 5, 5)
+        p.setPen(white)
+        p.setFont(self.font_mode)
+        p.drawText(QRectF(x + 18, y, 220, 24), Qt.AlignmentFlag.AlignVCenter, "CANDIDATURE")
+        p.setPen(grey)
+        p.setFont(small)
+        status = pn.get("status") or ""
+        if pn.get("busy"):
+            status = "CVGEN travaille…"
+        p.drawText(QRectF(x, y, inner, 24), int(Qt.AlignmentFlag.AlignVCenter) | int(Qt.AlignmentFlag.AlignRight), status)
+        y += 40
+        # chiffres
+        tiles = pn.get("tiles") or []
+        if tiles:
+            tw = (inner - 6 * (len(tiles) - 1)) / len(tiles)
+            for k, (n, lbl, on) in enumerate(tiles):
+                r = QRectF(x + k * (tw + 6), y, tw, 60)
+                p.setPen(CAND if on else Qt.PenStyle.NoPen)
+                p.setBrush(surf)
+                p.drawRoundedRect(r, 8, 8)
+                p.setPen(white)
+                p.setFont(num)
+                p.drawText(QRectF(r.x(), r.y() + 6, tw, 28), Qt.AlignmentFlag.AlignCenter, str(n))
+                p.setPen(grey)
+                p.setFont(small)
+                p.drawText(QRectF(r.x(), r.y() + 34, tw, 20), Qt.AlignmentFlag.AlignCenter, lbl)
+            y += 76
+        # bas : les mots à dire (fixés en bas du panneau)
+        words = (pn.get("words") or [])[:4]
+        rows = (len(words) + 1) // 2
+        bottom = PANEL_MARGIN + h - 22
+        foot_y = bottom - 20
+        grid_h = rows * 48 + max(rows - 1, 0) * 8
+        grid_y = foot_y - 12 - grid_h
+        p.setPen(QColor(138, 142, 154))
+        p.setFont(small)
+        p.drawText(QRectF(x, foot_y, inner, 20), Qt.AlignmentFlag.AlignCenter, pn.get("foot") or "")
+        if words:
+            p.drawText(QRectF(x, grid_y - 24, inner, 20), Qt.AlignmentFlag.AlignVCenter, "Tu peux dire")
+            ww = (inner - 8) / 2
+            for k, w in enumerate(words):
+                r = QRectF(x + (k % 2) * (ww + 8), grid_y + (k // 2) * 56, ww, 48)
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(CAND if k == 0 else chip)
+                p.drawRoundedRect(r, 10, 10)
+                p.setPen(QColor(11, 11, 14) if k == 0 else white)
+                p.setFont(word)
+                p.drawText(r, Qt.AlignmentFlag.AlignCenter, w)
+        room = grid_y - 36 - y                     # place pour la carte et la suite
+        # carte : l'offre, ou un message
+        card_top = y
+        p.save()
+        p.setClipRect(QRectF(x0, card_top, PANEL_W, max(room, 0)))
+        cx, cw = x + 18, inner - 36
+        cy = card_top + 18
+        o, m = pn.get("offer"), pn.get("msg")
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(surf)
+        # hauteur d'abord mesurée en dessinant sur une couche : plus simple de dessiner le fond après coup
+        layer_start = cy
+        texts = []
+        if o:
+            texts.append(("row", o["pos"], o.get("source") or ""))
+            texts.append(("wrap", big, white, o["poste"], 60))
+            texts.append(("wrap", msgf, light, o["entreprise"], 44))
+            if o.get("chips"):
+                texts.append(("chips", o["chips"]))
+            texts.append(("note", o["note"], o["frac"]))
+            for sign, t in (("+ ", o.get("plus")), ("- ", o.get("minus"))):
+                if t:
+                    texts.append(("wrap", small, light, sign + t, 66))
+            if o.get("prep"):
+                texts.append(("wrap", small, ORANGE, o["prep"], 40))
+        elif m:
+            texts.append(("wrap", big, white, m.get("title") or "Candidature", 60))
+            for line in m.get("lines") or []:
+                texts.append(("wrap", msgf, light, line, 70))
+        # fond de la carte : hauteur estimée par une première passe sans dessin
+        def measure(item):
+            if item[0] == "row":
+                return 20
+            if item[0] == "wrap":
+                flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
+                return min(QFontMetrics(item[1]).boundingRect(QRect(0, 0, int(cw), 100000), flags, item[3]).height(),
+                           item[4])
+            if item[0] == "chips":
+                return 26
+            return 34
+        card_h = 36 + sum(measure(it) for it in texts) + 10 * max(len(texts) - 1, 0)
+        card_h = min(card_h, max(room, 0))
+        p.drawRoundedRect(QRectF(x, card_top, inner, card_h), 14, 14)
+        cy = layer_start
+        for it in texts:
+            if it[0] == "row":
+                p.setFont(small)
+                p.setPen(grey)
+                p.drawText(QRectF(cx, cy, cw, 20), Qt.AlignmentFlag.AlignVCenter, it[1])
+                p.drawText(QRectF(cx, cy, cw, 20), int(Qt.AlignmentFlag.AlignVCenter) | int(Qt.AlignmentFlag.AlignRight), it[2])
+                cy += 20
+            elif it[0] == "wrap":
+                cy += self._wrap(p, it[1], it[2], cx, cy, cw, it[3], it[4])
+            elif it[0] == "chips":
+                fm = QFontMetrics(small)
+                px = cx
+                for c in it[1]:
+                    cwid = fm.horizontalAdvance(c) + 18
+                    if px + cwid > cx + cw:
+                        break
+                    p.setPen(Qt.PenStyle.NoPen)
+                    p.setBrush(chip)
+                    p.drawRoundedRect(QRectF(px, cy, cwid, 26), 13, 13)
+                    p.setPen(white)
+                    p.setFont(small)
+                    p.drawText(QRectF(px, cy, cwid, 26), Qt.AlignmentFlag.AlignCenter, c)
+                    px += cwid + 6
+                cy += 26
+            else:
+                p.setPen(CAND)
+                p.setFont(QFont("Atkinson Hyperlegible", 24, QFont.Weight.Bold))
+                nw = QFontMetrics(p.font()).horizontalAdvance(it[1]) + 12
+                p.drawText(QRectF(cx, cy, nw, 34), Qt.AlignmentFlag.AlignVCenter, it[1])
+                bx, bw = cx + nw, cw - nw - 34
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(QColor(42, 42, 50))
+                p.drawRoundedRect(QRectF(bx, cy + 14, bw, 6), 3, 3)
+                p.setBrush(CAND)
+                p.drawRoundedRect(QRectF(bx, cy + 14, bw * it[2], 6), 3, 3)
+                p.setPen(grey)
+                p.setFont(small)
+                p.drawText(QRectF(bx + bw, cy, 34, 34), int(Qt.AlignmentFlag.AlignVCenter) | int(Qt.AlignmentFlag.AlignRight), "/ 5")
+                cy += 34
+            cy += 10
+        y = card_top + card_h + 12
+        if pn.get("note"):
+            y += self._wrap(p, msgf, CAND, x, y, inner, pn["note"], 48) + 10
+        nxt = pn.get("next") or []
+        if nxt and y + 30 < card_top + room:
+            p.setPen(QColor(138, 142, 154))
+            p.setFont(small)
+            p.drawText(QRectF(x, y, inner, 20), Qt.AlignmentFlag.AlignVCenter, "Ensuite")
+            y += 24
+            fm = QFontMetrics(small)
+            for label, note in nxt:
+                if y + 28 > card_top + room:
+                    break
+                p.setPen(grey)
+                p.drawText(QRectF(x, y, inner - 40, 28), Qt.AlignmentFlag.AlignVCenter,
+                           fm.elidedText(label, Qt.TextElideMode.ElideRight, int(inner - 40)))
+                p.drawText(QRectF(x, y, inner, 28), int(Qt.AlignmentFlag.AlignVCenter) | int(Qt.AlignmentFlag.AlignRight), note)
+                y += 30
+        p.restore()
+        p.restore()
 
     def _paint_quota(self, p, lines):
         """Fiche du quota, coin haut gauche : logo Claude, session 5 h puis semaine dessous ; jamais estompée."""

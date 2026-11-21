@@ -114,21 +114,31 @@ def top_shown(d, t):
         rem = desk is not None and (bool(desk.r.active) or t < desk.list_until)
         ins = getattr(d, "instructeur", None)
         card = ins is not None and ins.state(t) is not None      # carte de l'instruction (aide, plan, résultat)
-        cand = getattr(d, "candidature", None)
-        card = card or (cand is not None and cand.state(t) is not None)   # carte de « iris candidature »
         return bool(qa) or bool(rem) or card
     except Exception:
         return False
 
 
 def plan_card(d, t):
-    """Carte du haut : celle de l'instruction, sinon celle de « iris candidature »."""
-    for name in ("instructeur", "candidature"):
+    """Carte du haut : celle de l'instruction (« iris candidature » a son panneau à droite)."""
+    for name in ("instructeur",):
         svc = getattr(d, name, None)
         card = svc.state(t) if svc is not None else None
         if card is not None:
             return card
     return None
+
+
+def cand_panel(d, t):
+    """Panneau de « iris candidature » (à droite), tant que le mode est allumé ; None sinon."""
+    svc = getattr(d, "candidature", None)
+    if svc is None or not d.core.cand_on(t):
+        return None
+    try:
+        return svc.panel(t)
+    except Exception:                          # le panneau ne doit jamais faire tomber la boucle
+        _log.exception("panneau candidature")
+        return None
 
 
 def reminder_shown(d):
@@ -608,6 +618,7 @@ class Engine:
             "quota": self._quota(t),
             "subs": d.traducteur.snapshot() if getattr(d, "traducteur", None) is not None else None,
             "plan": plan_card(d, t),
+            "cand_panel": cand_panel(d, t),
             "help": help_view(core.mode, t < core.calendar_until, core.confirming(t)) if t < core.help_until else None,
         })
 

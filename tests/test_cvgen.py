@@ -93,7 +93,14 @@ def test_etat_et_offres():
     ouvert = []
     c, core = cv.Candidature(http=FauxCvgen(), launch=lambda: None, open_url=ouvert.append), Core(Config())
     c.ask("état", 0.0)
-    assert _attendre(c, core)["lines"][1] == "2 à vérifier"
+    _attendre(c, core)
+    assert [o["id"] for o in c.offres] == ["t2", "t1", "v1"]      # ouverture : la liste tout de suite
+    pn = c.panel(0.0)
+    assert pn["status"] == "Recherche arrêtée" and pn["offer"]["poste"] == "Poste t2"
+    assert (2, "à vérifier", False) in pn["tiles"]
+    c.ask("état", 20.0)                                          # liste déjà ouverte : pas rechargée
+    _attendre(c, core, 20.0)
+    assert c.panel(20.0)["offer"] is not None
     c.ask("offres", 0.0)
     assert _attendre(c, core)["title"] == "Offres ouvertes" and ouvert == [cv.BASE + "/"]
 
@@ -107,7 +114,7 @@ def test_cvgen_eteint_est_lance():
         faux.up = True
     c = cv.Candidature(http=faux, launch=launch, sleep=lambda s: None)
     c.ask("état", 0.0)
-    assert _attendre(c, Core(Config()))["title"] == "Candidature" and lances == [1]
+    assert _attendre(c, Core(Config()))["title"].startswith("Offre 1 / 2") and lances == [1]
 
 
 def test_cvgen_ne_demarre_pas():
@@ -581,3 +588,101 @@ def test_postule_note_la_candidature():
     st = _attendre(c, core)
     assert ("PATCH", "/api/offres/v1", {"etat": "postulee"}) in faux.calls
     assert "postulée" in st["lines"][-1] and "v1" not in [o["id"] for o in c.offres]
+
+
+def test_mots_du_panneau_par_etape():
+    assert cv.hint_words(None) == ["liste", "cherche", "état", "offres"]
+    assert cv.hint_words({"etat": "a-trier"})[0] == "garde"
+    assert cv.hint_words({"etat": "generee"})[0] == "prépare"
+    assert cv.hint_words({"etat": "generee"}, cv.PREP_STEPS["pret"])[0] == "lien"
+    assert cv.hint_words({"etat": "generee"}, preparing=True)[0] == "suivante"
+    for o in (None, {"etat": "a-trier"}, {"etat": "generee"}):       # tous les mots existent dans le mode
+        assert set(cv.hint_words(o)) <= set(cv.WORDS)
+
+
+def test_contrat_et_anciennete():
+    import datetime
+    assert cv.fmt_contrat("FULL_TIME") == "Temps plein"
+    assert cv.fmt_contrat("CONTRACTOR, FULL_TIME") == "Freelance · Temps plein"
+    assert cv.fmt_contrat(None) is None and cv.fmt_contrat("") is None
+    j = datetime.date(2026, 11, 21)
+    assert cv.fmt_age("2026-11-18 19:02:28 +0200", j) == "il y a 3 j"
+    assert cv.fmt_age("2026-11-20T08:00:00Z", j) == "hier"
+    assert cv.fmt_age("2026-11-21", j) == "aujourd'hui"
+    assert cv.fmt_age(None, j) is None and cv.fmt_age("n'importe", j) is None
+
+
+def test_vue_de_l_offre():
+    import datetime
+    offres = cv.a_parcourir(OFFRES)
+    v = cv.offer_view(offres, 1, datetime.date(2026, 11, 21))
+    assert v["pos"] == "Offre 2 sur 2 à trier" and v["note"] == "3" and abs(v["frac"] - 0.6) < 1e-9
+    assert v["plus"].startswith("Adéquation") and v["minus"].startswith("Niveau")
+    vide = cv.offer_view([{"id": "z", "etat": "a-trier"}], 0, datetime.date(2026, 11, 21))   # offre sans rien
+    assert vide["poste"] == "Poste ?" and vide["note"] == "?" and vide["frac"] == 0.0 and vide["chips"] == []
+
+
+def test_panneau_sans_liste_et_en_erreur():
+    c = cv.Candidature(http=FauxCvgen(up=False), launch=lambda: (_ for _ in ()).throw(cv.CvgenError("CVGEN introuvable sur ce PC")))
+    pn = c.panel(0.0)
+    assert pn["offer"] is None and "liste" in pn["msg"]["lines"][0] and pn["status"] == ""
+    c.ask("état", 0.0)
+    _attendre(c, Core(Config()))
+    pn = c.panel(0.0)
+    assert pn["msg"]["title"] == "Candidature impossible" and pn["msg"]["lines"] == ["CVGEN introuvable sur ce PC"]
+    assert pn["tiles"][0] == (0, "à trier", False)
+
+
+def test_panneau_retour_sous_l_offre_puis_message_qui_expire():
+    c, core = cv.Candidature(http=FauxCvgen(), launch=lambda: None), Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    c.ask("suivante", 1.0)
+    assert c.panel(1.0)["offer"]["poste"] == "Poste t1"
+    c.ask("aide", 2.0)
+    assert c.panel(2.0)["msg"]["title"].startswith("Candidature : ce que")
+    assert c.panel(2.0 + cv.HELP_S + 1)["offer"]["poste"] == "Poste t1"   # l'aide passe, l'offre revient
+    c.ask("écarte", 50.0)
+    _attendre(c, core, 50.0)
+    assert c.panel(50.0)["note"] == "Écartée"
+
+
+def test_panneau_dessine_et_efface():
+    """Le panneau se dessine sans erreur (offre, message, liste vide) et la droite est repeinte à l'extinction."""
+    from motionzero.ui import QApplication, QImage, QPainter, _IslandPainter
+    QApplication.instance() or QApplication([])
+    c, core = cv.Candidature(http=FauxCvgen(), launch=lambda: None), Core(Config())
+    vues = [c.panel(0.0)]
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    vues.append(c.panel(0.0))
+    c.ask("aide", 1.0)
+    vues.append(c.panel(1.0))
+    p = _IslandPainter(1920, 1080)
+    img = QImage(1920, 1080, QImage.Format.Format_ARGB32)
+    for k, pn in enumerate(vues):
+        p.update({"mode": "NEUTRE", "candidature": True, "cand_panel": pn}, float(k))
+        assert p.rect().right() >= 1919 and p.rect().bottom() >= 1000
+        painter = QPainter(img)
+        p.paint(painter)
+        painter.end()
+    p.update({"mode": "NEUTRE"}, 10.0)
+    assert p.rect().right() >= 1919       # repeinte une fois pour effacer
+    p.update({"mode": "NEUTRE"}, 11.0)
+    assert p.rect().bottom() < 1000
+
+
+def test_app_panneau_seulement_mode_allume():
+    from types import SimpleNamespace
+    from motionzero.app import cand_panel
+
+    class Casse:
+        def panel(self, t):
+            raise RuntimeError("boum")
+    core = Core(Config())
+    d = SimpleNamespace(core=core, candidature=cv.Candidature(http=FauxCvgen(), launch=lambda: None))
+    assert cand_panel(d, 0.0) is None                     # mode éteint
+    core.cand_until = 100.0
+    assert cand_panel(d, 0.0)["words"][0] == "liste"
+    d.candidature = Casse()
+    assert cand_panel(d, 0.0) is None                     # une exception ne remonte pas
