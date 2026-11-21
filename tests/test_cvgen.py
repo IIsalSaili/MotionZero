@@ -683,6 +683,15 @@ def test_app_panneau_seulement_mode_allume():
     d = SimpleNamespace(core=core, candidature=cv.Candidature(http=FauxCvgen(), launch=lambda: None))
     assert cand_panel(d, 0.0) is None                     # mode éteint
     core.cand_until = 100.0
-    assert cand_panel(d, 0.0)["words"][0] == "liste"
+    assert cand_panel(d, 0.0)["words"][0][0] == "liste"
     d.candidature = Casse()
     assert cand_panel(d, 0.0) is None                     # une exception ne remonte pas
+
+
+def test_chaque_mot_du_panneau_dit_ce_qu_il_fait():
+    for o, prep, en_cours in ((None, None, False), ({"etat": "a-trier"}, None, False), ({"etat": "generee"}, None, False),
+                              ({"etat": "generee"}, None, True), ({"etat": "generee"}, cv.PREP_STEPS["pret"], False)):
+        for w in cv.hint_words(o, prep, en_cours):
+            assert cv.SHORT[w]
+        for mots, quoi in cv.EXTRA[cv.step_of(o, prep, en_cours)]:
+            assert quoi and all(m in cv.WORDS for m in mots.split(" · "))   # seulement des mots qui existent

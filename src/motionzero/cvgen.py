@@ -120,6 +120,39 @@ def hint_words(o, prep_line=None, preparing=False):
     return ["prépare", "montre", "écarte", "suivante"]
 
 
+# Ce que fait chaque mot, tel qu'on le voit à l'écran (panneau : sous le mot, court)
+SHORT = {"liste": "affiche les offres une par une", "cherche": "lance ou arrête la recherche d'offres",
+         "état": "met à jour les chiffres", "offres": "ouvre la page des offres de CVGEN",
+         "garde": "je la veux : CVGEN fait le CV", "écarte": "pas pour moi : retirée de la liste",
+         "suivante": "passe à l'offre d'après", "précédente": "revient à l'offre d'avant",
+         "lien": "ouvre l'annonce sur son site", "prépare": "fabrique le CV et la lettre en PDF",
+         "montre": "ouvre le PDF de ton CV", "relis": "ouvre la relecture de ton CV",
+         "mail": "écrit ton e-mail dans le champ cliqué", "cv": "joint le PDF du CV au site",
+         "lettre": "joint le PDF de la lettre au site", "postulé": "marque envoyée, relance à J+7"}
+# Les autres mots de l'étape, sous les boutons : (mots, ce qu'ils font)
+EXTRA = {"aucune": [],
+         "tri": [("précédente", "revient à l'offre d'avant")],
+         "cv": [("relis", "ouvre la relecture de ton CV par le jury"), ("lien", "ouvre l'annonce sur son site"),
+                ("précédente", "revient à l'offre d'avant")],
+         "prep": [("montre", "ouvre l'atelier du CV en cours"), ("écarte", "pas pour moi : retirée")],
+         "pret": [("prénom · nom · téléphone · ville", "écrit dans le champ cliqué"),
+                  ("github · linkedin", "écrit ton lien dans le champ cliqué"),
+                  ("lettre", "joint le PDF de la lettre (fenêtre « Choisir un fichier »)"),
+                  ("montre · relis", "ouvre le PDF du CV · sa relecture"),
+                  ("suivante · précédente", "change d'offre")]}
+
+
+def step_of(o, prep_line=None, preparing=False):
+    """Étape de l'offre affichée : aucune, tri, cv (à préparer), prep (en cours), pret. Pur : testable."""
+    if o is None:
+        return "aucune"
+    if o.get("etat") == "a-trier":
+        return "tri"
+    if prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret":
+        return "pret"
+    return "prep" if preparing else "cv"
+
+
 CONTRATS = {"FULL_TIME": "Temps plein", "PART_TIME": "Temps partiel", "INTERN": "Stage", "CONTRACTOR": "Freelance",
             "TEMPORARY": "CDD", "APPRENTICESHIP": "Alternance"}
 
@@ -602,11 +635,13 @@ class Candidature:
                 nxt.append((f"{x.get('poste') or 'Poste ?'} · {x.get('entreprise') or '?'}",
                             fmt_note((x.get("evaluation") or {}).get("globale"))))
         prep_line = self.prep.get(o["id"]) if o else None
+        preparing = o is not None and self.preparing == o["id"]
+        words = hint_words(o, prep_line, preparing)
         return {"status": status, "tiles": tiles, "msg": msg, "next": nxt, "busy": self.busy,
-                "words": hint_words(o, prep_line, o is not None and self.preparing == o["id"]),
+                "words": [(w, SHORT[w]) for w in words], "extra": EXTRA[step_of(o, prep_line, preparing)],
                 "offer": offer_view(self.offres, self.i, today, prep_line) if o is not None and msg is None else None,
                 "note": self.note if msg is None else None,
-                "foot": "« aide » · « candidature » pour quitter"}
+                "foot": "« candidature » : quitter le mode"}
 
     def state(self, t):
         if self.lines is None or (t >= self.show_until and not self.busy):

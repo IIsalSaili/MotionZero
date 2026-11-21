@@ -1367,25 +1367,52 @@ class _IslandPainter:
             y += 76
         # bas : les mots à dire (fixés en bas du panneau)
         words = (pn.get("words") or [])[:4]
+        extra = pn.get("extra") or []
         rows = (len(words) + 1) // 2
         bottom = PANEL_MARGIN + h - 22
         foot_y = bottom - 20
-        grid_h = rows * 48 + max(rows - 1, 0) * 8
-        grid_y = foot_y - 12 - grid_h
         p.setPen(QColor(138, 142, 154))
         p.setFont(small)
         p.drawText(QRectF(x, foot_y, inner, 20), Qt.AlignmentFlag.AlignCenter, pn.get("foot") or "")
+        # autres mots de l'étape : une ligne chacun, « mots » à gauche, effet à droite
+        fm_s = QFontMetrics(small)
+        ex_y = foot_y - 10 - len(extra) * 42
+        bold_s = QFont(small)
+        bold_s.setBold(True)
+        for k, (mots, quoi) in enumerate(extra):  # le mot en blanc, dessous ce qu'il fait
+            ry = ex_y + k * 42
+            p.setPen(white)
+            p.setFont(bold_s)
+            p.drawText(QRectF(x, ry, inner, 20), Qt.AlignmentFlag.AlignVCenter,
+                       QFontMetrics(bold_s).elidedText(mots, Qt.TextElideMode.ElideRight, int(inner)))
+            p.setPen(grey)
+            p.setFont(small)
+            p.drawText(QRectF(x, ry + 19, inner, 20), Qt.AlignmentFlag.AlignVCenter,
+                       fm_s.elidedText(quoi, Qt.TextElideMode.ElideRight, int(inner)))
+        if extra:
+            p.setPen(QColor(138, 142, 154))
+            p.drawText(QRectF(x, ex_y - 26, inner, 20), Qt.AlignmentFlag.AlignVCenter, "Aussi")
+            ex_y -= 34
+        th = 86                                    # bouton : le mot, et dessous ce qu'il fait
+        grid_h = rows * th + max(rows - 1, 0) * 8
+        grid_y = ex_y - 8 - grid_h
         if words:
+            p.setPen(QColor(138, 142, 154))
             p.drawText(QRectF(x, grid_y - 24, inner, 20), Qt.AlignmentFlag.AlignVCenter, "Tu peux dire")
             ww = (inner - 8) / 2
-            for k, w in enumerate(words):
-                r = QRectF(x + (k % 2) * (ww + 8), grid_y + (k // 2) * 56, ww, 48)
+            for k, (w, quoi) in enumerate(words):
+                r = QRectF(x + (k % 2) * (ww + 8), grid_y + (k // 2) * (th + 8), ww, th)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(CAND if k == 0 else chip)
                 p.drawRoundedRect(r, 10, 10)
                 p.setPen(QColor(11, 11, 14) if k == 0 else white)
                 p.setFont(word)
-                p.drawText(r, Qt.AlignmentFlag.AlignCenter, w)
+                p.drawText(QRectF(r.x(), r.y() + 8, ww, 26), Qt.AlignmentFlag.AlignCenter, w)
+                p.setPen(QColor(30, 50, 44) if k == 0 else grey)
+                p.setFont(small)
+                p.drawText(QRectF(r.x() + 8, r.y() + 34, ww - 16, th - 38),
+                           int(Qt.AlignmentFlag.AlignHCenter) | int(Qt.AlignmentFlag.AlignTop) | int(Qt.TextFlag.TextWordWrap),
+                           quoi)
         room = grid_y - 36 - y                     # place pour la carte et la suite
         # carte : l'offre, ou un message
         card_top = y
