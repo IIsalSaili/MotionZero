@@ -532,6 +532,9 @@ class Engine:
                 if a[1]:
                     d.quota.force()
                 _log.info("quota %s", "affiche" if a[1] else "masque")
+            elif a[0] == "camera":
+                d.cam.paused = a[1]           # le fil caméra ferme / rouvre la webcam lui-même
+                _log.info("camera %s", "coupee" if a[1] else "rallumee")
             elif a[0] == "traducteur":
                 if getattr(d, "traducteur", None) is None:
                     d.core.translating = False     # sans la voix, pas de Whisper : rien à faire

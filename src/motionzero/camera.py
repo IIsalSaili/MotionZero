@@ -18,7 +18,7 @@ import numpy as np
 
 log = logging.getLogger("motionzero.camera")
 
-OK, LOST, RECONNECTING, STOPPED = "ok", "perdue", "reconnexion", "arretee"
+OK, LOST, RECONNECTING, STOPPED, PAUSED = "ok", "perdue", "reconnexion", "arretee", "coupee"
 
 
 def frame_is_valid(frame, max_grain_ratio=0.7, min_grain=8.0, min_std=2.0):
@@ -81,6 +81,7 @@ class Camera:
         self.problem = None         # (texte pour l'îlot, instant) : pourquoi la caméra ne donne plus d'image
         self.info = {}
         self.running = False
+        self.paused = False         # « iris caméra » : webcam rendue (Discord…) ; seul ce fil la ferme / rouvre
         self.cond = threading.Condition()
         self.thread = None
         self.lock = None
@@ -122,6 +123,20 @@ class Camera:
         last_good, seen_bad = time.perf_counter(), False
         while self.running:
             try:
+                if self.paused:
+                    if self.cap is not None:
+                        self.cap.release()
+                        self.cap = None
+                        log.info("camera coupee a la demande")
+                    self.status, self.problem = PAUSED, None
+                    time.sleep(0.1)
+                    continue
+                if self.cap is None and self.status == PAUSED:
+                    self.cap = self._open()
+                    self.status = OK if self.cap is not None else LOST
+                    last_good = time.perf_counter()
+                    if self.cap is None:
+                        continue
                 ok, frame = self.cap.read() if self.cap is not None else (False, None)
                 now = time.perf_counter()
                 if ok and frame_is_valid(frame):

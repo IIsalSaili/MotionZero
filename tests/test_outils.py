@@ -17,9 +17,9 @@ def test_aucun_nouveau_mot_guette():
     from motionzero.voice import GRAMMARS, WORDS
     # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté ; puis « candidature » (+1 partout). Les mots
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
-    assert len(WORDS) == 117   # « espace », « muet », « activation », « favori » retirés (#50)
+    assert len(WORDS) == 118   # 21/11 : « caméra » ajouté. « espace », « muet », « activation », « favori » retirés (#50)
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 67, "souris": 67, "chrome": 75, "calendrier": 119, "candidature": 31, "candidature_souris": 37}   # 21/11 : annule, détails, vérifie, relances
+        {"base": 68, "souris": 68, "chrome": 76, "calendrier": 120, "candidature": 31, "candidature_souris": 37}   # 21/11 : annule, détails, vérifie, relances
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 
@@ -264,3 +264,50 @@ def test_appli_absente_mais_site_connu():
         check_step("ferme_app", "netflix", apps)              # fermer : jamais remplacé par un site
     with pytest.raises(PlanError):
         check_step("ouvre_app", "zzqq", apps)
+
+
+def test_iris_camera_coupe_puis_rallume():
+    from motionzero.core import COMMANDS, Core
+    from motionzero.voice import WORDS
+    assert WORDS["caméra"] == "caméra" and COMMANDS["caméra"] == "camera"
+    core, acts = Core.__new__(Core), []
+    core.camera_off = False
+    assert "COUPEE" in core._cmd_camera("caméra", 0.0, acts)
+    assert core._cmd_camera("caméra", 1.0, acts) == "CAMERA RALLUMEE"
+    assert acts == [("camera", True), ("camera", False)]
+
+
+def test_camera_en_pause_rend_puis_rouvre_la_webcam(monkeypatch):
+    import threading
+    import time
+    from motionzero import camera as cm
+
+    class Cap:
+        released = False
+        def read(self):
+            time.sleep(0.01)
+            return False, None
+        def release(self):
+            self.released = True
+    opened = []
+    cam = cm.Camera(lost_after_s=99)
+    monkeypatch.setattr(cam, "_open", lambda: opened.append(Cap()) or opened[-1])
+    cam.cap, cam.running = Cap(), True
+    first = cam.cap
+    th = threading.Thread(target=cam._run, daemon=True)
+    th.start()
+    cam.paused = True
+    time.sleep(0.3)
+    assert first.released and cam.cap is None and cam.status == cm.PAUSED
+    cam.paused = False
+    time.sleep(0.3)
+    assert opened and cam.cap is opened[0]
+    # webcam encore prise ailleurs à la reprise : pas de plantage, nouvelle tentative
+    cam.paused = True
+    time.sleep(0.3)
+    monkeypatch.setattr(cam, "_open", lambda: None)
+    cam.paused = False
+    time.sleep(0.3)
+    assert cam.cap is None and th.is_alive()
+    cam.running = False
+    th.join(2)
