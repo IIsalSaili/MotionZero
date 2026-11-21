@@ -5,7 +5,7 @@ Chaque point a son issue GitHub (étiquette `candidature`).
 
 ## Étape 1 : ne plus perdre ni casser d'offre
 - Offre gardée invisible tant que son CV se génère : le message « verdict » la retire, `a_parcourir` ignore l'état « gardée ».
-- Aucune annulation : un « écarte » ou « postulé » mal entendu est définitif. Ajouter « annule » (dernier verdict).
+- Fait (21/11) : « annule » remet le dernier verdict.
 
 ## Étape 2 : remplir un formulaire vite et sans risque
 - Vérifier que la fenêtre au premier plan est le navigateur avant de taper ; sinon le dire.
@@ -26,6 +26,7 @@ Chaque point a son issue GitHub (étiquette `candidature`).
 ## Étape 5 : confort
 - Interface dédiée au mode (grand panneau comme le calendrier) : maquettes dans l'artefact « Iris candidature : maquettes ».
 - Carte plus riche : ville, télétravail, contrat, salaire, date.
-- Fin de liste annoncée au lieu de repartir au début en silence.
+- Fait (21/11) : fin de liste annoncée ; « détails », « vérifie », « relances » ajoutés.
+- Côté CVGEN : issues CVGEN #68 à #72 (ville/télétravail/salaire, relance due, champs de profil, texte de la lettre, contrat en français).
 - « répète » : réafficher la carte.
 - Mots courts confondus (« cv », « nom »/« prénom », « lien »/« liste ») : mesurer sur enregistrements.

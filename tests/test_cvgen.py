@@ -695,3 +695,122 @@ def test_chaque_mot_du_panneau_dit_ce_qu_il_fait():
             assert cv.SHORT[w]
         for mots, quoi in cv.EXTRA[cv.step_of(o, prep, en_cours)]:
             assert quoi and all(m in cv.WORDS for m in mots.split(" · "))   # seulement des mots qui existent
+
+
+# ---- 21/11 : annule, détails, vérifie, relances, fin de liste
+def _introuvable():
+    raise cv.CvgenError("CVGEN introuvable sur ce PC")
+
+
+def _ouverte(http=None):
+    c, core = cv.Candidature(http=http or FauxCvgen(), launch=_introuvable), Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    return c, core
+
+
+def test_annule_remet_l_offre_ecartee_a_sa_place():
+    faux = FauxCvgen()
+    c, core = _ouverte(faux)
+    c.ask("suivante", 1.0)                                       # t1, 2e de la liste
+    c.ask("écarte", 2.0)
+    _attendre(c, core, 2.0)
+    assert [o["id"] for o in c.offres] == ["t2", "v1"]
+    c.ask("annule", 3.0)
+    _attendre(c, core, 3.0)
+    assert [o["id"] for o in c.offres] == ["t2", "t1", "v1"] and c.offres[c.i]["id"] == "t1"
+    assert ("PATCH", "/api/offres/t1", {"etat": "a-trier"}) in faux.calls and c.panel(3.0)["note"].startswith("Annulé")
+    c.ask("annule", 4.0)                                         # une seule annulation
+    assert c.state(4.0)["lines"] == ["Rien à annuler"]
+
+
+def test_annule_sans_rien_et_en_erreur():
+    c = cv.Candidature(http=FauxCvgen(), launch=lambda: None)
+    c.ask("annule", 0.0)
+    assert c.state(0.0)["lines"] == ["Rien à annuler"] and not c.busy
+    faux = FauxCvgen()
+    c, core = _ouverte(faux)
+    c.ask("écarte", 1.0)
+    _attendre(c, core, 1.0)
+    faux.up = False                                              # CVGEN tombe avant l'annulation
+    c.ask("annule", 2.0)
+    st = _attendre(c, core, 2.0)
+    assert st["title"] == "Candidature impossible" and c.last is not None   # on pourra réessayer
+
+
+def test_details_et_verifie():
+    base = FauxCvgen()
+
+    def http(method, path, body=None):
+        if path == "/api/offres/t2" and method == "GET":
+            return {"texte": "Poste basé à Lyon.\n\nSalaire : 40 k€\n" + "x " * 2000}
+        if path.endswith("/verifier-lien"):
+            return {"etat": "vivante"}
+        return base(method, path, body)
+    c, core = _ouverte(http)
+    c.ask("détails", 1.0)
+    st = _attendre(c, core, 1.0)
+    assert st["title"] == "Annonce : Poste t2" and st["lines"][:2] == ["Poste basé à Lyon.", "Salaire : 40 k€"]
+    assert st["lines"][-1].endswith("…") and c.state(1.0 + cv.HELP_S - 1) is not None
+    assert c.panel(1.0)["msg"]["title"] == "Annonce : Poste t2"
+    c.ask("suivante", 2.0)                                       # t1 : a un lien
+    c.ask("vérifie", 3.0)
+    _attendre(c, core, 3.0)
+    assert c.panel(3.0)["note"] == "Annonce encore en ligne"
+
+
+def test_verifie_sans_lien_et_details_cvgen_absent():
+    faux = FauxCvgen()
+    c, core = _ouverte(faux)                                       # t2 n'a pas de lien
+    c.ask("vérifie", 1.0)
+    assert "pas de lien" in c.state(1.0)["lines"][-1] and not c.busy
+    faux.up = False
+    c.ask("détails", 2.0)
+    assert _attendre(c, core, 2.0)["title"] == "Candidature impossible"
+
+
+def test_fin_et_debut_de_liste_annonces():
+    c, _ = _ouverte()
+    c.ask("précédente", 1.0)
+    assert c.panel(1.0)["note"].startswith("Début de la liste")
+    c.ask("suivante", 2.0)
+    assert c.panel(2.0)["note"].startswith("Fin de la liste") and c.i == 0
+    c.ask("suivante", 3.0)
+    assert c.panel(3.0)["note"] is None
+
+
+def test_relances():
+    import datetime
+    j = datetime.date(2026, 11, 21)
+    liste = [{"poste": "A", "entreprise": "X", "date": "2026-11-10"},
+             {"poste": "B", "entreprise": "Y", "date": "2026-11-19"},
+             {"poste": "C", "entreprise": "Z", "date": "2026-11-01", "refus": True},
+             {"poste": "D", "entreprise": "W", "date": "2026-11-02", "entretiens": [{"le": "x"}]},
+             {"poste": "E", "entreprise": "V", "date": None}, "abîmé"]
+    lignes = cv.relances_lines(liste, j)
+    assert lignes[0] == "1 à relancer"
+    assert lignes[1] == "À relancer · A · X · il y a 11 j"
+    assert "B · Y · il y a 2 j" in lignes and not any("C ·" in l for l in lignes)
+    assert cv.relances_lines([], j) == ["Aucune candidature en attente de réponse"]
+    assert cv.relances_lines(None, j) == ["Aucune candidature en attente de réponse"]
+
+
+def test_relances_par_la_voix():
+    base = FauxCvgen()
+
+    def http(method, path, body=None):
+        if path == "/api/postulees":
+            return []
+        return base(method, path, body)
+    c = cv.Candidature(http=http, launch=lambda: None)
+    c.ask("relances", 0.0)
+    st = _attendre(c, Core(Config()))
+    assert st["title"] == "Candidatures envoyées" and st["lines"] == ["Aucune candidature en attente de réponse"]
+
+
+def test_vivacite_et_texte_annonce():
+    assert cv.vivacite_text({"etat": "morte"}) == "Annonce retirée"
+    assert cv.vivacite_text({"etat": "douteuse", "detail": "Claude a vu un captcha"}).endswith("(Iris a vu un captcha)")
+    assert cv.vivacite_text(None) == "Annonce : état inconnu"
+    assert cv.details_lines("") == ["Pas de texte pour cette annonce"]
+    assert cv.details_lines("a\r\n\r\n  b   c ") == ["a", "b c"]

@@ -42,6 +42,8 @@ ROUTES = {
     "preparer": ("POST", "/api/offres/{id}/preparer"),   # « Préparer la candidature » : CV composé, PDF, pièces
     "profil": ("GET", "/api/profile"),              # nom, mail, téléphone… lus à la demande, jamais recopiés
     "en_cours": ("POST", "/api/offres/{id}/en-cours"),   # PDF de l'offre dans le dossier fixe, et leurs chemins
+    "postulees": ("GET", "/api/postulees"),         # journal des candidatures (page « Postulées »)
+    "verifier_lien": ("POST", "/api/offres/{id}/verifier-lien"),   # l'annonce est-elle encore en ligne ?
 }
 # Pages ouvertes dans le navigateur (vérifiées par les tests : fichiers de public/ et route des PDF)
 PAGES = {"atelier": "/generate.html?id={cv}", "jury": "/jury.html?id={cv}",
@@ -70,7 +72,12 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          "nom": "ton nom", "ville": "ta ville", "github": "ton lien GitHub", "linkedin": "ton lien LinkedIn",
          "cv": "le PDF du CV, dans la fenêtre « Choisir un fichier »",
          "lettre": "le PDF de la lettre, dans la fenêtre « Choisir un fichier »",
-         "postulé": "candidature notée envoyée (relance à J+7)"}
+         "postulé": "candidature notée envoyée (relance à J+7)",
+         # 21/11 : ce qu'il faut pour chercher depuis Iris sans ouvrir CVGEN
+         "annule": "annule le dernier « garde », « écarte » ou « postulé »",
+         "détails": "le texte de l'annonce dans le panneau",
+         "vérifie": "l'annonce est-elle encore en ligne",
+         "relances": "les candidatures envoyées et celles à relancer"}
 FIELDS = {"mail": "email", "téléphone": "telephone", "prénom": "prenom", "nom": "nom", "ville": "ville"}
 LINKS = {"github", "linkedin"}
 FILES = {"cv", "lettre"}
@@ -83,11 +90,15 @@ HELP_LINES = [
     "Postuler : « lien » ouvre l'offre sur son site ; clique dans un champ, puis dis",
     "  « mail » · « téléphone » · « prénom » · « nom » · « ville » · « github » · « linkedin »",
     "  « cv » / « lettre » dans la fenêtre « Choisir un fichier » ; « postulé » une fois envoyé",
+    "Annonce : « détails » (son texte) · « vérifie » (encore en ligne ?) · « annule » (dernier verdict)",
+    "Suivi : « relances » (candidatures envoyées, à relancer)",
     "Souris : « souris », puis « clic » · « scroll »… · « stop » arrête tout",
     "Quitter le mode : « candidature »",
 ]
 NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis", "cv", "lettre",
-       "postulé"}   # liste ouverte
+       "postulé", "détails", "vérifie"}   # liste ouverte
+RELANCE_J = 7
+DETAILS_MAX = 1400       # caractères de l'annonce montrés par « détails »
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
 A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier"}
 
@@ -129,17 +140,19 @@ SHORT = {"liste": "affiche les offres une par une", "cherche": "lance ou arrête
          "montre": "ouvre le PDF de ton CV", "relis": "ouvre la relecture de ton CV",
          "mail": "écrit ton e-mail dans le champ cliqué", "cv": "joint le PDF du CV au site",
          "lettre": "joint le PDF de la lettre au site", "postulé": "marque envoyée, relance à J+7"}
+_COMMUNS = [("détails · vérifie", "texte de l'annonce · encore en ligne ?"),
+            ("annule · relances", "dernier verdict · candidatures envoyées")]
 # Les autres mots de l'étape, sous les boutons : (mots, ce qu'ils font)
-EXTRA = {"aucune": [],
-         "tri": [("précédente", "revient à l'offre d'avant")],
-         "cv": [("relis", "ouvre la relecture de ton CV par le jury"), ("lien", "ouvre l'annonce sur son site"),
-                ("précédente", "revient à l'offre d'avant")],
-         "prep": [("montre", "ouvre l'atelier du CV en cours"), ("écarte", "pas pour moi : retirée")],
+EXTRA = {"aucune": [("relances", "candidatures envoyées, celles à relancer"),
+                    ("annule", "annule le dernier verdict")],
+         "tri": [("précédente", "revient à l'offre d'avant")] + _COMMUNS,
+         "cv": [("relis · précédente", "relecture de ton CV · offre d'avant"),
+                ("lien", "ouvre l'annonce sur son site")] + _COMMUNS,
+         "prep": [("montre", "ouvre l'atelier du CV en cours"), ("écarte", "pas pour moi : retirée")] + _COMMUNS,
          "pret": [("prénom · nom · téléphone · ville", "écrit dans le champ cliqué"),
-                  ("github · linkedin", "écrit ton lien dans le champ cliqué"),
-                  ("lettre", "joint le PDF de la lettre (fenêtre « Choisir un fichier »)"),
+                  ("github · linkedin · lettre", "ton lien · le PDF de la lettre"),
                   ("montre · relis", "ouvre le PDF du CV · sa relecture"),
-                  ("suivante · précédente", "change d'offre")]}
+                  ("suivante · précédente", "change d'offre")] + _COMMUNS}
 
 
 def step_of(o, prep_line=None, preparing=False):
@@ -194,6 +207,52 @@ def offer_view(offres, i, today, prep_line=None):
             "chips": chips, "note": fmt_note(note),
             "frac": min(max(note / 5, 0.0), 1.0) if isinstance(note, (int, float)) else 0.0,
             "plus": plus, "minus": minus, "prep": prep_line}
+
+
+def details_lines(texte, limit=DETAILS_MAX):
+    """Début du texte de l'annonce, en paragraphes courts. Pur : testable."""
+    out, n = [], 0
+    for para in str(texte or "").replace("\r", "").split("\n"):
+        para = " ".join(para.split())
+        if not para:
+            continue
+        if n + len(para) > limit:
+            out.append(para[:max(limit - n, 40)].rsplit(" ", 1)[0] + "…")
+            break
+        out.append(para)
+        n += len(para)
+    return out or ["Pas de texte pour cette annonce"]
+
+
+def relances_lines(liste, today):
+    """Candidatures envoyées : à relancer d'abord (J+7 passé, sans réponse), puis les plus récentes. Pur."""
+    import datetime as _dt
+    rows = []
+    for e in liste or []:
+        if not isinstance(e, dict) or e.get("refus") or e.get("proposition"):
+            continue
+        try:
+            d = _dt.date.fromisoformat(str(e.get("date"))[:10])
+        except ValueError:
+            continue
+        n = (today - d).days
+        due = n >= RELANCE_J and not e.get("entretiens")
+        rows.append((not due, -d.toordinal(), f"{e.get('poste') or 'Poste ?'} · {e.get('entreprise') or '?'}", n, due))
+    rows.sort()
+    if not rows:
+        return ["Aucune candidature en attente de réponse"]
+    a_relancer = sum(1 for r in rows if r[4])
+    head = f"{a_relancer} à relancer" if a_relancer else "Rien à relancer aujourd'hui"
+    return [head] + [f"{'À relancer · ' if due else ''}{lbl} · il y a {n} j" for _, _, lbl, n, due in rows[:8]]
+
+
+def vivacite_text(v):
+    """Réponse de « vérifier le lien » en une ligne. Pur : testable."""
+    v = v or {}
+    etat = v.get("etat")
+    lbl = {"vivante": "Annonce encore en ligne", "morte": "Annonce retirée", "douteuse": "Vérification incertaine"}
+    txt = lbl.get(etat, f"Annonce : {etat or 'état inconnu'}")
+    return f"{txt} ({iris_says(v['detail'])})"[:120] if v.get("detail") else txt
 
 
 def profile_value(profile, word):
@@ -347,6 +406,7 @@ class Candidature:
         self.view = "msg"                  # le panneau montre l'offre (« card ») ou un message (« msg »)
         self.note = None                   # retour de la dernière commande, sous l'offre
         self.compte = self.agent = None    # derniers chiffres et état de la recherche reçus de CVGEN
+        self.last = None                   # (offre avant verdict, position) : pour « annule »
 
     # ---- fil « cvgen » ----
     def _ensure(self):
@@ -420,6 +480,22 @@ class Candidature:
                 call("maj_offre", self.http, {"etat": "postulee"}, id=arg["id"])
                 self._q.put(("verdict", arg["id"], word))
                 return
+            elif word == "annule":
+                call("maj_offre", self.http, {"etat": arg["offre"]["etat"]}, id=arg["offre"]["id"])
+                self._q.put(("annule", arg["offre"], arg["pos"]))
+                return
+            elif word == "détails":
+                o = call("offre", self.http, id=arg["id"]) or {}
+                self._q.put(("long", f"Annonce : {arg.get('poste') or 'offre'}", details_lines(o.get("texte"))))
+                return
+            elif word == "vérifie":
+                self._q.put(("note", arg["id"], vivacite_text(call("verifier_lien", self.http, {}, id=arg["id"]))))
+                return
+            elif word == "relances":
+                import datetime as _dt
+                self._q.put(("long", "Candidatures envoyées",
+                             relances_lines(call("postulees", self.http), _dt.date.today())))
+                return
             elif word in ("garde", "écarte"):
                 etat = "gardee" if word == "garde" else "ecartee"
                 call("maj_offre", self.http, {"etat": etat}, id=arg["id"])
@@ -449,6 +525,14 @@ class Candidature:
             self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
             self.show_until = t + HELP_S
             return
+        if word == "annule":
+            if self.busy:
+                self._show("Candidature", ["Patiente : la demande d'avant n'est pas finie"], t)
+            elif self.last is None:
+                self._show("Candidature", ["Rien à annuler"], t)
+            else:
+                self._send(word, t, {"offre": self.last[0], "pos": self.last[1]})
+            return
         if word in NAV:
             return self._nav(word, t)
         if self.busy:
@@ -471,8 +555,19 @@ class Candidature:
             return
         o = self.offres[self.i]
         if word in ("suivante", "précédente"):
-            self.i = (self.i + (1 if word == "suivante" else -1)) % len(self.offres)
-            self._card(t)
+            j = self.i + (1 if word == "suivante" else -1)
+            self.i = j % len(self.offres)
+            bout = None
+            if len(self.offres) > 1 and j >= len(self.offres):
+                bout = "Fin de la liste : retour à la première"
+            elif len(self.offres) > 1 and j < 0:
+                bout = "Début de la liste : retour à la dernière"
+            self._card(t, bout)
+        elif word in ("détails", "vérifie"):
+            if word == "vérifie" and not o.get("url"):
+                self._card(t, "Cette offre n'a pas de lien")
+            else:
+                self._send(word, t, o)
         elif word == "lien":
             if not o.get("url"):
                 self._card(t, "Cette offre n'a pas de lien")
@@ -575,9 +670,32 @@ class Candidature:
                 _, oid, paths, word = msg
                 self.files[oid] = paths
                 self._file(oid, word, t)
+            elif msg[0] == "long":                 # « détails », « relances » : le temps de lire
+                self.busy = False
+                self._show(msg[1], msg[2], t)
+                self.show_until = t + HELP_S
+            elif msg[0] == "note":
+                self.busy = False
+                if self.offres and self.offres[self.i]["id"] == msg[1]:
+                    self._card(t, msg[2])
+                else:
+                    self._show("Candidature", [msg[2]], t)
+            elif msg[0] == "annule":
+                self.busy = False
+                _, o, pos = msg
+                self.last = None
+                self.offres = list(self.offres or [])
+                pos = min(pos, len(self.offres))
+                self.offres.insert(pos, o)
+                self.i = pos
+                self._card(t, "Annulé : l'offre est revenue")
+                core.last_gesture = ("CANDIDATURE : ANNULE", t)
             elif msg[0] == "verdict":
                 self.busy = False
                 _, oid, word = msg
+                for k, x in enumerate(self.offres or []):
+                    if x["id"] == oid:
+                        self.last = (dict(x), k)       # « annule » la remet à sa place, dans son état d'avant
                 self.offres = [o for o in self.offres or [] if o["id"] != oid]
                 self.i = min(self.i, max(len(self.offres) - 1, 0))
                 fait = {"garde": "Gardée : CVGEN prépare son CV", "écarte": "Écartée",
