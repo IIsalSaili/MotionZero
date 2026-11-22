@@ -373,3 +373,9 @@ def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
     except AttributeError:
         pass                                  # la suite de _emit (file de mots) n'est pas montée ici
     assert v.last_rejected is None            # décoché : jamais « pas sûr de l'avoir entendu »
+
+
+def test_ferme_ne_ferme_jamais_le_dernier_onglet():
+    from motionzero.app import last_tab
+    assert last_tab(1) and last_tab(0)            # dernier onglet, ou choix du profil : on ne touche à rien
+    assert not last_tab(2) and not last_tab(None)  # plusieurs onglets, ou illisible : Ctrl+W comme avant

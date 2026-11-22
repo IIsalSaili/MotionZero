@@ -32,7 +32,7 @@ from .hand import HandTracker
 from .overlay import render
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
 from .sounds import Sounds, is_failure
-from .vscode import chrome_in_front, foreground_exe
+from .vscode import chrome_in_front, chrome_tab_count, foreground_exe
 from .volume import VIEW as VOLUME_VIEW
 from .quota import Quota, read_shown, write_shown
 from .accueil import home_view, sensors as home_sensors
@@ -170,6 +170,12 @@ def next_volume(v):
         if s > v + 1e-6:
             return s
     return VOLUME_STEPS[0]
+
+
+def last_tab(n):
+    """« ferme » ne doit jamais fermer Chrome entier : 1 onglet (ou moins) = on ne touche à rien.
+    Illisible (None) : on garde Ctrl+W, comme avant. Pur : testable."""
+    return n is not None and n <= 1
 
 
 def read_conversation(path):
@@ -1230,6 +1236,10 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
     for a in acts:
         if a[0] == "chrome_keys":
             if chrome_in_front():
+                if a[1] == ["ctrl", "w"] and last_tab(chrome_tab_count()):
+                    core.last_gesture = ("DERNIER ONGLET : Chrome reste ouvert", t)
+                    _log.info("ferme ignore : dernier onglet de Chrome")
+                    continue
                 rest.append(("hotkey", a[1]))
             else:
                 core.last_gesture = ("CHROME PAS DEVANT : rien envoye", t)
