@@ -320,3 +320,10 @@ def test_camera_en_pause_rend_puis_rouvre_la_webcam(monkeypatch):
     assert cam.cap is None and th.is_alive()
     cam.running = False
     th.join(2)
+
+
+def test_candidature_entendu_meme_dans_une_phrase():
+    from motionzero.voice import confirmed
+    w = [{"word": "candidature", "conf": 1.0}]
+    assert confirmed(w, "l'appli marche plus du tout candidature je dois quitter ce mode", 1)
+    assert not confirmed([{"word": "suivante", "conf": 1.0}], "tu as vu la série hier soir avec les copains", 1)

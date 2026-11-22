@@ -253,7 +253,7 @@ def _gap(a, b):
 
 
 FREE_MAX_WORDS = 4          # un mot seul vient d'une phrase courte ; une phrase de conversation, non
-ALWAYS_HEARD = {"stop", "agrippe"}   # sécurité : jamais bloqués par la vérification
+ALWAYS_HEARD = {"stop", "agrippe", "candidature"}   # jamais bloqués par la vérification (candidature : demandé le 22/11, même dans une phrase)
 
 
 QUIET_IRIS_CONF = 0.7       # voix basse : « iris » moins net, accepté plus tôt
