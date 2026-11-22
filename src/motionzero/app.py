@@ -407,6 +407,7 @@ class Engine:
         for _ in drain(d.pointer_requests):   # bouton « main / tête » de l'accueil (fil Qt)
             acts += core.set_pointer_toggle(t)
         self._quiet(t)
+        self._camera()
         self._volume()
         if t - self.chrome_check_t >= 0.3:
             self.chrome_check_t = t           # le mode Chrome suit Chrome au premier plan (14/11)
@@ -479,6 +480,14 @@ class Engine:
             d.sounds.play("OK")
             _log.info("volume d'Iris : %d %%", round(vol * 100))
 
+    def _camera(self):
+        """Clics sur « caméra » : le fil caméra ferme / rouvre la webcam lui-même. Seulement boucle principale."""
+        d = self.d
+        for _ in drain(d.camera_requests):
+            d.cam.paused = not d.cam.paused
+            d.bridge.camera.emit(d.cam.paused)
+            _log.info("camera %s (bouton)", "coupee" if d.cam.paused else "rallumee")
+
     def _quiet(self, t):
         """Voix basse : choix de l'accueil (enregistré) et heure ; le micro est prévenu par un simple booléen."""
         d = self.d
@@ -532,9 +541,6 @@ class Engine:
                 if a[1]:
                     d.quota.force()
                 _log.info("quota %s", "affiche" if a[1] else "masque")
-            elif a[0] == "camera":
-                d.cam.paused = a[1]           # le fil caméra ferme / rouvre la webcam lui-même
-                _log.info("camera %s", "coupee" if a[1] else "rallumee")
             elif a[0] == "traducteur":
                 if getattr(d, "traducteur", None) is None:
                     d.core.translating = False     # sans la voix, pas de Whisper : rien à faire
@@ -740,6 +746,7 @@ def main(argv=None):
     app_messages = queue.Queue()
     pointer_requests = queue.Queue()           # clics sur « main / tête » (fil Qt) -> boucle principale
     quiet_requests = queue.Queue()             # clics sur « voix basse » (fil Qt) -> boucle principale
+    camera_requests = queue.Queue()            # clics sur « caméra » (fil Qt) -> boucle principale
     quiet_choice = read_quiet(QUIET_FILE)
 
     def app_message(msg):
@@ -782,6 +789,7 @@ def main(argv=None):
     volume_requests = queue.Queue()            # clics sur « volume d'Iris » (fil Qt) -> boucle principale
     view_win.volume_clicked.connect(lambda: volume_requests.put(1))
     view_win.quiet_clicked.connect(lambda: quiet_requests.put(1))
+    view_win.camera_clicked.connect(lambda: camera_requests.put(1))
     def _pointer_clicked():
         log.info("bouton main / tete de l'accueil")
         pointer_requests.put(1)
@@ -789,6 +797,7 @@ def main(argv=None):
     stop = threading.Event()
     bridge = Bridge()
     bridge.quiet.connect(view_win.set_quiet)
+    bridge.camera.connect(view_win.set_camera)
     bridge.iris_volume.connect(view_win.set_volume)
     bridge.pointer.connect(view_win.set_pointer)          # choix fait à la voix : le bouton suit
     bridge.frame.connect(view_win.set_frame)   # file d'attente Qt : passe d'un fil à l'autre
@@ -899,7 +908,7 @@ def main(argv=None):
         cfg=cfg, core=core, cam=cam, tracker=tracker, landmarker=landmarker, faces=faces,
         face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, instructeur=instructeur, candidature=candidature, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
-        quiet_requests=quiet_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
+        quiet_requests=quiet_requests, camera_requests=camera_requests, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
         bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
 

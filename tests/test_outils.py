@@ -17,9 +17,9 @@ def test_aucun_nouveau_mot_guette():
     from motionzero.voice import GRAMMARS, WORDS
     # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté ; puis « candidature » (+1 partout). Les mots
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
-    assert len(WORDS) == 118   # 21/11 : « caméra » ajouté. « espace », « muet », « activation », « favori » retirés (#50)
+    assert len(WORDS) == 117   # « espace », « muet », « activation », « favori » retirés (#50)
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 68, "souris": 68, "chrome": 76, "calendrier": 120, "candidature": 31, "candidature_souris": 37}   # 21/11 : annule, détails, vérifie, relances
+        {"base": 67, "souris": 67, "chrome": 75, "calendrier": 119, "candidature": 31, "candidature_souris": 37}   # 21/11 : annule, détails, vérifie, relances
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 
@@ -266,15 +266,24 @@ def test_appli_absente_mais_site_connu():
         check_step("ouvre_app", "zzqq", apps)
 
 
-def test_iris_camera_coupe_puis_rallume():
-    from motionzero.core import COMMANDS, Core
+def test_bouton_camera_coupe_puis_rallume():
+    import queue
+    from types import SimpleNamespace
+    from motionzero.app import Engine as Loop
+    from motionzero.ui import camera_button_text
     from motionzero.voice import WORDS
-    assert WORDS["caméra"] == "caméra" and COMMANDS["caméra"] == "camera"
-    core, acts = Core.__new__(Core), []
-    core.camera_off = False
-    assert "COUPEE" in core._cmd_camera("caméra", 0.0, acts)
-    assert core._cmd_camera("caméra", 1.0, acts) == "CAMERA RALLUMEE"
-    assert acts == [("camera", True), ("camera", False)]
+    assert "caméra" not in WORDS                     # un bouton, jamais un mot de plus pour Vosk
+    shown = []
+    d = SimpleNamespace(camera_requests=queue.Queue(), cam=SimpleNamespace(paused=False),
+                        bridge=SimpleNamespace(camera=SimpleNamespace(emit=shown.append)))
+    loop = Loop.__new__(Loop)
+    loop.d = d
+    d.camera_requests.put(1)
+    loop._camera()
+    assert d.cam.paused and shown == [True] and "rallumer" in camera_button_text(True)
+    d.camera_requests.put(1)
+    loop._camera()
+    assert not d.cam.paused and shown == [True, False] and "couper" in camera_button_text(False)
 
 
 def test_camera_en_pause_rend_puis_rouvre_la_webcam(monkeypatch):

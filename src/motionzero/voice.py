@@ -97,7 +97,6 @@ WORDS = {
     "viens": "viens",     # « iris viens » : le bot vocal rejoint ton salon et répond quand on dit « Iris » (bot #1)
     "pars": "pars",       # « iris pars » : il quitte le vocal
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
-    "caméra": "caméra",   # « iris caméra » : rend la webcam à Discord ; redit, la reprend
     "instruction": "instruction",
     "bypass": "bypass",           # « iris bypass » : mots acceptés même mal dits (sauf les définitifs) ; redit, éteint  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
     "candidature": "candidature",   # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md) ; redit, éteint
