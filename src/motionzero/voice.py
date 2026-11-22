@@ -353,6 +353,7 @@ class VoiceListener:
         self.last_rejected = None   # (texte affiché, instant) : commande entendue mais bloquée (pour l'île)
         self.capture = None         # morceaux de son gardés pendant « iris question »
         self.quiet = False          # voix basse : écrit par la boucle principale (un booléen), lu ici
+        self.conversation = True    # bouton « mode conversation » de l'accueil : décoché, pas de 2e vérification
         self.bypass = False         # « iris bypass » : écrit par la boucle principale (un booléen), lu ici
         self.relaxed = frozenset()  # mots attendus maintenant (« envoie / annule » après une dictée) : idem
         self._iris_ok_t = -1e9      # dernier « iris » accepté (le mot qui suit n'est pas re-vérifié)
@@ -480,7 +481,7 @@ class VoiceListener:
         if not words:
             return
         after_iris = time.perf_counter() - self._iris_ok_t < AFTER_IRIS_S
-        if free_text is not None and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
+        if free_text is not None and getattr(self, "conversation", True) and not confirmed(words, free_text, len(res.get("result", [])), after_iris,
                                                    self.quiet, relaxed, bypass):
             said = " ".join(w["word"] for w in words)
             log.info("non confirme : %s (entendu librement : %s)", said, apercu(free_text))

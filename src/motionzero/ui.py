@@ -30,6 +30,7 @@ class Bridge(QObject):
     repair_done = Signal()   # réparation du son finie (fil « reparation » -> bouton, dans le fil Qt)
     pointer = Signal(str)    # souris à la main / à la tête (changé à la voix) -> bouton de l'accueil
     quiet = Signal(str)      # choix « voix basse » enregistré -> bouton de l'accueil
+    conversation = Signal(bool)  # mode conversation coché / décoché -> bouton de l'accueil
     camera = Signal(bool)    # webcam coupée (True) / allumée -> bouton de l'accueil
     iris_volume = Signal(float)  # volume des sons d'Iris choisi -> bouton de l'accueil
 
@@ -43,6 +44,12 @@ def quiet_button_text(choice):
     """Texte du bouton « voix basse » de l'accueil. Pur : testable."""
     return {"oui": "Voix basse : toujours", "non": "Voix basse : jamais"}.get(
         choice, "Voix basse : le soir (22 h - 7 h)")
+
+
+def conversation_button_text(on):
+    """Texte du bouton « mode conversation » de l'accueil. Pur : testable."""
+    return ("[x] Mode conversation : mot noyé dans une phrase ignoré" if on
+            else "[  ] Mode conversation : chaque mot reconnu compte")
 
 
 def camera_button_text(off):
@@ -114,6 +121,8 @@ class PreviewWindow(QWidget):
     quiet_clicked = Signal()                   # « voix basse » : idem
     volume_clicked = Signal()                  # « volume d'Iris » : idem
     camera_clicked = Signal()                  # « caméra » : idem
+    conversation_clicked = Signal()            # « mode conversation » : idem
+    quit_clicked = Signal()                    # « fermer Iris » : arrêt voulu, sans relance
 
     def __init__(self, pointer="main", quiet="auto", volume=0.5):
         super().__init__()
@@ -171,20 +180,28 @@ class PreviewWindow(QWidget):
         self.quiet_btn.setToolTip("Iris accepte une voix plus faible. Clic : le soir / toujours / jamais")
         self.volume_btn = QPushButton(volume_button_text(volume))
         self.volume_btn.setToolTip("Sons d'Iris seulement (pas le volume de Windows). Clic : 30 / 50 / 70 / 100 %")
+        self.conv_btn = QPushButton(conversation_button_text(True))
+        self.conv_btn.setToolTip("Coché : un mot dit au milieu d'une conversation est ignoré. Décoché : tout mot reconnu agit")
+        self.quit_btn = QPushButton("Fermer Iris")
+        self.quit_btn.setToolTip("Ferme Iris pour de bon : le gardien ne la relance pas")
         self.camera_btn = QPushButton(camera_button_text(False))
         self.camera_btn.setToolTip("Rend la webcam aux autres applis (appel Discord). Gestes en pause tant qu'elle est coupée")
-        for b in (self.main_btn, self.head_btn, self.quiet_btn, self.volume_btn, self.camera_btn):
+        for b in (self.main_btn, self.head_btn, self.quiet_btn, self.volume_btn, self.camera_btn, self.conv_btn,
+                  self.quit_btn):
             b.setMinimumHeight(64)             # grande cible (clic à la main ou à la tête)
             # jamais au clavier : avec le focus, une touche Espace (envoyée par Iris, la dictée, un réveil…)
             # « cliquait » le bouton sans que personne ne l'ait touché
             b.setFocusPolicy(Qt.FocusPolicy.NoFocus)
-        for b in (self.quiet_btn, self.volume_btn, self.camera_btn):
+        for b in (self.quiet_btn, self.volume_btn, self.camera_btn, self.conv_btn):
             b.setStyleSheet(_pill_style("#000", HOME["texte"], "#555"))
+        self.quit_btn.setStyleSheet(_pill_style("#3A0E12", "#FFD6D9", "#7A2A30"))
         self.main_btn.clicked.connect(lambda: self._choose_pointer("main"))
         self.head_btn.clicked.connect(lambda: self._choose_pointer("tete"))
         self.quiet_btn.clicked.connect(self.quiet_clicked.emit)
         self.volume_btn.clicked.connect(self.volume_clicked.emit)
         self.camera_btn.clicked.connect(self.camera_clicked.emit)
+        self.conv_btn.clicked.connect(self.conversation_clicked.emit)
+        self.quit_btn.clicked.connect(self.quit_clicked.emit)
         ptr = QHBoxLayout()
         ptr.setSpacing(16)
         ptr.addWidget(self.main_btn)
@@ -203,6 +220,8 @@ class PreviewWindow(QWidget):
         right.addWidget(self.quiet_btn)
         right.addWidget(self.volume_btn)
         right.addWidget(self.camera_btn)
+        right.addWidget(self.conv_btn)
+        right.addWidget(self.quit_btn)
 
         body = QHBoxLayout()
         body.setSpacing(20)
@@ -250,6 +269,9 @@ class PreviewWindow(QWidget):
 
     def set_volume(self, volume):
         self.volume_btn.setText(volume_button_text(volume))
+
+    def set_conversation(self, on):
+        self.conv_btn.setText(conversation_button_text(on))
 
     def set_camera(self, off):
         self.camera_btn.setText(camera_button_text(off))

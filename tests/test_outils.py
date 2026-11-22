@@ -327,3 +327,49 @@ def test_candidature_entendu_meme_dans_une_phrase():
     w = [{"word": "candidature", "conf": 1.0}]
     assert confirmed(w, "l'appli marche plus du tout candidature je dois quitter ce mode", 1)
     assert not confirmed([{"word": "suivante", "conf": 1.0}], "tu as vu la série hier soir avec les copains", 1)
+
+
+def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
+    import queue
+    from types import SimpleNamespace
+    from motionzero.app import Engine, read_conversation
+    import motionzero.app as app
+    from motionzero.voice import VoiceListener
+    assert read_conversation(str(tmp_path / "absent.txt")) is True       # coché par défaut
+    (tmp_path / "c.txt").write_text("non", encoding="utf-8")
+    assert read_conversation(str(tmp_path / "c.txt")) is False
+    # bouton : bascule, enregistre, prévient le micro
+    app_conv = tmp_path / "conv.txt"
+    old, app.CONV_FILE = app.CONV_FILE, str(app_conv)
+    try:
+        shown, lis = [], SimpleNamespace(conversation=True)
+        d = SimpleNamespace(conversation_requests=queue.Queue(), conversation=True, listener=lis,
+                            bridge=SimpleNamespace(conversation=SimpleNamespace(emit=shown.append)))
+        e = Engine.__new__(Engine)
+        e.d = d
+        d.conversation_requests.put(1)
+        e._conversation()
+        assert lis.conversation is False and shown == [False] and app_conv.read_text(encoding="utf-8") == "non"
+        d.listener = None                     # sans la voix : le bouton marche quand même
+        d.conversation_requests.put(1)
+        e._conversation()
+        assert d.conversation is True and app_conv.read_text(encoding="utf-8") == "oui"
+    finally:
+        app.CONV_FILE = old
+    # micro : mot noyé dans une phrase -> ignoré si coché, accepté si décoché
+    got = []
+    v = VoiceListener.__new__(VoiceListener)
+    v.min_conf, v._iris_ok_t, v.quiet, v.last_rejected = 0.6, -1e9, False, None
+    v._handle = lambda *a, **k: got.append(a)
+    res = {"result": [{"word": "suivante", "conf": 1.0, "start": 0.0, "end": 0.4}], "text": "suivante"}
+    long = "tu as vu la série hier soir avec les copains suivante"
+    v.conversation = True
+    v._emit(res, long)
+    assert v.last_rejected is not None
+    v.last_rejected = None
+    v.conversation = False
+    try:
+        v._emit(res, long)
+    except AttributeError:
+        pass                                  # la suite de _emit (file de mots) n'est pas montée ici
+    assert v.last_rejected is None            # décoché : jamais « pas sûr de l'avoir entendu »
