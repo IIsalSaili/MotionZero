@@ -285,11 +285,15 @@ def test_garde_et_ecarte_passent_par_cvgen():
     c.ask("garde", 0.0)
     st = _attendre(c, core)
     assert ("PATCH", "/api/offres/t2", {"etat": "gardee"}) in faux.calls
-    assert "Gardée" in st["lines"][-1] and st["lines"][0] == "Poste t1 · ACME"   # la suivante vient d'elle-même
+    assert "Gardée" in st["lines"][-1] and st["lines"][0] == "Poste t2 · ACME"   # reste visible, CV en cours (#59)
+    assert c.offres[c.i]["etat"] == "gardee"
+    c.ask("garde", 0.0)
+    assert "CV est en cours" in c.state(0.0)["lines"][-1] and not c.busy
+    c.ask("suivante", 0.0)
     c.ask("écarte", 0.0)
     _attendre(c, core)
     assert ("PATCH", "/api/offres/t1", {"etat": "ecartee"}) in faux.calls
-    assert [o["id"] for o in c.offres] == ["v1"]
+    assert [o["id"] for o in c.offres] == ["t2", "v1"]
 
 
 def test_garde_une_offre_a_verifier_refusee():
@@ -504,11 +508,11 @@ def test_valeurs_du_profil():
     assert cv.profile_value(None, "nom") is None
 
 
-def _depot(fg="Chrome_WidgetWin_1", **kw):
+def _depot(fg="Chrome_WidgetWin_1", navigateur=True, **kw):
     ecrit = []
     faux = FauxDepot(**kw)
     c = cv.Candidature(http=faux, launch=lambda: None, typer=lambda s, enter=False: ecrit.append((s, enter)),
-                       fg_class=lambda: fg)
+                       fg_class=lambda: fg, browser_front=lambda: navigateur)
     c.sleep = lambda s: None
     core = Core(Config())
     c.ask("liste", 0.0)
@@ -536,7 +540,8 @@ def test_champ_absent_du_profil():
 
 def test_champ_sans_liste_marche_aussi():
     ecrit = []
-    c = cv.Candidature(http=FauxDepot(), launch=lambda: None, typer=lambda s, enter=False: ecrit.append(s))
+    c = cv.Candidature(http=FauxDepot(), launch=lambda: None, typer=lambda s, enter=False: ecrit.append(s),
+                       browser_front=lambda: True)
     c.ask("prénom", 0.0)
     _attendre(c, Core(Config()))
     assert ecrit == ["Ada"]
@@ -814,3 +819,118 @@ def test_vivacite_et_texte_annonce():
     assert cv.vivacite_text(None) == "Annonce : état inconnu"
     assert cv.details_lines("") == ["Pas de texte pour cette annonce"]
     assert cv.details_lines("a\r\n\r\n  b   c ") == ["a", "b c"]
+
+
+# ---- 24/11 : champs du profil (#68), « tab » (#67), profil lu une fois (#62), mauvaise fenêtre (#61)
+PROFIL["identity"].update({"adresse": "1 rue des Fleurs", "code_postal": "75001", "pays": "France",
+                           "date_naissance": "1990-12-10", "disponibilite": "immédiate", "permis": ""})
+
+
+def test_nouveaux_champs_du_profil():
+    assert cv.profile_value(PROFIL, "adresse") == "1 rue des Fleurs"
+    assert cv.profile_value(PROFIL, "code postal") == "75001"
+    assert cv.profile_value(PROFIL, "naissance") == "10/12/1990"     # format des formulaires français
+    assert cv.profile_value(PROFIL, "salaire") is None                 # absent : rien n'est écrit
+    assert cv.profile_value(PROFIL, "permis") is None                  # vide
+    assert cv.profile_value({"identity": {"date_naissance": "10 déc."}}, "naissance") == "10 déc."
+
+
+def test_profil_lu_une_seule_fois_par_ouverture():
+    c, core, faux, ecrit = _depot()
+    for w in ("mail", "pays", "code postal"):
+        c.ask(w, 0.0)
+        _attendre(c, core)
+    assert [e[0] for e in ecrit] == ["ada@exemple.fr", "France", "75001"]
+    assert len([x for x in faux.calls if x[1] == "/api/profile"]) == 1
+    c.actions([("cand_off",)], core, 0.0)                              # fermé : relu à la réouverture
+    assert c.profile is None
+
+
+def test_champ_pas_ecrit_si_le_navigateur_n_est_plus_devant():
+    c, core, faux, ecrit = _depot(navigateur=False)
+    c.ask("mail", 0.0)
+    st = _attendre(c, core)
+    assert ecrit == [] and "navigateur n'est plus devant" in st["lines"][0]
+
+
+def test_tab_appuie_sur_la_touche_sans_cvgen():
+    touches = []
+    faux = FauxCvgen()
+    c = cv.Candidature(http=faux, launch=lambda: None, press=touches.append)
+    c.ask("tab", 0.0)
+    assert touches == ["tab"] and faux.calls == [] and not c.busy
+
+
+def test_mots_en_deux_morceaux_recolles():
+    from motionzero.voice import GRAMMARS, _join_demute
+    w = [{"word": "code", "conf": 1, "start": 0, "end": 1}, {"word": "postal", "conf": 0.9, "start": 1, "end": 2}]
+    assert [x["word"] for x in _join_demute(w)] == ["code postal"]
+    assert "code postal" in GRAMMARS["candidature"] and "code postal" not in GRAMMARS["base"]
+    assert "prépare tout" not in GRAMMARS["chrome"]
+
+
+# ---- « prépare tout » (#72), reprise après relance (#63)
+class FauxFile(FauxCvgen):
+    """Deux offres à vérifier ; chaque préparation finit « prête » au premier suivi."""
+    def __init__(self, en_cours_id=None, **kw):
+        super().__init__(**kw)
+        self.en_cours_id = en_cours_id
+
+    def __call__(self, method, path, body=None):
+        if path == "/api/offres":
+            self.calls.append((method, path))
+            return [_offre("v1", "generee", 4.0), _offre("v2", "generee", 3.0), _offre("t1", "a-trier", 3.0)]
+        if path == "/api/preparation":
+            self.calls.append((method, path))
+            return {"offreId": self.en_cours_id}
+        if method == "GET" and path.startswith("/api/offres/v"):
+            self.calls.append((method, path))
+            return {"preparation": {"etape": "pret"}}
+        return super().__call__(method, path, body)
+
+
+def _file(**kw):
+    faux = FauxFile(**kw)
+    c = cv.Candidature(http=faux, launch=lambda: None)
+    c.sleep = lambda s: None
+    core = Core(Config())
+    return c, core, faux
+
+
+def test_prepare_tout_enchaine_les_offres():
+    c, core, faux = _file()
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    c.ask("prépare tout", 0.0)
+    for _ in range(300):
+        c.events(core, 0.0)
+        if c.preparing is None and not c.todo and not c.busy:
+            break
+        time.sleep(0.01)
+    prep = [x[1] for x in faux.calls if x[1].endswith("/preparer")]
+    assert prep == ["/api/offres/v1/preparer", "/api/offres/v2/preparer"]   # l'une après l'autre, jamais t1
+
+
+def test_prepare_tout_sans_liste_ou_sans_offre_prete():
+    c, core, faux = _file()
+    c.ask("prépare tout", 0.0)
+    assert "Pas de liste" in c.state(0.0)["lines"][0]
+    c.offres = [_offre("t1", "a-trier", 3.0)]
+    c.ask("prépare tout", 0.0)
+    assert "Rien à préparer" in c.state(0.0)["lines"][-1] and not c.busy
+
+
+def test_preparation_reprise_apres_relance_d_iris():
+    c, core, faux = _file(en_cours_id="v2")
+    c.ask("état", 0.0)                             # ouverture du mode après une relance
+    for _ in range(300):
+        c.events(core, 0.0)
+        if c.prep.get("v2") == cv.PREP_STEPS["pret"] and not c.busy:
+            break
+        time.sleep(0.01)
+    assert c.prep.get("v2") == cv.PREP_STEPS["pret"] and c.preparing is None
+    assert ("GET", "/api/offres/v2") in faux.calls                     # suivi repris
+    c2, core2, faux2 = _file()                                         # rien en cours : pas de suivi
+    c2.ask("état", 0.0)
+    _attendre(c2, core2)
+    assert not [x for x in faux2.calls if x[1] == "/api/offres/v2"]

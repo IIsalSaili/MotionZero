@@ -77,8 +77,16 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          "annule": "annule le dernier « garde », « écarte » ou « postulé »",
          "détails": "le texte de l'annonce dans le panneau",
          "vérifie": "l'annonce est-elle encore en ligne",
-         "relances": "les candidatures envoyées et celles à relancer"}
-FIELDS = {"mail": "email", "téléphone": "telephone", "prénom": "prenom", "nom": "nom", "ville": "ville"}
+         "relances": "les candidatures envoyées et celles à relancer",
+         "adresse": "ton adresse", "code postal": "ton code postal", "pays": "ton pays",
+         "naissance": "ta date de naissance", "disponibilité": "ta disponibilité",
+         "salaire": "ton salaire souhaité", "permis": "ton permis",
+         "tab": "passe au champ suivant du formulaire",
+         "prépare tout": "prépare l'une après l'autre toutes les offres dont le CV est prêt"}
+FIELDS = {"mail": "email", "téléphone": "telephone", "prénom": "prenom", "nom": "nom", "ville": "ville",
+          "adresse": "adresse", "code postal": "code_postal", "pays": "pays", "naissance": "date_naissance",
+          "disponibilité": "disponibilite", "salaire": "salaire_souhaite", "permis": "permis"}   # profil CVGEN
+BROWSERS = {"chrome.exe", "msedge.exe", "firefox.exe", "brave.exe", "opera.exe"}   # on n'écrit que là (#61)
 LINKS = {"github", "linkedin"}
 FILES = {"cv", "lettre"}
 FILE_DIALOG = "#32770"   # classe Windows des fenêtres « Ouvrir » / « Choisir un fichier »
@@ -86,9 +94,11 @@ HELP_S = 40.0
 HELP_LINES = [
     "Recherche : « cherche » (lance / arrête) · « état » · « offres » (la page)",
     "Tri : « liste », puis « suivante » · « précédente » · « garde » · « écarte »",
-    "CV : « prépare » (CV et pièces en PDF) · « montre » (le PDF) · « relis » (jury)",
+    "CV : « prépare » (CV et pièces en PDF) · « prépare tout » · « montre » (le PDF) · « relis » (jury)",
     "Postuler : « lien » ouvre l'offre sur son site ; clique dans un champ, puis dis",
     "  « mail » · « téléphone » · « prénom » · « nom » · « ville » · « github » · « linkedin »",
+    "  « adresse » · « code postal » · « pays » · « naissance » · « disponibilité » · « salaire » · « permis »",
+    "  « tab » : champ suivant",
     "  « cv » / « lettre » dans la fenêtre « Choisir un fichier » ; « postulé » une fois envoyé",
     "Annonce : « détails » (son texte) · « vérifie » (encore en ligne ?) · « annule » (dernier verdict)",
     "Suivi : « relances » (candidatures envoyées, à relancer)",
@@ -100,7 +110,7 @@ NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "mont
 RELANCE_J = 7
 DETAILS_MAX = 1400       # caractères de l'annonce montrés par « détails »
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
-A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier"}
+A_PARCOURIR = {"a-trier": "à trier", "generee": "à vérifier", "gardee": "CV en cours"}
 
 
 def next_hint(o, prep_line=None, preparing=False):
@@ -109,6 +119,8 @@ def next_hint(o, prep_line=None, preparing=False):
         return "« liste » · « cherche » · « aide »"
     if o.get("etat") == "a-trier":
         return "« garde » · « écarte » · « suivante » · « aide »"
+    if o.get("etat") == "gardee":
+        return "CV en cours · « suivante » · « écarte » · « aide »"
     pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
     if pret:
         return "« lien » · « mail » · « cv » · « postulé » · « aide »"
@@ -123,6 +135,8 @@ def hint_words(o, prep_line=None, preparing=False):
         return ["liste", "cherche", "état", "offres"]
     if o.get("etat") == "a-trier":
         return ["garde", "écarte", "suivante", "lien"]
+    if o.get("etat") == "gardee":
+        return ["suivante", "précédente", "écarte", "lien"]
     pret = prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret"
     if pret:
         return ["lien", "mail", "cv", "postulé"]
@@ -138,7 +152,8 @@ SHORT = {"liste": "affiche les offres une par une", "cherche": "lance ou arrête
          "suivante": "passe à l'offre d'après", "précédente": "revient à l'offre d'avant",
          "lien": "ouvre l'annonce sur son site", "prépare": "fabrique le CV et la lettre en PDF",
          "montre": "ouvre le PDF de ton CV", "relis": "ouvre la relecture de ton CV",
-         "mail": "écrit ton e-mail dans le champ cliqué", "cv": "joint le PDF du CV au site",
+         "mail": "écrit ton e-mail dans le champ cliqué", "tab": "passe au champ suivant",
+         "prépare tout": "prépare toutes les offres à vérifier", "cv": "joint le PDF du CV au site",
          "lettre": "joint le PDF de la lettre au site", "postulé": "marque envoyée, relance à J+7"}
 _COMMUNS = [("détails · vérifie", "texte de l'annonce · encore en ligne ?"),
             ("annule · relances", "dernier verdict · candidatures envoyées")]
@@ -159,7 +174,7 @@ def step_of(o, prep_line=None, preparing=False):
     """Étape de l'offre affichée : aucune, tri, cv (à préparer), prep (en cours), pret. Pur : testable."""
     if o is None:
         return "aucune"
-    if o.get("etat") == "a-trier":
+    if o.get("etat") in ("a-trier", "gardee"):
         return "tri"
     if prep_line == PREP_STEPS["pret"] or (o.get("preparation") or {}).get("etape") == "pret":
         return "pret"
@@ -260,6 +275,8 @@ def profile_value(profile, word):
     ident = (profile or {}).get("identity") or {}
     if word in FIELDS:
         v = str(ident.get(FIELDS[word]) or "").strip()
+        if word == "naissance" and len(v) == 10 and v[4] == v[7] == "-":
+            v = f"{v[8:]}/{v[5:7]}/{v[:4]}"          # AAAA-MM-JJ (CVGEN) -> JJ/MM/AAAA (formulaires français)
         return v or None
     for lien in ident.get("liens") or []:
         url = str((lien or {}).get("url") or "") if isinstance(lien, dict) else str(lien)
@@ -273,6 +290,17 @@ def _fg_class():
     buf = ctypes.create_unicode_buffer(64)
     ctypes.windll.user32.GetClassNameW(ctypes.windll.user32.GetForegroundWindow(), buf, 64)
     return buf.value
+
+
+def _browser_front():
+    import ctypes
+    from .vscode import _exe_of
+    return _exe_of(ctypes.windll.user32.GetForegroundWindow()) in BROWSERS
+
+
+def _press(key):
+    from .typer import press
+    press(key)
 
 
 def _type(text, enter=False):
@@ -391,9 +419,11 @@ def summary(agent, compte, prep):
 
 class Candidature:
     def __init__(self, http=_http, launch=_launch, open_url=None, clock=time.monotonic, sleep=time.sleep,
-                 typer=_type, fg_class=_fg_class):
+                 typer=_type, fg_class=_fg_class, press=_press, browser_front=_browser_front):
         self.http, self.launch, self.open_url = http, launch, open_url
-        self.typer, self.fg_class = typer, fg_class
+        self.typer, self.fg_class, self.press, self.browser_front = typer, fg_class, press, browser_front
+        self.profile = None                # profil CVGEN lu une fois par ouverture du mode (en mémoire seulement)
+        self.todo = []                     # « prépare tout » : offres qui attendent leur tour
         self.clock, self.sleep = clock, sleep
         self._q = queue.Queue()
         self.busy = False
@@ -470,7 +500,9 @@ class Candidature:
                 self._follow(arg["id"])
                 return
             elif word in FIELDS or word in LINKS:
-                self._q.put(("field", word, profile_value(call("profil", self.http), word)))
+                if self.profile is None:
+                    self.profile = call("profil", self.http)
+                self._q.put(("field", word, profile_value(self.profile, word)))
                 return
             elif word in FILES:
                 r = call("en_cours", self.http, {}, id=arg["id"]) or {}
@@ -506,6 +538,12 @@ class Candidature:
             lines = self._status()
             if (arg or {}).get("liste"):           # ouverture du mode : la première offre tout de suite
                 self._q.put(("liste", a_parcourir(call("offres", self.http))))
+                oid = (call("preparation", self.http) or {}).get("offreId")
+                if oid:                            # Iris relancée pendant une préparation : on reprend le suivi
+                    self._q.put(("prep", oid, {"etape": "attente", "libelle": "reprise du suivi"}))
+                    self._q.put(("ok", title, lines))
+                    self._follow(oid)
+                    return
             self._q.put(("ok", title, lines))
         except CvgenError as e:
             if word == "prépare":
@@ -521,6 +559,11 @@ class Candidature:
             self.busy = True                    # le champ garde le focus : rien n'est affiché devant avant d'écrire
             threading.Thread(target=self._work, args=(word,), name="cvgen", daemon=True).start()
             return
+        if word == "tab":
+            self.press("tab")                  # touche seule : le champ garde le focus, rien à demander à CVGEN
+            return
+        if word == "prépare tout":
+            return self._prep_all(t)
         if word == "aide":
             self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
             self.show_until = t + HELP_S
@@ -539,6 +582,30 @@ class Candidature:
             self._show("Candidature", ["Patiente : la demande d'avant n'est pas finie"], t)
             return
         self._send(word, t, {"liste": True} if word == "état" and self.offres is None else None)
+
+    def _prep_all(self, t):
+        """« prépare tout » : les offres à vérifier pas encore prêtes, l'une après l'autre (CVGEN n'en fait qu'une)."""
+        if not self.offres:
+            self._show("Candidature", ["Pas de liste ouverte : dis « liste »"], t)
+            return
+        if self.busy:
+            self._card(t, "Patiente : la demande d'avant n'est pas finie")
+            return
+        todo = [o for o in self.offres if o.get("cvId") and o["id"] != self.preparing
+                and (o.get("preparation") or {}).get("etape") != "pret" and self.prep.get(o["id"]) != PREP_STEPS["pret"]]
+        if not todo:
+            self._card(t, "Rien à préparer : aucune offre avec un CV prêt")
+            return
+        self.todo = todo
+        self._card(t, f"{len(todo)} offre(s) à préparer, l'une après l'autre")
+        self._next_prep(t)
+
+    def _next_prep(self, t):
+        if self.preparing is not None or self.busy or not self.todo:
+            return
+        o = self.todo.pop(0)
+        self.preparing = o["id"]
+        self._send("prépare", t, o)
 
     def _send(self, word, t, arg=None):
         self.busy = True
@@ -576,7 +643,9 @@ class Candidature:
                     self.open_url(o["url"])
                 self._card(t, "Ouverte dans le navigateur")
         elif word == "garde" and o["etat"] != "a-trier":
-            self._card(t, "Déjà gardée : son CV est prêt")
+            self._card(t, "Déjà gardée : son CV est en cours" if o["etat"] == "gardee" else "Déjà gardée : son CV est prêt")
+        elif o["etat"] == "gardee" and word in FILES | {"postulé", "prépare", "montre", "relis"}:
+            self._card(t, "Son CV est en cours : dis « liste » un peu plus tard")
         elif word in FILES or word == "postulé":
             if not o.get("cvId"):
                 self._card(t, "Pas encore de CV : dis « garde » d'abord")
@@ -662,6 +731,9 @@ class Candidature:
                 _, word, value = msg
                 if value is None:
                     self._show(self.title or "Candidature", [f"« {word} » : absent de ton profil CVGEN"], t, self.meta)
+                elif not self.browser_front():   # le focus a changé pendant l'attente : rien n'est tapé
+                    self._show(self.title or "Candidature", [f"« {word} » : le navigateur n'est plus devant, "
+                                                             "rien n'est écrit"], t, self.meta)
                 else:
                     self.typer(value)
                     core.last_gesture = (f"CANDIDATURE : {word.upper()} ECRIT", t)
@@ -684,7 +756,7 @@ class Candidature:
                 self.busy = False
                 _, o, pos = msg
                 self.last = None
-                self.offres = list(self.offres or [])
+                self.offres = [x for x in self.offres or [] if x["id"] != o["id"]]
                 pos = min(pos, len(self.offres))
                 self.offres.insert(pos, o)
                 self.i = pos
@@ -696,7 +768,11 @@ class Candidature:
                 for k, x in enumerate(self.offres or []):
                     if x["id"] == oid:
                         self.last = (dict(x), k)       # « annule » la remet à sa place, dans son état d'avant
-                self.offres = [o for o in self.offres or [] if o["id"] != oid]
+                if word == "garde":                # reste visible, « CV en cours », jusqu'à son CV (#59)
+                    self.offres = [dict(o, etat="gardee") if o["id"] == oid else o for o in self.offres or []]
+                else:
+                    self.offres = [o for o in self.offres or [] if o["id"] != oid]
+                    self.todo = [o for o in self.todo if o["id"] != oid]
                 self.i = min(self.i, max(len(self.offres) - 1, 0))
                 fait = {"garde": "Gardée : CVGEN prépare son CV", "écarte": "Écartée",
                         "postulé": "Notée postulée : relance dans 7 jours"}[word]
@@ -708,9 +784,13 @@ class Candidature:
                 self.prep[oid] = prep_text(prep)
                 if prep.get("etape") in ("pret", "erreur") and self.preparing == oid:
                     self.preparing = None
+                elif prep.get("etape") not in ("pret", "erreur") and self.preparing is None:
+                    self.preparing = oid           # préparation reprise après une relance d'Iris
                 if self.offres and self.offres[self.i]["id"] == oid:
                     self._card(t)              # l'offre affichée : la carte suit l'avancement
                 core.last_gesture = (f"CANDIDATURE : {self.prep[oid]}".upper()[:60], t)
+                if self.preparing is None and self.todo:
+                    self._next_prep(t)             # « prépare tout » : la suivante
             elif msg[0] == "error":
                 self.busy = False
                 self._show("Candidature impossible", [msg[1]], t)
@@ -724,6 +804,7 @@ class Candidature:
                 self.ask(a[1], t)
             elif a[0] == "cand_off":
                 self.lines, self.offres = None, None
+                self.profile, self.todo = None, []   # profil relu à la prochaine ouverture
             elif a[0] in ("rappel_merci", "ask_close") and self.lines is not None:
                 self.lines = None              # « iris merci » / « iris ferme » : la carte se ferme
                 rest.append(a)

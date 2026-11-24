@@ -119,7 +119,9 @@ SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un 
          ("plus", "tard"): "plus tard",
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
-         ("double", "clic"): "double"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
+         ("double", "clic"): "double"}
+# mots en deux morceaux du mode candidature : recollés, mais jamais ajoutés aux grammaires de base
+CAND_SPLIT = {("code", "postal"): "code postal", ("prépare", "tout"): "prépare tout"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
 SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement à « démute », absent du modèle)
 CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seulement calendrier ouvert
 
@@ -182,9 +184,9 @@ def _join_demute(words):
     while i < len(words):
         w = words[i]
         pair = (w["word"], words[i + 1]["word"]) if i + 1 < len(words) else None
-        if pair in SPLIT:
+        if pair in SPLIT or pair in CAND_SPLIT:
             nxt = words[i + 1]
-            out.append({"word": SPLIT[pair], "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
+            out.append({"word": SPLIT.get(pair) or CAND_SPLIT[pair], "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
             i += 2
             continue
         out.append(w)

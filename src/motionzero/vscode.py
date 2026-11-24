@@ -311,7 +311,12 @@ def open_app(name):
         log.info("%s au premier plan", name)
         return None
     try:
-        subprocess.Popen(cmd, close_fds=True)
+        if name == "chrome":               # par l'explorateur : Chrome n'est pas un enfant d'Iris (#58)
+            if not os.path.exists(cmd[0]):
+                raise OSError(cmd[0])
+            subprocess.Popen(["explorer.exe", cmd[0]], close_fds=True, creationflags=0x08000000)
+        else:
+            subprocess.Popen(cmd, close_fds=True)
     except OSError:
         log.warning("%s introuvable : %s", name, cmd[0])
         return f"{name.upper()} INTROUVABLE"

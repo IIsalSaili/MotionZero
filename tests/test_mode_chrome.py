@@ -328,3 +328,18 @@ def test_onglet_vscode_ferme(monkeypatch):
     core = type("C", (), {"last_gesture": None})()
     app.vscode_actions([("editor_tab", ["ctrl", "pageup"])], core, None, None, 0.0)
     assert envoyes == [] and "PAS DEVANT" in core.last_gesture[0]
+
+
+def test_chrome_lance_par_l_explorateur(monkeypatch):
+    """#58 : Chrome lancé par Iris passe par explorer.exe (pas enfant d'Iris) ; absent du disque = introuvable."""
+    from motionzero import vscode
+    lance = []
+    monkeypatch.setattr(vscode, "find_app_window", lambda exe: None)
+    import subprocess
+    monkeypatch.setattr(subprocess, "Popen", lambda cmd, **kw: lance.append(cmd))
+    monkeypatch.setattr(vscode.os.path, "exists", lambda p: True)
+    assert vscode.open_app("chrome") is None
+    assert lance == [["explorer.exe", vscode.APPS["chrome"][1][0]]]
+    monkeypatch.setattr(vscode.os.path, "exists", lambda p: False)
+    assert vscode.open_app("chrome") == "CHROME INTROUVABLE" and len(lance) == 1
+    assert vscode.open_app("studio") is None and lance[-1] == vscode.APPS["studio"][1]   # les autres : inchangé

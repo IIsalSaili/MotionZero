@@ -30,3 +30,9 @@ Chaque point a son issue GitHub (étiquette `candidature`).
 - Côté CVGEN : issues CVGEN #68 à #72 (ville/télétravail/salaire, relance due, champs de profil, texte de la lettre, contrat en français).
 - « répète » : réafficher la carte.
 - Mots courts confondus (« cv », « nom »/« prénom », « lien »/« liste ») : mesurer sur enregistrements.
+
+## Fait le 24/11
+- Offre gardée visible « CV en cours » (#59) ; navigateur vérifié avant d'écrire (#61) ; profil lu une fois (#62).
+- Suivi d'une préparation repris après une relance d'Iris (#63) ; « prépare tout » (#72).
+- Champs adresse, code postal, pays, naissance, disponibilité, salaire, permis (#68) ; « tab » : champ suivant (#67).
+- Abandonné : connexion / création de compte (#70), « répète » (#73, le panneau reste affiché).
