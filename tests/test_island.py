@@ -50,7 +50,11 @@ def test_haut_deux_mots_au_plus_le_reste_en_bas():
     st = {"mode": "CHROME", "mouse": True, "focus": True, "bypass": True}
     top, bas, actif = island_text(st)
     assert top == "CHROME · SOURIS" and bas == "focus · bypass" and not actif   # rien n'est caché
-    assert island_text({"mode": "NEUTRE"})[0] == "NEUTRE"
+    assert island_text({"mode": "NEUTRE"})[0] == ""                          # rien à dire : le logo seul
+    assert island_text({"mode": "NEUTRE", "front": "code.exe"})[0] == "VS CODE"  # l'appli devant
+    assert island_text({"mode": "NEUTRE", "front": "explorer.exe"})[0] == ""
+    assert island_text({"mode": "NEUTRE", "front": "Obsidian.exe"})[0] == "OBSIDIAN"
+    assert island_text({"mode": "CHROME", "front": "chrome.exe"})[0] == "CHROME"
     assert island_text({"mode": "NEUTRE", "candidature": True, "focus": True, "bypass": True})[:2] ==         ("CANDIDATURE · FOCUS", "bypass")
     assert island_text({"mode": "NEUTRE", "mouse": True, "dragging": True})[0] == "AGRIPPE · SOURIS"
     assert island_text({**st, "toast": "ONGLET FERME", "toast_age": 0.5})[1] == "ONGLET FERME"   # le retour passe devant

@@ -641,6 +641,7 @@ class Engine:
             "scroll_gauge": core.scroll_gauge(t),
             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
             "mode": core.mode,
+            "front": getattr(core, "front_exe", None),   # l'appli devant, affichée en haut (24/11)
             "focus": core.focus_on(t),
             "bypass": core.bypass_on(t),
             "candidature": core.cand_on(t),

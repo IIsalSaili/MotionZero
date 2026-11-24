@@ -1171,6 +1171,23 @@ def cam_blink(now, motion=True):
     return 1.0 if (now % CAM_BLINK_S) < CAM_BLINK_S * 0.6 else 0.25
 
 
+APP_LABELS = {"chrome.exe": "CHROME", "code.exe": "VS CODE", "discord.exe": "DISCORD", "msedge.exe": "EDGE",
+              "firefox.exe": "FIREFOX", "windowsterminal.exe": "TERMINAL", "notepad.exe": "BLOC-NOTES",
+              "explorer.exe": "", "winword.exe": "WORD", "excel.exe": "EXCEL", "spotify.exe": "SPOTIFY",
+              "whatsapp.exe": "WHATSAPP", "steam.exe": "STEAM"}
+
+
+def app_label(exe):
+    """Nom court de l'appli devant ; vide pour le bureau / l'explorateur ou rien. Pur : testable."""
+    if not exe:
+        return ""
+    exe = exe.lower()
+    if exe in APP_LABELS:
+        return APP_LABELS[exe]
+    name = exe[:-4] if exe.endswith(".exe") else exe
+    return name.upper()[:14]
+
+
 FLAG_ORDER = ("AGRIPPE", "SOURIS", "CANDIDATURE", "FOCUS", "BYPASS")   # le plus important d'abord
 
 
@@ -1180,12 +1197,13 @@ def island_text(st):
     important) ; en bas, une ligne courte qui défile : le dernier retour, sinon les autres états allumés
     (focus, bypass… restent visibles, jamais éteints en silence)."""
     base = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
-    base = "" if base == "NEUTRE" else base
+    if base == "NEUTRE":                       # 24/11 : l'appli devant (Chrome, VS Code…), sinon rien
+        base = app_label(st.get("front"))
     on = {"SOURIS": st.get("mouse"), "FOCUS": st.get("focus"), "BYPASS": st.get("bypass"),
           "CANDIDATURE": st.get("candidature"), "AGRIPPE": st.get("dragging")}
     flags = [f for f in FLAG_ORDER if on[f]]
     shown = flags[:1] if base else flags[:2]
-    top = " · ".join(([base] if base else []) + shown) or "NEUTRE"
+    top = " · ".join(([base] if base else []) + shown)
     rest = " · ".join(f.lower() for f in flags if f not in shown) or None
     head = st.get("pointer") == "tete"
     phase = (st.get("qa") or {}).get("phase")
@@ -1665,32 +1683,35 @@ class _IslandPainter:
         if getattr(self, "qa", None):
             self._paint_answer(p, mode, msg)
             return
-        fm_mode = QFontMetrics(self.font_mode)
-        pad, dot = 20, 10
-        w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
-        h = ISLAND_H
-        if msg:                                  # #18 : la même île s'agrandit, le texte en dessous des mots
-            msg_w = QFontMetrics(self.font_small).horizontalAdvance(msg) + 2 * pad
-            w = max(w, min(msg_w, TICKER_W))
-            h = ISLAND_H + TICKER_H - 8
-        gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
+        fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_small)
+        pad, dot, dgap = 22, 8, 10
+        mode_w = (dot + dgap + fm_mode.horizontalAdvance(mode)) if mode else 0
+        msg_w = fm_msg.horizontalAdvance(msg) if msg else 0
+        w = 2 * pad + max(mode_w, min(msg_w, TICKER_W - 2 * pad)) if (mode or msg) else 0
+        two = bool(mode and msg)                 # #18 : la même île s'agrandit, le texte sous les mots
+        h = ISLAND_H + 20 if two else ISLAND_H
+        gx = (self.width - (ISLET + (ISLET_GAP + w if w else 0))) / 2   # rien à dire : le logo seul, centré
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
         self._paint_islet(p, gx, ISLAND_TOP)       # le logo ne s'estompe jamais
-        p.setOpacity(self.opacity)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
-        p.drawRoundedRect(QRectF(x, y, w, h), min(ISLAND_H / 2, 22), min(ISLAND_H / 2, 22))
-        cx = x + pad + dot / 2
-        p.setBrush(QColor(255, 255, 255))
-        p.drawEllipse(QPointF(cx, y + ISLAND_H / 2), dot / 2, dot / 2)
-        p.setPen(QColor(255, 255, 255))
-        p.setFont(self.font_mode)
-        tx = x + pad + dot + 10
-        p.drawText(QRectF(tx, y, fm_mode.horizontalAdvance(mode) + 2, ISLAND_H),
-                   Qt.AlignmentFlag.AlignVCenter, mode)
-        if msg:
-            self._paint_ticker(p, x + pad, y + ISLAND_H - 10, w - 2 * pad, msg)
+        if w:
+            p.setOpacity(self.opacity)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(0, 0, 0, 235))                # noir opaque : lisible sur tout fond
+            r = min(h, ISLAND_H) / 2
+            p.drawRoundedRect(QRectF(x, y, w, h), r, r)
+            line1 = (y + 7, 26) if two else (y, ISLAND_H)    # (haut, hauteur) de la ligne des mots
+            if mode:
+                mx = x + (w - mode_w) / 2                    # pastille + mots, centrés ensemble
+                p.setBrush(QColor(255, 255, 255))
+                p.drawEllipse(QPointF(mx + dot / 2, line1[0] + line1[1] / 2), dot / 2, dot / 2)
+                p.setPen(QColor(255, 255, 255))
+                p.setFont(self.font_mode)
+                p.drawText(QRectF(mx + dot + dgap, line1[0], fm_mode.horizontalAdvance(mode) + 2, line1[1]),
+                           Qt.AlignmentFlag.AlignVCenter, mode)
+            if msg:
+                top, hh = (y + 33, 22) if two else (y, ISLAND_H)
+                self._paint_ticker(p, x + pad, top, w - 2 * pad, msg, hh)
         p.restore()
         ty = y + h + CLOCK_GAP
         self._paint_clock(p, x, ty)
@@ -1700,18 +1721,22 @@ class _IslandPainter:
         for text, countdown in getattr(self, "timer_pills", []):
             tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
 
-    def _paint_ticker(self, p, x, y, room, text):
-        """Ligne sous les mots, dans l'île : petite ; défile si le texte est trop long (#18)."""
+    def _paint_ticker(self, p, x, y, room, text, h=TICKER_H):
+        """Ligne sous les mots, dans l'île : petite, centrée ; défile si elle est trop longue (#18)."""
         fm = QFontMetrics(self.font_small)
         tw = fm.horizontalAdvance(text)
-        off = ticker_offset(tw, room, getattr(self, "now", 0.0) - getattr(self, "ticker_t0", 0.0)) \
-            if self.motion else 0.0
         p.save()
-        p.setClipRect(QRectF(x, y, room, TICKER_H))
+        p.setClipRect(QRectF(x, y, room, h))
         p.setPen(QColor(255, 255, 255, 190))
         p.setFont(self.font_small)
-        shown = text if self.motion or tw <= room else fm.elidedText(text, Qt.TextElideMode.ElideRight, int(room))
-        p.drawText(QRectF(x + off, y, max(tw, room) + 4, TICKER_H), Qt.AlignmentFlag.AlignVCenter, shown)
+        if tw <= room:
+            p.drawText(QRectF(x, y, room, h), Qt.AlignmentFlag.AlignCenter, text)
+        elif not self.motion:
+            p.drawText(QRectF(x, y, room, h), Qt.AlignmentFlag.AlignCenter,
+                       fm.elidedText(text, Qt.TextElideMode.ElideRight, int(room)))
+        else:
+            off = ticker_offset(tw, room, getattr(self, "now", 0.0) - getattr(self, "ticker_t0", 0.0))
+            p.drawText(QRectF(x + off, y, tw + 4, h), Qt.AlignmentFlag.AlignVCenter, text)
         p.restore()
 
     def _paint_timer_pill(self, p, x, y, text, countdown):

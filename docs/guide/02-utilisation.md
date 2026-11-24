@@ -21,7 +21,7 @@ Le bouton **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas l
 
 ## Le bandeau en haut
 
-En haut, un ou deux mots fixes : le mode (CHROME, LECTURE, PAUSE…) et l'état le plus important (AGRIPPE, puis SOURIS, CANDIDATURE, FOCUS, BYPASS). Juste en dessous, une ligne courte : le dernier retour (commande comprise, « Écoute », « Main perdue »…), qui défile s'il est trop long et disparaît après 4 s ; au repos, elle liste les autres états allumés, pour qu'aucun ne soit caché. Les rappels et les timers sonnent et s'affichent, sans être lus à voix haute.
+À côté du logo, une seule île : en haut, un ou deux mots fixes, le mode (LECTURE, PAUSE…) ou, sinon, l'appli devant (CHROME, VS CODE, DISCORD…), puis l'état le plus important (AGRIPPE, puis SOURIS, CANDIDATURE, FOCUS, BYPASS). En dessous, dans la même île, une ligne courte et centrée : le dernier retour (commande comprise, « Écoute », « Main perdue »…), qui défile s'il est trop long et disparaît après 4 s ; au repos, elle liste les autres états allumés, pour qu'aucun ne soit caché. Rien à dire : le logo seul. Les rappels et les timers sonnent et s'affichent, sans être lus à voix haute.
 
 ## Effets d'animation
 
