@@ -126,3 +126,5 @@ Rien dit pendant 8 s : la dictée est abandonnée. Pendant une dictée, les mots
 
 ---
 [← Présentation](01-presentation.md) · [Sommaire](README.md) · [Commandes vocales →](03-commandes-vocales.md)
+
+Si la caméra tombe en panne (image illisible, prise par une autre appli), une caméra barrée clignote en bas à gauche de l'écran, sans texte ; elle disparaît dès que l'image revient. Caméra coupée exprès (bouton de l'accueil) : rien ne s'affiche.
