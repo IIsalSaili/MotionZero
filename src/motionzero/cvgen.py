@@ -24,6 +24,9 @@ log = logging.getLogger("motionzero.cvgen")
 BASE = "http://127.0.0.1:3000"
 DIR = Path.home() / "Desktop" / "CVGEN"
 TIMEOUT_S = 8
+# appels longs : le modèle (réveil compris), la visite de l'annonce, les PDF (24/11 : 8 s ne suffisaient pas)
+ROUTE_TIMEOUT_S = {"llm": 120, "verifier_lien": 40, "en_cours": 60, "preparer": 30, "offre": 20}
+BUSY_MAX_S = 180.0       # au-delà, une demande sans réponse est oubliée : le mode ne reste jamais bloqué
 START_WAIT_S = 20.0      # CVGEN lancé par Iris : temps laissé pour qu'il réponde
 SHOW_S = 15.0            # la carte reste ce temps
 CLOSE_HINT = "« candidature » pour quitter"
@@ -359,6 +362,12 @@ def _http(method, path, body=None, base=BASE, timeout=TIMEOUT_S):
         except (ValueError, OSError):
             msg = None
         raise CvgenError(msg or f"CVGEN a refusé ({e.code})") from None
+    except TimeoutError:
+        raise CvgenError("CVGEN met trop de temps à répondre : réessaie") from None
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            raise CvgenError("CVGEN met trop de temps à répondre : réessaie") from None
+        raise CvgenError("CVGEN ne répond pas") from None
     except (OSError, ValueError):
         raise CvgenError("CVGEN ne répond pas") from None
 
@@ -376,6 +385,8 @@ def _launch(root=DIR):
 def call(name, http=_http, body=None, **ids):
     method, path = ROUTES[name]
     path = path.format(**{k: urllib.parse.quote(str(v), safe="") for k, v in ids.items()})
+    if http is _http:
+        return _http(method, path, body, timeout=ROUTE_TIMEOUT_S.get(name, TIMEOUT_S))
     return http(method, path, body) if body is not None else http(method, path)
 
 
@@ -502,6 +513,7 @@ class Candidature:
         self.profile = None                # profil CVGEN lu une fois par ouverture du mode (en mémoire seulement)
         self.todo = []                     # « prépare tout » : offres qui attendent leur tour
         self.reponse = None                # réponse proposée à la dernière question libre (#46)
+        self._busy_t = None                # début de la demande en cours (garde-fou BUSY_MAX_S)
         self.clock, self.sleep = clock, sleep
         self._q = queue.Queue()
         self.busy = False
@@ -651,6 +663,7 @@ class Candidature:
                     return
             self._q.put(("ok", title, lines))
         except CvgenError as e:
+            log.warning("cvgen %s : %s", word, e)
             if word == "prépare":
                 self._q.put(("prep", arg["id"], {"etape": "erreur", "erreur": str(e)}))
             self._q.put(("error", iris_says(e)))
@@ -704,6 +717,9 @@ class Candidature:
             return
         self.busy = True
         o = dict(self.offres[self.i]) if self.offres else None
+        self._show("Question", ["Je transcris ta question, puis je prépare une réponse…"
+                                + ("" if o else " (sans offre affichée : d'après ton profil seulement)")],
+                   self.clock(), self.meta)
 
         def run():
             try:
@@ -840,11 +856,29 @@ class Candidature:
         self.view = "msg"
 
     def events(self, core, t):
+        if not self.busy:
+            self._busy_t = None
+        elif self._busy_t is None:
+            self._busy_t = t
+        elif t - self._busy_t > BUSY_MAX_S:      # réponse perdue : on débloque plutôt que d'attendre pour rien
+            log.warning("cvgen : demande sans réponse depuis %.0f s, oubliée", t - self._busy_t)
+            self.busy, self._busy_t = False, None
+            self._show("Candidature", ["CVGEN n'a pas répondu : redis la commande"], t)
         while True:
             try:
                 msg = self._q.get_nowait()
             except queue.Empty:
                 break
+            try:
+                self._event(msg, core, t)
+            except Exception:                     # un message mal traité ne bloque jamais le mode
+                log.exception("cvgen : message %s", msg[0])
+                self.busy = False
+                self._show("Candidature", ["Erreur inattendue : redis la commande"], t)
+        return []
+
+    def _event(self, msg, core, t):
+        if True:
             if msg[0] == "wait":
                 self._show("Candidature", [msg[1]], t)
             elif msg[0] == "chiffres":
@@ -955,13 +989,17 @@ class Candidature:
                 self.busy = False
                 self._show("Candidature impossible", [msg[1]], t)
                 core.last_gesture = (f"CANDIDATURE : {msg[1]}".upper()[:60], t)
-        return []
 
     def actions(self, acts, core, t):
         rest = []
         for a in acts:
             if a[0] == "cand":
-                self.ask(a[1], t)
+                try:
+                    self.ask(a[1], t)
+                except Exception:                 # frappe, ouverture d'un lien… : dit, jamais bloquant
+                    log.exception("cvgen : %s", a[1])
+                    self.busy = False
+                    self._show("Candidature", [f"« {a[1]} » n'a pas marché : redis-le"], t)
             elif a[0] == "cand_off":
                 self.lines, self.offres = None, None
                 self.profile, self.todo, self.reponse = None, [], None   # profil relu à la prochaine ouverture

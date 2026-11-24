@@ -156,7 +156,7 @@ def test_demande_pendant_une_autre():
 
 def test_http_cvgen_eteint():
     with pytest.raises(cv.CvgenError, match="ne répond pas"):
-        cv._http("GET", "/api/health", base="http://127.0.0.1:9", timeout=0.5)
+        cv._http("GET", "/api/health", base="http://127.0.0.1:9", timeout=5)
 
 
 def test_carte_fermee_par_merci():
@@ -1068,3 +1068,55 @@ def test_brouillon_de_bout_en_bout_et_echecs(tmp_path):
     c.i = 0                                                           # offre à trier : pas de CV
     c.ask("brouillon", 0.0)
     assert "dis « garde »" in c.state(0.0)["lines"][-1]
+
+
+# ---- 24/11 : rien d'imprévu ne bloque le mode
+def test_serveur_trop_lent_message_clair():
+    import socket
+    import threading as th
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)                                                     # accepte, ne répond jamais
+    port = srv.getsockname()[1]
+    try:
+        with pytest.raises(cv.CvgenError, match="trop de temps"):
+            cv._http("GET", "/api/health", base=f"http://127.0.0.1:{port}", timeout=0.5)
+    finally:
+        srv.close()
+    assert cv.ROUTE_TIMEOUT_S["llm"] >= 60                            # le modèle a le temps de se réveiller
+
+
+def test_question_sans_offre_affiche_l_attente_et_repond():
+    faux = FauxLlm()
+    c = cv.Candidature(http=faux, launch=lambda: None, browser_front=lambda: True, typer=lambda s, enter=False: None)
+    c.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "sans offre affichée" in c.lines[0]                       # quelque chose à l'écran tout de suite
+    st = _attendre(c, Core(Config()))
+    assert st["title"] == "Réponse proposée"
+    assert not [x for x in faux.calls if x[1].startswith("/api/offres/") and x[0] == "GET"]
+
+
+def test_demande_perdue_debloquee():
+    c = cv.Candidature(http=FauxCvgen(), launch=lambda: None)
+    core = Core(Config())
+    c.busy = True                                                     # aucune réponse n'arrivera
+    c.events(core, 0.0)
+    c.events(core, cv.BUSY_MAX_S - 1)
+    assert c.busy
+    c.events(core, cv.BUSY_MAX_S + 1)
+    assert not c.busy and "n'a pas répondu" in c.lines[0]
+
+
+def test_message_qui_plante_ne_bloque_pas():
+    def boom(s, enter=False):
+        raise OSError("clavier")
+    c = cv.Candidature(http=FauxDepot(), launch=lambda: None, typer=boom, browser_front=lambda: True)
+    core = Core(Config())
+    c.ask("mail", 0.0)
+    st = _attendre(c, core)
+    assert not c.busy and "Erreur inattendue" in st["lines"][0]
+    c.reponse = "x"
+    assert c.actions([("cand", "écris")], core, 0.0) == []           # frappe en panne : dit, pas d'exception
+    assert "n'a pas marché" in c.lines[0] and not c.busy
+    c._q.put(("inconnu",))                                            # message inattendu : ignoré sans planter
+    c.events(core, 0.0)
