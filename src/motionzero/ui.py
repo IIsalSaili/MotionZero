@@ -1363,7 +1363,7 @@ class _IslandPainter:
         ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
         scrolling = False
         if self.content and self.content[1] and self.motion:
-            scrolling = QFontMetrics(self.font_small).horizontalAdvance(self.content[1]) > TICKER_W - 32
+            scrolling = QFontMetrics(self.font_small).horizontalAdvance(self.content[1]) > TICKER_W - 40
         return moving or (ringing and self.motion) or scrolling
 
     def paint(self, p):
@@ -1628,6 +1628,11 @@ class _IslandPainter:
         fm_mode = QFontMetrics(self.font_mode)
         pad, dot = 20, 10
         w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
+        h = ISLAND_H
+        if msg:                                  # #18 : la même île s'agrandit, le texte en dessous des mots
+            msg_w = QFontMetrics(self.font_small).horizontalAdvance(msg) + 2 * pad
+            w = max(w, min(msg_w, TICKER_W))
+            h = ISLAND_H + TICKER_H - 8
         gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
@@ -1635,7 +1640,7 @@ class _IslandPainter:
         p.setOpacity(self.opacity)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
-        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        p.drawRoundedRect(QRectF(x, y, w, h), min(ISLAND_H / 2, 22), min(ISLAND_H / 2, 22))
         cx = x + pad + dot / 2
         p.setBrush(QColor(255, 255, 255))
         p.drawEllipse(QPointF(cx, y + ISLAND_H / 2), dot / 2, dot / 2)
@@ -1644,11 +1649,10 @@ class _IslandPainter:
         tx = x + pad + dot + 10
         p.drawText(QRectF(tx, y, fm_mode.horizontalAdvance(mode) + 2, ISLAND_H),
                    Qt.AlignmentFlag.AlignVCenter, mode)
-        p.restore()
-        ty = y + ISLAND_H + CLOCK_GAP
         if msg:
-            self._paint_ticker(p, x, ty, msg)
-            ty += TICKER_H + CLOCK_GAP
+            self._paint_ticker(p, x + pad, y + ISLAND_H - 10, w - 2 * pad, msg)
+        p.restore()
+        ty = y + h + CLOCK_GAP
         self._paint_clock(p, x, ty)
         if self.next_rem:
             ty += ISLAND_H + CLOCK_GAP
@@ -1656,25 +1660,18 @@ class _IslandPainter:
         for text, countdown in getattr(self, "timer_pills", []):
             tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
 
-    def _paint_ticker(self, p, x, y, text):
-        """Ligne du bas : petite, sous les mots fixes ; défile si le texte est trop long (#18)."""
-        pad = 16
+    def _paint_ticker(self, p, x, y, room, text):
+        """Ligne sous les mots, dans l'île : petite ; défile si le texte est trop long (#18)."""
         fm = QFontMetrics(self.font_small)
         tw = fm.horizontalAdvance(text)
-        w = min(TICKER_W, tw + 2 * pad)
-        room = w - 2 * pad
         off = ticker_offset(tw, room, getattr(self, "now", 0.0) - getattr(self, "ticker_t0", 0.0)) \
             if self.motion else 0.0
         p.save()
-        p.setOpacity(self.opacity)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 215))
-        p.drawRoundedRect(QRectF(x, y, w, TICKER_H), TICKER_H / 2, TICKER_H / 2)
-        p.setClipRect(QRectF(x + pad, y, room, TICKER_H))
-        p.setPen(QColor(255, 255, 255, 215))
+        p.setClipRect(QRectF(x, y, room, TICKER_H))
+        p.setPen(QColor(255, 255, 255, 190))
         p.setFont(self.font_small)
         shown = text if self.motion or tw <= room else fm.elidedText(text, Qt.TextElideMode.ElideRight, int(room))
-        p.drawText(QRectF(x + pad + off, y, max(tw, room) + 4, TICKER_H), Qt.AlignmentFlag.AlignVCenter, shown)
+        p.drawText(QRectF(x + off, y, max(tw, room) + 4, TICKER_H), Qt.AlignmentFlag.AlignVCenter, shown)
         p.restore()
 
     def _paint_timer_pill(self, p, x, y, text, countdown):
