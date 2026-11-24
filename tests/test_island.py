@@ -66,3 +66,14 @@ def test_ligne_du_bas_defile_seulement_si_trop_longue():
     assert ticker_offset(500, 200, 0.1) == 0.0                              # pause au début
     assert ticker_offset(500, 200, TICKER_PAUSE_S + 1.0) < 0
     assert ticker_offset(500, 200, TICKER_PAUSE_S + 60.0) >= -300            # jamais au-delà du bout du texte
+
+
+def test_camera_en_panne_icone_en_bas_a_gauche():
+    """24/11 : plus de « CAMERA : image illisible… » dans l'île ; une caméra barrée qui clignote."""
+    from motionzero.app import cam_down
+    from motionzero.camera import LOST, OK, PAUSED, RECONNECTING, STOPPED
+    from motionzero.ui import cam_blink
+    assert cam_down(LOST) and cam_down(RECONNECTING)
+    assert not cam_down(OK) and not cam_down(PAUSED) and not cam_down(STOPPED)   # coupée exprès : rien
+    assert cam_blink(0.1) == 1.0 and cam_blink(1.0) < 1.0 and cam_blink(1.0, motion=False) == 1.0
+    assert island_text({"mode": "NEUTRE", "cam_down": True})[1] is None        # aucun texte en haut

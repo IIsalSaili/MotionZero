@@ -1159,6 +1159,18 @@ def load_fonts():
         QFontDatabase.addApplicationFont(_os.path.join(_FONT_DIR, name))
 
 
+CAM_BOX = 56             # caméra barrée (panne), en bas à gauche
+CAM_MARGIN = 18
+CAM_BLINK_S = 1.2        # période du clignotement (moins de 3 fois par seconde)
+
+
+def cam_blink(now, motion=True):
+    """Opacité de l'icône caméra : pleine puis presque éteinte ; fixe sans animations Windows. Pur."""
+    if not motion:
+        return 1.0
+    return 1.0 if (now % CAM_BLINK_S) < CAM_BLINK_S * 0.6 else 0.25
+
+
 FLAG_ORDER = ("AGRIPPE", "SOURIS", "CANDIDATURE", "FOCUS", "BYPASS")   # le plus important d'abord
 
 
@@ -1257,7 +1269,8 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF")):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"),
+                            ("camera-off", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
                 self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
@@ -1281,6 +1294,10 @@ class _IslandPainter:
             w, x = w + x, 0
             self.quota_gone = False
         r = QRect(x, ISLAND_TOP - 4, int(w), h)
+        if getattr(self, "cam_down", False) or getattr(self, "cam_gone", False):   # caméra barrée, en bas à gauche
+            self.cam_gone = False
+            r = r.united(QRect(0, int(self.height - CAM_BOX - 2 * CAM_MARGIN), CAM_BOX + 2 * CAM_MARGIN,
+                               CAM_BOX + 2 * CAM_MARGIN))
         if getattr(self, "panel", None) or getattr(self, "panel_gone", False):   # panneau candidature (ou à effacer)
             self.panel_gone = False
             r = r.united(QRect(int(self.width - PANEL_W - 2 * PANEL_MARGIN), 0, PANEL_W + 2 * PANEL_MARGIN,
@@ -1321,6 +1338,12 @@ class _IslandPainter:
         if getattr(self, "quota", None) and not q:
             self.quota_gone = True             # masquée : repeindre le coin gauche une fois pour l'effacer
         self.quota = tuple(q) if q else None
+        down = bool(st.get("cam_down"))
+        if getattr(self, "cam_down", False) and not down:
+            self.cam_gone = True               # caméra revenue : repeindre le coin une fois pour l'effacer
+        if down != getattr(self, "cam_down", False):
+            self.last_change = now
+        self.cam_down = down
         panel = st.get("cand_panel")
         if getattr(self, "panel", None) and not panel:
             self.panel_gone = True             # mode éteint : repeindre la droite une fois pour l'effacer
@@ -1364,7 +1387,7 @@ class _IslandPainter:
         scrolling = False
         if self.content and self.content[1] and self.motion:
             scrolling = QFontMetrics(self.font_small).horizontalAdvance(self.content[1]) > TICKER_W - 40
-        return moving or (ringing and self.motion) or scrolling
+        return moving or (ringing and self.motion) or scrolling or getattr(self, "cam_down", False)
 
     def paint(self, p):
         if not self.content:
@@ -1374,6 +1397,23 @@ class _IslandPainter:
             self._paint_quota(p, self.quota)
         if getattr(self, "panel", None):
             self._paint_cand_panel(p, self.panel)
+        if getattr(self, "cam_down", False):
+            self._paint_cam_down(p)
+
+    def _paint_cam_down(self, p):
+        """Caméra en panne : caméra barrée en bas à gauche, qui clignote (pas de texte, 24/11)."""
+        x, y = CAM_MARGIN, self.height - CAM_MARGIN - CAM_BOX
+        k = cam_blink(getattr(self, "anim_now", 0.0), self.motion)
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 220))
+        p.drawRoundedRect(QRectF(x, y, CAM_BOX, CAM_BOX), CAM_BOX / 2, CAM_BOX / 2)
+        icon = self.icons.get("camera-off")
+        if icon is not None:
+            p.setOpacity(k)
+            m = CAM_BOX * 0.24
+            icon.render(p, QRectF(x + m, y + m, CAM_BOX - 2 * m, CAM_BOX - 2 * m))
+        p.restore()
 
     def _wrap(self, p, font, color, x, y, w, text, max_h=10000):
         """Texte sur plusieurs lignes ; renvoie la hauteur utilisée (bornée à max_h)."""
