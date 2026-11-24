@@ -934,3 +934,23 @@ def test_preparation_reprise_apres_relance_d_iris():
     c2.ask("état", 0.0)
     _attendre(c2, core2)
     assert not [x for x in faux2.calls if x[1] == "/api/offres/v2"]
+
+
+def test_panneau_ville_teletravail_salaire():
+    """#64 : ce que CVGEN lit dans l'annonce s'affiche ; contrat en français de CVGEN d'abord ; absents : rien."""
+    import datetime as dt
+    o = dict(_offre("v1", "generee", 4.0), contratLibelle="CDI", ville="Lyon", teletravail="Hybride",
+             salaire="45 k€", contrat="FULL_TIME")
+    chips = cv.offer_view([o], 0, dt.date(2026, 11, 24))["chips"]
+    assert chips[:4] == ["CDI", "Lyon", "Hybride", "45 k€"]
+    nu = cv.offer_view([dict(_offre("v1", "generee", 4.0), contrat="FULL_TIME", ville=None)], 0, dt.date(2026, 11, 24))
+    assert nu["chips"][0] == "Temps plein" and None not in nu["chips"]
+
+
+def test_etiquettes_sur_deux_lignes():
+    from motionzero.ui import chip_rows
+    w = lambda c: 10 * len(c)
+    assert chip_rows(w, ["aaaa", "bbbb", "cccc"], 130) == [["aaaa", "bbbb"], ["cccc"]]
+    assert chip_rows(w, ["a" * 50, "ok"], 130) == [["ok"]]           # trop longue : laissée de côté
+    assert len(chip_rows(w, ["aaaaaaaaaa"] * 5, 130)) == 2           # jamais plus de deux lignes
+    assert chip_rows(w, [], 130) == [[]]

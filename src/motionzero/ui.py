@@ -20,6 +20,23 @@ __all__ = ["Bridge", "EyeButton", "GlassOverlay", "KeySink", "PreviewWindow", "Q
            "set_capture_visible"]
 
 
+
+def chip_rows(width, chips, max_w, gap=6, pad=18, max_rows=2):
+    """Étiquettes rangées en lignes de largeur max_w (au plus max_rows lignes ; trop longue : coupée). Pur."""
+    rows, cur, x = [], [], 0.0
+    for c in chips:
+        w = width(c) + pad
+        if cur and x + w > max_w:
+            rows.append(cur)
+            cur, x = [], 0.0
+        if w > max_w:
+            continue
+        cur.append(c)
+        x += w + gap
+    if cur:
+        rows.append(cur)
+    return rows[:max_rows] or [[]]
+
 class Bridge(QObject):
     frame = Signal(object)   # image BGR (numpy) déjà dessinée par overlay.render
     state = Signal(object)   # état pour le verre : curseur, progression, main perdue
@@ -1487,7 +1504,7 @@ class _IslandPainter:
                 return min(QFontMetrics(item[1]).boundingRect(QRect(0, 0, int(cw), 100000), flags, item[3]).height(),
                            item[4])
             if item[0] == "chips":
-                return 26
+                return 32 * len(chip_rows(QFontMetrics(small).horizontalAdvance, item[1], cw)) - 6
             return 34
         card_h = 36 + sum(measure(it) for it in texts) + 10 * max(len(texts) - 1, 0)
         card_h = min(card_h, max(room, 0))
@@ -1502,21 +1519,21 @@ class _IslandPainter:
                 cy += 20
             elif it[0] == "wrap":
                 cy += self._wrap(p, it[1], it[2], cx, cy, cw, it[3], it[4])
-            elif it[0] == "chips":
+            elif it[0] == "chips":                # sur plusieurs lignes si besoin (#64 : ville, télétravail, salaire)
                 fm = QFontMetrics(small)
-                px = cx
-                for c in it[1]:
-                    cwid = fm.horizontalAdvance(c) + 18
-                    if px + cwid > cx + cw:
-                        break
-                    p.setPen(Qt.PenStyle.NoPen)
-                    p.setBrush(chip)
-                    p.drawRoundedRect(QRectF(px, cy, cwid, 26), 13, 13)
-                    p.setPen(white)
-                    p.setFont(small)
-                    p.drawText(QRectF(px, cy, cwid, 26), Qt.AlignmentFlag.AlignCenter, c)
-                    px += cwid + 6
-                cy += 26
+                for row in chip_rows(fm.horizontalAdvance, it[1], cw):
+                    px = cx
+                    for c in row:
+                        cwid = fm.horizontalAdvance(c) + 18
+                        p.setPen(Qt.PenStyle.NoPen)
+                        p.setBrush(chip)
+                        p.drawRoundedRect(QRectF(px, cy, cwid, 26), 13, 13)
+                        p.setPen(white)
+                        p.setFont(small)
+                        p.drawText(QRectF(px, cy, cwid, 26), Qt.AlignmentFlag.AlignCenter, c)
+                        px += cwid + 6
+                    cy += 32
+                cy -= 6
             else:
                 p.setPen(CAND)
                 p.setFont(QFont("Atkinson Hyperlegible", 24, QFont.Weight.Bold))

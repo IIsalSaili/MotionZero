@@ -208,7 +208,9 @@ def offer_view(offres, i, today, prep_line=None):
     ev = o.get("evaluation") or {}
     total = sum(1 for x in offres if x["etat"] == o["etat"])
     k = sum(1 for x in offres[:i + 1] if x["etat"] == o["etat"])
-    chips = [c for c in (fmt_contrat(o.get("contrat")), ev.get("verdict"), fmt_age(o.get("datePubliee"), today)) if c]
+    contrat = o.get("contratLibelle") or fmt_contrat(o.get("contrat"))   # lus dans l'annonce par CVGEN (#64)
+    chips = [str(c)[:40] for c in (contrat, o.get("ville"), o.get("teletravail"), o.get("salaire"), ev.get("verdict"),
+                                   fmt_age(o.get("datePubliee"), today)) if c]
     axes = [a for a in ev.get("axes") or [] if isinstance(a.get("note"), (int, float))]
     plus = minus = None
     if axes:
