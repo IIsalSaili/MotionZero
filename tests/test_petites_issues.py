@@ -79,7 +79,7 @@ def test_animations_coupees():
 
 
 def test_reglage_windows_illisible(monkeypatch):
-    import motionzero.ui as ui
+    import motionzero.ui_ile as ui   # #52 : windows_animations vit dans ui_ile
     monkeypatch.setattr(ui.ctypes, "windll", None, raising=False)
     assert ui.windows_animations() is True
 
