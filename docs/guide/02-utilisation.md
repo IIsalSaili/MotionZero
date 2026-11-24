@@ -19,6 +19,10 @@
 
 Le bouton **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `volume_iris.txt`.
 
+## Le bandeau en haut
+
+À côté du logo, une seule île : en haut, un ou deux mots fixes, le mode (LECTURE, PAUSE…) ou, sinon, l'appli devant (CHROME, VS CODE, DISCORD…), puis l'état le plus important (AGRIPPE, puis SOURIS, CANDIDATURE, FOCUS, BYPASS). En dessous, dans la même île, une ligne courte et centrée : le dernier retour (commande comprise, « Écoute », « Main perdue »…), qui défile s'il est trop long et disparaît après 4 s ; au repos, elle liste les autres états allumés, pour qu'aucun ne soit caché. Rien à dire : le logo seul. Les rappels et les timers sonnent et s'affichent, sans être lus à voix haute.
+
 ## Effets d'animation
 
 Si les « Effets d'animation » sont coupés dans Windows (Accessibilité > Effets visuels), l'île ne cligne plus, l'heure apparaît sans animation et l'alarme reste rouge sans pulser. Le réglage est lu au démarrage d'Iris.
@@ -122,3 +126,5 @@ Rien dit pendant 8 s : la dictée est abandonnée. Pendant une dictée, les mots
 
 ---
 [← Présentation](01-presentation.md) · [Sommaire](README.md) · [Commandes vocales →](03-commandes-vocales.md)
+
+Si la caméra tombe en panne (image illisible, prise par une autre appli), une caméra barrée clignote en bas à gauche de l'écran, sans texte ; elle disparaît dès que l'image revient. Caméra coupée exprès (bouton de l'accueil) : rien ne s'affiche.

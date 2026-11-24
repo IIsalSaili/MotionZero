@@ -824,7 +824,11 @@ ISLAND_H = 46
 ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
 ISLAND_FADED = 0.25      # … à 25 % d'opacité
-TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
+TOAST_S = 4.0            # durée d'affichage d'une commande comprise / ignorée (ligne du bas, le temps de défiler)
+TICKER_W = 460           # largeur de la ligne du bas
+TICKER_H = 30
+TICKER_SPEED = 60.0      # px/s quand le texte est trop long
+TICKER_PAUSE_S = 0.8
 MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "CHROME": "CHROME", "DESACTIVE": "PAUSE"}
 
 # pastille Discord, à gauche de l'îlot : micro barré (micro coupé), casque barré + micro barré (sourdine)
@@ -1155,48 +1159,81 @@ def load_fonts():
         QFontDatabase.addApplicationFont(_os.path.join(_FONT_DIR, name))
 
 
+CAM_BOX = 56             # caméra barrée (panne), en bas à gauche
+CAM_MARGIN = 18
+CAM_BLINK_S = 1.2        # période du clignotement (moins de 3 fois par seconde)
+
+
+def cam_blink(now, motion=True):
+    """Opacité de l'icône caméra : pleine puis presque éteinte ; fixe sans animations Windows. Pur."""
+    if not motion:
+        return 1.0
+    return 1.0 if (now % CAM_BLINK_S) < CAM_BLINK_S * 0.6 else 0.25
+
+
+APP_LABELS = {"chrome.exe": "CHROME", "code.exe": "VS CODE", "discord.exe": "DISCORD", "msedge.exe": "EDGE",
+              "firefox.exe": "FIREFOX", "windowsterminal.exe": "TERMINAL", "notepad.exe": "BLOC-NOTES",
+              "explorer.exe": "", "winword.exe": "WORD", "excel.exe": "EXCEL", "spotify.exe": "SPOTIFY",
+              "whatsapp.exe": "WHATSAPP", "steam.exe": "STEAM"}
+
+
+def app_label(exe):
+    """Nom court de l'appli devant ; vide pour le bureau / l'explorateur ou rien. Pur : testable."""
+    if not exe:
+        return ""
+    exe = exe.lower()
+    if exe in APP_LABELS:
+        return APP_LABELS[exe]
+    name = exe[:-4] if exe.endswith(".exe") else exe
+    return name.upper()[:14]
+
+
+FLAG_ORDER = ("AGRIPPE", "SOURIS", "CANDIDATURE", "FOCUS", "BYPASS")   # le plus important d'abord
+
+
 def island_text(st):
-    """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
-    mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
-    if st.get("mouse"):
-        mode = "SOURIS" if mode in ("NEUTRE", "") else f"{mode} · SOURIS"   # la souris s'ajoute au mode
-    if st.get("focus"):
-        mode = f"{mode} · FOCUS" if mode else "FOCUS"
-    if st.get("bypass"):
-        mode = f"{mode} · BYPASS" if mode else "BYPASS"
-    if st.get("candidature"):
-        mode = f"{mode} · CANDIDATURE" if mode else "CANDIDATURE"
-    if st.get("dragging"):                    # « agrippe » : bouton tenu, visible tant qu'il l'est (19/11)
-        mode = f"{mode} · AGRIPPE" if mode else "AGRIPPE"
-    qa = st.get("qa") or {}
-    if qa.get("phase") == "listening":
-        return mode, "Pose ta question…", True
-    if qa.get("phase") == "thinking":
-        return mode, "Iris réfléchit…", True
-    if qa.get("phase") == "searching":
-        return mode, "Iris cherche sur internet…", True
-    if qa.get("phase") == "answer":
-        return mode, "Iris répond", True
-    if qa.get("phase") == "error":
-        return mode, "Question : échec", True
-    if st.get("dictating"):
-        return mode, "Claude t'écoute", True
-    if st.get("typing"):
-        return mode, "Dicte ton texte…", True
-    if st.get("confirming"):
-        pending = (st.get("reminders") or {}).get("pending")
-        return mode, (f"{pending} — dis ENVOIE" if pending else "Dis ENVOIE ou ANNULE"), True
-    if st.get("listening"):
-        return mode, "Iris écoute…", True
+    """(haut, ligne du bas ou None, actif ?) d'après l'état du moteur. Pur : testable.
+    #18 / #27 (demande de l'utilisateur, 24/11) : en haut, un ou deux mots fixes (le mode, plus l'état le plus
+    important) ; en bas, une ligne courte qui défile : le dernier retour, sinon les autres états allumés
+    (focus, bypass… restent visibles, jamais éteints en silence)."""
+    base = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    if base == "NEUTRE":                       # 24/11 : l'appli devant (Chrome, VS Code…), sinon rien
+        base = app_label(st.get("front"))
+    on = {"SOURIS": st.get("mouse"), "FOCUS": st.get("focus"), "BYPASS": st.get("bypass"),
+          "CANDIDATURE": st.get("candidature"), "AGRIPPE": st.get("dragging")}
+    flags = [f for f in FLAG_ORDER if on[f]]
+    shown = flags[:1] if base else flags[:2]
+    top = " · ".join(([base] if base else []) + shown)
+    rest = " · ".join(f.lower() for f in flags if f not in shown) or None
     head = st.get("pointer") == "tete"
-    if st.get("lost") and st.get("mouse"):
-        return mode, "Visage non détecté" if head else "Main non détectée", True
-    if st.get("arming"):
-        return mode, "Tête de face pour démarrer" if head else "Main au centre pour démarrer", True
+    phase = (st.get("qa") or {}).get("phase")
+    pending = (st.get("reminders") or {}).get("pending")
+    for cond, text in (
+            (phase == "listening", "Ta question"), (phase == "thinking", "Iris réfléchit…"),
+            (phase == "searching", "Recherche sur internet…"), (phase == "answer", "Iris répond"),
+            (phase == "error", "Question : échec"),
+            (st.get("dictating"), "Claude écoute"), (st.get("typing"), "Dictée"),
+            (st.get("confirming"), f"{pending} · envoie ?" if pending else "Envoie ou annule"),
+            (st.get("listening"), "Écoute"),
+            (st.get("lost") and st.get("mouse"), "Visage perdu" if head else "Main perdue"),
+            (st.get("arming"), "Tête de face" if head else "Main au centre")):
+        if cond:
+            return top, text, True
     toast, age = st.get("toast"), st.get("toast_age", 1e9)
     if toast and age <= TOAST_S:
-        return mode, toast, True
-    return mode, None, False
+        return top, toast, True
+    return top, rest, False
+
+
+def ticker_offset(text_w, room, elapsed, speed=TICKER_SPEED, pause=TICKER_PAUSE_S):
+    """Décalage du texte de la ligne du bas : 0 s'il tient ; sinon il défile, puis repart après une pause. Pur."""
+    if text_w <= room:
+        return 0.0
+    run = (text_w - room) / speed
+    k = elapsed % (pause + run + pause)
+    if k < pause:
+        return 0.0
+    return -min((k - pause) * speed, text_w - room)
 
 
 CLAUDE_ORANGE = "#D97757"
@@ -1250,7 +1287,8 @@ class _IslandPainter:
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF")):
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"),
+                            ("camera-off", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
                 self.icons[name] = QSvgRenderer(QByteArray(svg.replace("currentColor", color).encode()))
@@ -1274,6 +1312,10 @@ class _IslandPainter:
             w, x = w + x, 0
             self.quota_gone = False
         r = QRect(x, ISLAND_TOP - 4, int(w), h)
+        if getattr(self, "cam_down", False) or getattr(self, "cam_gone", False):   # caméra barrée, en bas à gauche
+            self.cam_gone = False
+            r = r.united(QRect(0, int(self.height - CAM_BOX - 2 * CAM_MARGIN), CAM_BOX + 2 * CAM_MARGIN,
+                               CAM_BOX + 2 * CAM_MARGIN))
         if getattr(self, "panel", None) or getattr(self, "panel_gone", False):   # panneau candidature (ou à effacer)
             self.panel_gone = False
             r = r.united(QRect(int(self.width - PANEL_W - 2 * PANEL_MARGIN), 0, PANEL_W + 2 * PANEL_MARGIN,
@@ -1314,6 +1356,12 @@ class _IslandPainter:
         if getattr(self, "quota", None) and not q:
             self.quota_gone = True             # masquée : repeindre le coin gauche une fois pour l'effacer
         self.quota = tuple(q) if q else None
+        down = bool(st.get("cam_down"))
+        if getattr(self, "cam_down", False) and not down:
+            self.cam_gone = True               # caméra revenue : repeindre le coin une fois pour l'effacer
+        if down != getattr(self, "cam_down", False):
+            self.last_change = now
+        self.cam_down = down
         panel = st.get("cand_panel")
         if getattr(self, "panel", None) and not panel:
             self.panel_gone = True             # mode éteint : repeindre la droite une fois pour l'effacer
@@ -1323,7 +1371,10 @@ class _IslandPainter:
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
                    rem_key, self.next_rem, tuple(self.timer_pills), self.quota, repr(panel) if panel else None)
         if content != self.content:
+            if not self.content or content[1] != self.content[1]:
+                self.ticker_t0 = now           # nouveau texte en bas : il défile depuis le début
             self.content, self.last_change = content, now
+        self.now = now
         if st.get("ok_flash"):
             self.last_change = now
         # clignement : 0,5 s, à intervalle irrégulier
@@ -1351,7 +1402,10 @@ class _IslandPainter:
         """Vrai pendant l'animation du logo ou une alarme qui pulse : redessiner à 60 images/s."""
         moving = self.motion and self.clk_start is not None and (self.clk_end is not None or now - self.clk_start < CLOCK_ANIM_S)
         ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
-        return moving or (ringing and self.motion)
+        scrolling = False
+        if self.content and self.content[1] and self.motion:
+            scrolling = QFontMetrics(self.font_small).horizontalAdvance(self.content[1]) > TICKER_W - 40
+        return moving or (ringing and self.motion) or scrolling or getattr(self, "cam_down", False)
 
     def paint(self, p):
         if not self.content:
@@ -1361,6 +1415,23 @@ class _IslandPainter:
             self._paint_quota(p, self.quota)
         if getattr(self, "panel", None):
             self._paint_cand_panel(p, self.panel)
+        if getattr(self, "cam_down", False):
+            self._paint_cam_down(p)
+
+    def _paint_cam_down(self, p):
+        """Caméra en panne : caméra barrée en bas à gauche, qui clignote (pas de texte, 24/11)."""
+        x, y = CAM_MARGIN, self.height - CAM_MARGIN - CAM_BOX
+        k = cam_blink(getattr(self, "anim_now", 0.0), self.motion)
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 220))
+        p.drawRoundedRect(QRectF(x, y, CAM_BOX, CAM_BOX), CAM_BOX / 2, CAM_BOX / 2)
+        icon = self.icons.get("camera-off")
+        if icon is not None:
+            p.setOpacity(k)
+            m = CAM_BOX * 0.24
+            icon.render(p, QRectF(x + m, y + m, CAM_BOX - 2 * m, CAM_BOX - 2 * m))
+        p.restore()
 
     def _wrap(self, p, font, color, x, y, w, text, max_h=10000):
         """Texte sur plusieurs lignes ; renvoie la hauteur utilisée (bornée à max_h)."""
@@ -1612,45 +1683,61 @@ class _IslandPainter:
         if getattr(self, "qa", None):
             self._paint_answer(p, mode, msg)
             return
-        fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_msg)
-        pad, dot, gap = 20, 10, 14
-        w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
-        font_msg = self.font_msg
-        if msg:
-            room = ISLAND_MAX_W - w - gap - pad
-            font_msg = fit_font(self.font_msg, msg, room)
-            fm_msg = QFontMetrics(font_msg)
-            msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, room)
-            w += gap + fm_msg.horizontalAdvance(msg)
-        gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
+        fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_small)
+        pad, dot, dgap = 22, 8, 10
+        mode_w = (dot + dgap + fm_mode.horizontalAdvance(mode)) if mode else 0
+        msg_w = fm_msg.horizontalAdvance(msg) if msg else 0
+        w = 2 * pad + max(mode_w, min(msg_w, TICKER_W - 2 * pad)) if (mode or msg) else 0
+        two = bool(mode and msg)                 # #18 : la même île s'agrandit, le texte sous les mots
+        h = ISLAND_H + 20 if two else ISLAND_H
+        gx = (self.width - (ISLET + (ISLET_GAP + w if w else 0))) / 2   # rien à dire : le logo seul, centré
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
         self._paint_islet(p, gx, ISLAND_TOP)       # le logo ne s'estompe jamais
-        p.setOpacity(self.opacity)
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(QColor(0, 0, 0, 235))                    # noir opaque : lisible sur tout fond
-        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
-        cx = x + pad + dot / 2
-        p.setBrush(QColor(255, 255, 255))
-        p.drawEllipse(QPointF(cx, y + ISLAND_H / 2), dot / 2, dot / 2)
-        p.setPen(QColor(255, 255, 255))
-        p.setFont(self.font_mode)
-        tx = x + pad + dot + 10
-        p.drawText(QRectF(tx, y, fm_mode.horizontalAdvance(mode) + 2, ISLAND_H),
-                   Qt.AlignmentFlag.AlignVCenter, mode)
-        if msg:
-            p.setPen(QColor(255, 255, 255, 200))
-            p.setFont(font_msg)
-            mx = tx + fm_mode.horizontalAdvance(mode) + gap
-            p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
+        if w:
+            p.setOpacity(self.opacity)
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(QColor(0, 0, 0, 235))                # noir opaque : lisible sur tout fond
+            r = min(h, ISLAND_H) / 2
+            p.drawRoundedRect(QRectF(x, y, w, h), r, r)
+            line1 = (y + 7, 26) if two else (y, ISLAND_H)    # (haut, hauteur) de la ligne des mots
+            if mode:
+                mx = x + (w - mode_w) / 2                    # pastille + mots, centrés ensemble
+                p.setBrush(QColor(255, 255, 255))
+                p.drawEllipse(QPointF(mx + dot / 2, line1[0] + line1[1] / 2), dot / 2, dot / 2)
+                p.setPen(QColor(255, 255, 255))
+                p.setFont(self.font_mode)
+                p.drawText(QRectF(mx + dot + dgap, line1[0], fm_mode.horizontalAdvance(mode) + 2, line1[1]),
+                           Qt.AlignmentFlag.AlignVCenter, mode)
+            if msg:
+                top, hh = (y + 33, 22) if two else (y, ISLAND_H)
+                self._paint_ticker(p, x + pad, top, w - 2 * pad, msg, hh)
         p.restore()
-        self._paint_clock(p, x, y + ISLAND_H + CLOCK_GAP)
-        ty = y + ISLAND_H + CLOCK_GAP
+        ty = y + h + CLOCK_GAP
+        self._paint_clock(p, x, ty)
         if self.next_rem:
             ty += ISLAND_H + CLOCK_GAP
         tx = x
         for text, countdown in getattr(self, "timer_pills", []):
             tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
+
+    def _paint_ticker(self, p, x, y, room, text, h=TICKER_H):
+        """Ligne sous les mots, dans l'île : petite, centrée ; défile si elle est trop longue (#18)."""
+        fm = QFontMetrics(self.font_small)
+        tw = fm.horizontalAdvance(text)
+        p.save()
+        p.setClipRect(QRectF(x, y, room, h))
+        p.setPen(QColor(255, 255, 255, 190))
+        p.setFont(self.font_small)
+        if tw <= room:
+            p.drawText(QRectF(x, y, room, h), Qt.AlignmentFlag.AlignCenter, text)
+        elif not self.motion:
+            p.drawText(QRectF(x, y, room, h), Qt.AlignmentFlag.AlignCenter,
+                       fm.elidedText(text, Qt.TextElideMode.ElideRight, int(room)))
+        else:
+            off = ticker_offset(tw, room, getattr(self, "now", 0.0) - getattr(self, "ticker_t0", 0.0))
+            p.drawText(QRectF(x + off, y, tw + 4, h), Qt.AlignmentFlag.AlignVCenter, text)
+        p.restore()
 
     def _paint_timer_pill(self, p, x, y, text, countdown):
         """Fiche « sablier + temps » ; renvoie sa largeur."""

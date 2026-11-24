@@ -9,14 +9,14 @@ def test_mode_seul_au_repos():
 
 def test_priorites():
     st = {"mode": "NEUTRE", "mouse": True, "toast": "CLIC GAUCHE", "toast_age": 0.5, "lost": True}
-    assert island_text(st)[1] == "Main non détectée"
-    assert island_text({**st, "listening": True})[1] == "Iris écoute…"
-    assert island_text({**st, "dictating": True})[1] == "Claude t'écoute"
+    assert island_text(st)[1] == "Main perdue"
+    assert island_text({**st, "listening": True})[1] == "Écoute"
+    assert island_text({**st, "dictating": True})[1] == "Claude écoute"
 
 
-def test_message_disparait_apres_2_5_s():
+def test_message_disparait_apres_4_s():
     assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 1.0})[1] == "CHROME"
-    assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 3.0})[1] is None
+    assert island_text({"mode": "LECTURE", "toast": "CHROME", "toast_age": 4.5})[1] is None
 
 
 def test_logo_de_l_ilot_toujours_le_classique():
@@ -40,6 +40,44 @@ def test_cercle_du_logo_selon_le_mode():
 def test_mode_tete_parle_du_visage():
     from motionzero.ui import island_text
     st = {"mouse": True, "pointer": "tete", "lost": True}
-    assert island_text(st)[1] == "Visage non détecté"
-    assert island_text({"mouse": True, "pointer": "tete", "lost": False, "arming": True})[1] == "Tête de face pour démarrer"
+    assert island_text(st)[1] == "Visage perdu"
+    assert island_text({"mouse": True, "pointer": "tete", "lost": False, "arming": True})[1] == "Tête de face"
     assert island_text({"mouse": True, "pointer": "tete", "lost": False, "arming": False})[1] is None
+
+
+# ---- #18 / #27 (24/11) : un ou deux mots en haut, une ligne courte en bas
+def test_haut_deux_mots_au_plus_le_reste_en_bas():
+    st = {"mode": "CHROME", "mouse": True, "focus": True, "bypass": True}
+    top, bas, actif = island_text(st)
+    assert top == "CHROME · SOURIS" and bas == "focus · bypass" and not actif   # rien n'est caché
+    assert island_text({"mode": "NEUTRE"})[0] == ""                          # rien à dire : le logo seul
+    assert island_text({"mode": "NEUTRE", "front": "code.exe"})[0] == "VS CODE"  # l'appli devant
+    assert island_text({"mode": "NEUTRE", "front": "explorer.exe"})[0] == ""
+    assert island_text({"mode": "NEUTRE", "front": "Obsidian.exe"})[0] == "OBSIDIAN"
+    assert island_text({"mode": "CHROME", "front": "chrome.exe"})[0] == "CHROME"
+    assert island_text({"mode": "NEUTRE", "candidature": True, "focus": True, "bypass": True})[:2] ==         ("CANDIDATURE · FOCUS", "bypass")
+    assert island_text({"mode": "NEUTRE", "mouse": True, "dragging": True})[0] == "AGRIPPE · SOURIS"
+    assert island_text({**st, "toast": "ONGLET FERME", "toast_age": 0.5})[1] == "ONGLET FERME"   # le retour passe devant
+    for s in ({"mode": m, "mouse": a, "focus": b, "bypass": c, "candidature": d, "dragging": e}
+              for m in ("NEUTRE", "CHROME", "LECTURE") for a in (0, 1) for b in (0, 1) for c in (0, 1)
+              for d in (0, 1) for e in (0, 1)):
+        assert len(island_text(s)[0].split(" · ")) <= 2
+
+
+def test_ligne_du_bas_defile_seulement_si_trop_longue():
+    from motionzero.ui import TICKER_PAUSE_S, ticker_offset
+    assert ticker_offset(100, 200, 5.0) == 0.0
+    assert ticker_offset(500, 200, 0.1) == 0.0                              # pause au début
+    assert ticker_offset(500, 200, TICKER_PAUSE_S + 1.0) < 0
+    assert ticker_offset(500, 200, TICKER_PAUSE_S + 60.0) >= -300            # jamais au-delà du bout du texte
+
+
+def test_camera_en_panne_icone_en_bas_a_gauche():
+    """24/11 : plus de « CAMERA : image illisible… » dans l'île ; une caméra barrée qui clignote."""
+    from motionzero.app import cam_down
+    from motionzero.camera import LOST, OK, PAUSED, RECONNECTING, STOPPED
+    from motionzero.ui import cam_blink
+    assert cam_down(LOST) and cam_down(RECONNECTING)
+    assert not cam_down(OK) and not cam_down(PAUSED) and not cam_down(STOPPED)   # coupée exprès : rien
+    assert cam_blink(0.1) == 1.0 and cam_blink(1.0) < 1.0 and cam_blink(1.0, motion=False) == 1.0
+    assert island_text({"mode": "NEUTRE", "cam_down": True})[1] is None        # aucun texte en haut

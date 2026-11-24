@@ -42,7 +42,7 @@ def test_main_jamais_au_centre_le_curseur_ne_bouge_pas():
     acts = clk.run(core, 1.0, **at(0.2, 0.5), to_cx=0.1 - OX) + clk.run(core, 2.0, **at(0.1, 0.5))
     assert not core.armed and not moves(acts) and core.cursor == (960, 540)
     st = {"mode": "SOURIS", "arming": True}
-    assert island_text(st)[1] == "Main au centre pour démarrer"
+    assert island_text(st)[1] == "Main au centre"
 
 
 def test_passage_rapide_au_centre_n_arme_pas():

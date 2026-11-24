@@ -220,7 +220,7 @@ def test_echeance_son_voix_discord(tmp_path):
     d, core = desk(tmp_path), Core(Config())
     d.r.add(r("2026-11-11T22:00", text="réveil", alarm=True))
     d.events(core, 10.0)
-    assert d.sounds.played[0] == "ALARME" and d.speaker.said[-1] == "Alarme : réveil"
+    assert d.sounds.played[0] == "ALARME" and not d.speaker.said   # #27 : plus lu à voix haute
     assert d.bot.sent == [{"t": "notify", "text": "Alarme : réveil"}]
     st = d.state(10.0)["current"]
     assert st["ringing"] and st["text"] == "réveil"
@@ -364,8 +364,8 @@ def test_rappel_en_attente_affiche_en_haut():
         "Rappel · aujourd'hui à 19:00 · pâtes"
     assert pending_text(("cancel", r), now).startswith("Supprimer · ")
     st = {"confirming": True, "reminders": {"pending": txt}}
-    assert island_text(st)[1] == txt + " — dis ENVOIE"
-    assert island_text({"confirming": True})[1] == "Dis ENVOIE ou ANNULE"   # dictée Claude : inchangé
+    assert island_text(st)[1] == txt + " · envoie ?"
+    assert island_text({"confirming": True})[1] == "Envoie ou annule"   # dictée Claude : inchangé
 
 
 

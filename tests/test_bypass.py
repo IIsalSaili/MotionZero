@@ -47,7 +47,7 @@ def test_iris_bypass_allume_eteint_et_s_ajoute_au_focus():
     core.voice("iris", 2.0)
     core.voice("bypass", 2.3)
     assert core.bypass_on(3.0) and core.focus_on(3.0)
-    assert island_text({"mode": "neutral", "focus": True, "bypass": True})[0].endswith("FOCUS · BYPASS")
+    assert island_text({"mode": "NEUTRE", "focus": True, "bypass": True})[0] == "FOCUS · BYPASS"   # deux mots max
     core.voice("bypass", 4.0)                      # en focus : redit sans « iris », il s'éteint
     assert not core.bypass_on(5.0) and core.focus_on(5.0)
 

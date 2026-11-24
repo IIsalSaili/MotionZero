@@ -55,4 +55,4 @@ def test_liens_bing_et_nettoyage():
 
 
 def test_bandeau_recherche():
-    assert island_text({"mode": "NEUTRE", "qa": {"phase": "searching"}})[1] == "Iris cherche sur internet…"
+    assert island_text({"mode": "NEUTRE", "qa": {"phase": "searching"}})[1] == "Recherche sur internet…"

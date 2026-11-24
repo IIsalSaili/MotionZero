@@ -245,6 +245,12 @@ def note_error(where):
     ERROR_NOTICE["notice"] = (text, t)
 
 
+def cam_down(status):
+    """Caméra en panne (perdue, en reconnexion) ; pas coupée exprès ni arrêtée. Pur : testable."""
+    from .camera import LOST, RECONNECTING
+    return status in (LOST, RECONNECTING)
+
+
 def pick_toast(*items):
     """Le message le plus récent parmi (texte, instant) ou None."""
     items = [i for i in items if i]
@@ -614,12 +620,12 @@ class Engine:
         prog = core.progress()
         # île : la dernière chose comprise (ou refusée), la plus récente des deux
         rej = d.listener.last_rejected if d.listener is not None else None
-        # caméra en panne (#48) et erreurs (#51) : montrées comme le reste, 6 s au plus pour une erreur
-        cam = getattr(d.cam, "problem", None)
+        # erreurs (#51) : montrées comme le reste, 6 s au plus. Caméra en panne (#48) : plus de texte dans
+        # l'île (24/11, trop long) : une caméra barrée qui clignote en bas à gauche (« cam_down »)
         err = ERROR_NOTICE["notice"]
         if err and t - err[1] > 6.0:
             err = None
-        toast = pick_toast(core.last_gesture, rej, cam, err)
+        toast = pick_toast(core.last_gesture, rej, err)
         d.bridge.state.emit({
             "show_cursor": core.mouse and not core.scrolling(t),  # défile : curseur dans la jauge
             "mouse": core.mouse,
@@ -635,9 +641,11 @@ class Engine:
             "scroll_gauge": core.scroll_gauge(t),
             "volume": VOLUME_VIEW.state(t, core.opening and core.open_kind == "volume"),
             "mode": core.mode,
+            "front": getattr(core, "front_exe", None),   # l'appli devant, affichée en haut (24/11)
             "focus": core.focus_on(t),
             "bypass": core.bypass_on(t),
             "candidature": core.cand_on(t),
+            "cam_down": cam_down(status),
             "dragging": core.dragging,
             "dictating": core.dictating,
             "typing": core.typing or core.opening,
