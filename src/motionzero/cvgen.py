@@ -24,6 +24,9 @@ log = logging.getLogger("motionzero.cvgen")
 BASE = "http://127.0.0.1:3000"
 DIR = Path.home() / "Desktop" / "CVGEN"
 TIMEOUT_S = 8
+# appels longs : le modèle (réveil compris), la visite de l'annonce, les PDF (24/11 : 8 s ne suffisaient pas)
+ROUTE_TIMEOUT_S = {"llm": 120, "verifier_lien": 40, "en_cours": 60, "preparer": 30, "offre": 20}
+BUSY_MAX_S = 180.0       # au-delà, une demande sans réponse est oubliée : le mode ne reste jamais bloqué
 START_WAIT_S = 20.0      # CVGEN lancé par Iris : temps laissé pour qu'il réponde
 SHOW_S = 15.0            # la carte reste ce temps
 CLOSE_HINT = "« candidature » pour quitter"
@@ -44,6 +47,7 @@ ROUTES = {
     "en_cours": ("POST", "/api/offres/{id}/en-cours"),   # PDF de l'offre dans le dossier fixe, et leurs chemins
     "postulees": ("GET", "/api/postulees"),         # journal des candidatures (page « Postulées »)
     "verifier_lien": ("POST", "/api/offres/{id}/verifier-lien"),   # l'annonce est-elle encore en ligne ?
+    "llm": ("POST", "/api/llm"),                    # modèle local de CVGEN : réponse aux questions libres (#46)
 }
 # Pages ouvertes dans le navigateur (vérifiées par les tests : fichiers de public/ et route des PDF)
 PAGES = {"atelier": "/generate.html?id={cv}", "jury": "/jury.html?id={cv}",
@@ -82,6 +86,9 @@ WORDS = {"cherche": "lance ou arrête la recherche",
          "naissance": "ta date de naissance", "disponibilité": "ta disponibilité",
          "salaire": "ton salaire souhaité", "permis": "ton permis",
          "tab": "passe au champ suivant du formulaire",
+         "question": "dis la question du formulaire : Iris propose une réponse",
+         "écris": "écrit la réponse proposée dans le champ cliqué",
+         "brouillon": "prépare un e-mail de candidature avec le CV et la lettre",
          "prépare tout": "prépare l'une après l'autre toutes les offres dont le CV est prêt"}
 FIELDS = {"mail": "email", "téléphone": "telephone", "prénom": "prenom", "nom": "nom", "ville": "ville",
           "adresse": "adresse", "code postal": "code_postal", "pays": "pays", "naissance": "date_naissance",
@@ -101,12 +108,14 @@ HELP_LINES = [
     "  « tab » : champ suivant",
     "  « cv » / « lettre » dans la fenêtre « Choisir un fichier » ; « postulé » une fois envoyé",
     "Annonce : « détails » (son texte) · « vérifie » (encore en ligne ?) · « annule » (dernier verdict)",
+    "Questions libres : « question », dis-la, puis « écris » (la réponse proposée, dans le champ cliqué)",
+    "Par e-mail : « brouillon » (adresse de l'annonce, CV et lettre joints ; tu relis et tu envoies)",
     "Suivi : « relances » (candidatures envoyées, à relancer)",
     "Souris : « souris », puis « clic » · « scroll »… · « stop » arrête tout",
     "Quitter le mode : « candidature »",
 ]
 NAV = {"suivante", "précédente", "garde", "écarte", "lien", "prépare", "montre", "relis", "cv", "lettre",
-       "postulé", "détails", "vérifie"}   # liste ouverte
+       "postulé", "détails", "vérifie", "brouillon"}   # liste ouverte
 RELANCE_J = 7
 DETAILS_MAX = 1400       # caractères de l'annonce montrés par « détails »
 # à trier d'abord (verdict à donner), puis à vérifier (CV prêt) ; meilleure note en tête
@@ -153,7 +162,9 @@ SHORT = {"liste": "affiche les offres une par une", "cherche": "lance ou arrête
          "lien": "ouvre l'annonce sur son site", "prépare": "fabrique le CV et la lettre en PDF",
          "montre": "ouvre le PDF de ton CV", "relis": "ouvre la relecture de ton CV",
          "mail": "écrit ton e-mail dans le champ cliqué", "tab": "passe au champ suivant",
-         "prépare tout": "prépare toutes les offres à vérifier", "cv": "joint le PDF du CV au site",
+         "prépare tout": "prépare toutes les offres à vérifier",
+         "question": "propose une réponse à la question", "écris": "écrit la réponse proposée",
+         "brouillon": "e-mail prêt avec CV et lettre", "cv": "joint le PDF du CV au site",
          "lettre": "joint le PDF de la lettre au site", "postulé": "marque envoyée, relance à J+7"}
 _COMMUNS = [("détails · vérifie", "texte de l'annonce · encore en ligne ?"),
             ("annule · relances", "dernier verdict · candidatures envoyées")]
@@ -167,6 +178,8 @@ EXTRA = {"aucune": [("relances", "candidatures envoyées, celles à relancer"),
          "pret": [("prénom · nom · téléphone · ville", "écrit dans le champ cliqué"),
                   ("github · linkedin · lettre", "ton lien · le PDF de la lettre"),
                   ("montre · relis", "ouvre le PDF du CV · sa relecture"),
+                  ("question · écris", "réponse à une question du formulaire"),
+                  ("brouillon", "e-mail de candidature, CV et lettre joints"),
                   ("suivante · précédente", "change d'offre")] + _COMMUNS}
 
 
@@ -208,7 +221,9 @@ def offer_view(offres, i, today, prep_line=None):
     ev = o.get("evaluation") or {}
     total = sum(1 for x in offres if x["etat"] == o["etat"])
     k = sum(1 for x in offres[:i + 1] if x["etat"] == o["etat"])
-    chips = [c for c in (fmt_contrat(o.get("contrat")), ev.get("verdict"), fmt_age(o.get("datePubliee"), today)) if c]
+    contrat = o.get("contratLibelle") or fmt_contrat(o.get("contrat"))   # lus dans l'annonce par CVGEN (#64)
+    chips = [str(c)[:40] for c in (contrat, o.get("ville"), o.get("teletravail"), o.get("salaire"), ev.get("verdict"),
+                                   fmt_age(o.get("datePubliee"), today)) if c]
     axes = [a for a in ev.get("axes") or [] if isinstance(a.get("note"), (int, float))]
     plus = minus = None
     if axes:
@@ -347,6 +362,12 @@ def _http(method, path, body=None, base=BASE, timeout=TIMEOUT_S):
         except (ValueError, OSError):
             msg = None
         raise CvgenError(msg or f"CVGEN a refusé ({e.code})") from None
+    except TimeoutError:
+        raise CvgenError("CVGEN met trop de temps à répondre : réessaie") from None
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, TimeoutError):
+            raise CvgenError("CVGEN met trop de temps à répondre : réessaie") from None
+        raise CvgenError("CVGEN ne répond pas") from None
     except (OSError, ValueError):
         raise CvgenError("CVGEN ne répond pas") from None
 
@@ -364,6 +385,8 @@ def _launch(root=DIR):
 def call(name, http=_http, body=None, **ids):
     method, path = ROUTES[name]
     path = path.format(**{k: urllib.parse.quote(str(v), safe="") for k, v in ids.items()})
+    if http is _http:
+        return _http(method, path, body, timeout=ROUTE_TIMEOUT_S.get(name, TIMEOUT_S))
     return http(method, path, body) if body is not None else http(method, path)
 
 
@@ -417,6 +440,71 @@ def summary(agent, compte, prep):
     return lines
 
 
+QUESTION_MAX = 600        # caractères de la réponse proposée
+PROMPT_QUESTION = """Tu aides un candidat à remplir un formulaire de candidature en ligne.
+Réponds à la question ci-dessous à sa place, à la première personne, en français, en 2 à 4 phrases.
+Pas de formule de politesse, pas de titre, rien d'inventé : appuie-toi seulement sur le profil et l'offre.
+
+Offre : {poste} chez {entreprise}
+{annonce}
+
+Profil du candidat (JSON) :
+{profil}
+
+Question du formulaire : {question}
+Réponse :"""
+PRIVE = {"adresse", "code_postal", "date_naissance", "telephone", "email", "photo", "salaire_souhaite"}
+
+
+def question_prompt(question, offre, profile, texte=None):
+    """Message envoyé au modèle de CVGEN : offre + profil (sans adresse, téléphone…) + question. Pur."""
+    prof = dict(profile or {})
+    prof["identity"] = {k: v for k, v in (prof.get("identity") or {}).items() if k not in PRIVE}
+    o = offre or {}
+    return PROMPT_QUESTION.format(poste=o.get("poste") or "poste inconnu", entreprise=o.get("entreprise") or "?",
+                                  annonce=str(texte or "")[:3000],
+                                  profil=json.dumps(prof, ensure_ascii=False)[:5000], question=question)
+
+
+def clean_answer(text):
+    """Réponse du modèle : une ligne propre, bornée ; None si vide. Pur."""
+    t = " ".join(str(text or "").split()).strip().strip('"«» ')
+    if t.lower().startswith("réponse :"):
+        t = t[9:].strip()
+    return t[:QUESTION_MAX] or None
+
+
+def offer_email(texte):
+    """Adresse e-mail de candidature lue dans l'annonce ; None si absente. Pur."""
+    import re
+    for m in re.finditer(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+", str(texte or "")):
+        a = m.group(0).rstrip(".")
+        if not a.lower().startswith(("noreply", "no-reply", "ne-pas-repondre")):
+            return a
+    return None
+
+
+def draft_eml(to, offre, profile, attachments):
+    """Brouillon .eml (X-Unsent : s'ouvre prêt à envoyer) avec les PDF joints. Pur sauf la lecture des PDF."""
+    from email.message import EmailMessage
+    ident = (profile or {}).get("identity") or {}
+    nom = " ".join(x for x in (ident.get("prenom"), ident.get("nom")) if x) or "Candidat"
+    o = offre or {}
+    poste = o.get("poste") or "le poste proposé"
+    chez = f" chez {o['entreprise']}" if o.get("entreprise") else ""
+    m = EmailMessage()
+    m["To"] = to
+    m["Subject"] = f"Candidature : {poste}"
+    m["X-Unsent"] = "1"
+    sign = "\n".join(x for x in (nom, ident.get("telephone"), ident.get("email")) if x)
+    m.set_content(f"Bonjour,\n\nJe vous adresse ma candidature au poste de {poste}{chez}. "
+                  "Vous trouverez ci-joint mon CV et ma lettre de motivation.\n\n"
+                  f"Je reste à votre disposition pour un échange.\n\nBien cordialement,\n{sign}\n")
+    for path in attachments:
+        m.add_attachment(Path(path).read_bytes(), maintype="application", subtype="pdf", filename=Path(path).name)
+    return m.as_bytes()
+
+
 class Candidature:
     def __init__(self, http=_http, launch=_launch, open_url=None, clock=time.monotonic, sleep=time.sleep,
                  typer=_type, fg_class=_fg_class, press=_press, browser_front=_browser_front):
@@ -424,6 +512,8 @@ class Candidature:
         self.typer, self.fg_class, self.press, self.browser_front = typer, fg_class, press, browser_front
         self.profile = None                # profil CVGEN lu une fois par ouverture du mode (en mémoire seulement)
         self.todo = []                     # « prépare tout » : offres qui attendent leur tour
+        self.reponse = None                # réponse proposée à la dernière question libre (#46)
+        self._busy_t = None                # début de la demande en cours (garde-fou BUSY_MAX_S)
         self.clock, self.sleep = clock, sleep
         self._q = queue.Queue()
         self.busy = False
@@ -523,6 +613,33 @@ class Candidature:
             elif word == "vérifie":
                 self._q.put(("note", arg["id"], vivacite_text(call("verifier_lien", self.http, {}, id=arg["id"]))))
                 return
+            elif word == "question":
+                question, o = arg["question"], arg.get("offre")
+                if self.profile is None:
+                    self.profile = call("profil", self.http)
+                texte = (call("offre", self.http, id=o["id"]) or {}).get("texte") if o else None
+                r = call("llm", self.http, {"messages": [{"role": "user", "content":
+                                                           question_prompt(question, o, self.profile, texte)}]})
+                self._q.put(("reponse", question, clean_answer((r or {}).get("content"))))
+                return
+            elif word == "brouillon":
+                o = arg
+                to = offer_email((call("offre", self.http, id=o["id"]) or {}).get("texte"))
+                if to is None:
+                    self._q.put(("note", o["id"], "Pas d'adresse e-mail dans l'annonce : postule sur le site"))
+                    return
+                r = call("en_cours", self.http, {}, id=o["id"]) or {}
+                pdf = [r[k] for k in ("cv", "lettre") if r.get(k)]
+                if not pdf:
+                    self._q.put(("note", o["id"], "Pas de PDF : dis « prépare » d'abord"))
+                    return
+                if self.profile is None:
+                    self.profile = call("profil", self.http)
+                import tempfile
+                path = Path(tempfile.gettempdir()) / "iris-candidature.eml"
+                path.write_bytes(draft_eml(to, o, self.profile, pdf))
+                self._q.put(("brouillon", o["id"], str(path), to))
+                return
             elif word == "relances":
                 import datetime as _dt
                 self._q.put(("long", "Candidatures envoyées",
@@ -546,6 +663,7 @@ class Candidature:
                     return
             self._q.put(("ok", title, lines))
         except CvgenError as e:
+            log.warning("cvgen %s : %s", word, e)
             if word == "prépare":
                 self._q.put(("prep", arg["id"], {"etape": "erreur", "erreur": str(e)}))
             self._q.put(("error", iris_says(e)))
@@ -564,6 +682,14 @@ class Candidature:
             return
         if word == "prépare tout":
             return self._prep_all(t)
+        if word == "écris":
+            if self.reponse is None:
+                self._show("Candidature", ["Pas de réponse prête : dis « question », puis la question"], t)
+            elif not self.browser_front():
+                self._show("Candidature", ["Le navigateur n'est pas devant : rien n'est écrit"], t)
+            else:
+                self.typer(self.reponse)
+            return
         if word == "aide":
             self._show("Candidature : ce que tu peux dire", HELP_LINES, t, meta=CLOSE_HINT)
             self.show_until = t + HELP_S
@@ -582,6 +708,30 @@ class Candidature:
             self._show("Candidature", ["Patiente : la demande d'avant n'est pas finie"], t)
             return
         self._send(word, t, {"liste": True} if word == "état" and self.offres is None else None)
+
+    def submit_question(self, audio, transcribe):
+        """« question » : la phrase enregistrée est transcrite puis envoyée au modèle de CVGEN (fil « cvgen »).
+        Seulement boucle principale (l'offre affichée est lue ici)."""
+        if self.busy:
+            self._q.put(("error", "Patiente : la demande d'avant n'est pas finie"))
+            return
+        self.busy = True
+        o = dict(self.offres[self.i]) if self.offres else None
+        self._show("Question", ["Je transcris ta question, puis je prépare une réponse…"
+                                + ("" if o else " (sans offre affichée : d'après ton profil seulement)")],
+                   self.clock(), self.meta)
+
+        def run():
+            try:
+                q = " ".join(str(transcribe(audio) or "").split()).strip()
+            except Exception:
+                log.exception("transcription question")
+                q = ""
+            if len(q) < 3:
+                self._q.put(("error", "Rien compris : redis « question »"))
+                return
+            self._work("question", {"question": q, "offre": o})
+        threading.Thread(target=run, name="cvgen", daemon=True).start()
 
     def _prep_all(self, t):
         """« prépare tout » : les offres à vérifier pas encore prêtes, l'une après l'autre (CVGEN n'en fait qu'une)."""
@@ -646,6 +796,8 @@ class Candidature:
             self._card(t, "Déjà gardée : son CV est en cours" if o["etat"] == "gardee" else "Déjà gardée : son CV est prêt")
         elif o["etat"] == "gardee" and word in FILES | {"postulé", "prépare", "montre", "relis"}:
             self._card(t, "Son CV est en cours : dis « liste » un peu plus tard")
+        elif word == "brouillon" and o["etat"] == "a-trier":
+            self._card(t, "Pas encore de CV : dis « garde » d'abord")
         elif word in FILES or word == "postulé":
             if not o.get("cvId"):
                 self._card(t, "Pas encore de CV : dis « garde » d'abord")
@@ -704,11 +856,29 @@ class Candidature:
         self.view = "msg"
 
     def events(self, core, t):
+        if not self.busy:
+            self._busy_t = None
+        elif self._busy_t is None:
+            self._busy_t = t
+        elif t - self._busy_t > BUSY_MAX_S:      # réponse perdue : on débloque plutôt que d'attendre pour rien
+            log.warning("cvgen : demande sans réponse depuis %.0f s, oubliée", t - self._busy_t)
+            self.busy, self._busy_t = False, None
+            self._show("Candidature", ["CVGEN n'a pas répondu : redis la commande"], t)
         while True:
             try:
                 msg = self._q.get_nowait()
             except queue.Empty:
                 break
+            try:
+                self._event(msg, core, t)
+            except Exception:                     # un message mal traité ne bloque jamais le mode
+                log.exception("cvgen : message %s", msg[0])
+                self.busy = False
+                self._show("Candidature", ["Erreur inattendue : redis la commande"], t)
+        return []
+
+    def _event(self, msg, core, t):
+        if True:
             if msg[0] == "wait":
                 self._show("Candidature", [msg[1]], t)
             elif msg[0] == "chiffres":
@@ -742,6 +912,30 @@ class Candidature:
                 _, oid, paths, word = msg
                 self.files[oid] = paths
                 self._file(oid, word, t)
+            elif msg[0] == "reponse":
+                self.busy = False
+                _, question, rep_ = msg
+                if rep_ is None:
+                    self._show("Candidature", ["Pas de réponse du modèle : redis « question »"], t)
+                else:
+                    self.reponse = rep_
+                    self._show("Réponse proposée", [f"Question : {question}"[:160], rep_,
+                                                    "« écris » : l'écrire dans le champ cliqué"], t)
+                    self.show_until = t + HELP_S
+                core.last_gesture = ("CANDIDATURE : REPONSE PROPOSEE" if rep_ else "CANDIDATURE : PAS DE REPONSE", t)
+            elif msg[0] == "brouillon":
+                self.busy = False
+                _, oid, path, to = msg
+                try:
+                    if self.open_url is not None:
+                        self.open_url(path)
+                    note = f"Brouillon pour {to} ouvert : relis, puis envoie"
+                except OSError:
+                    note = "Brouillon prêt, mais aucun logiciel de mail ne l'ouvre"
+                if self.offres and self.offres[self.i]["id"] == oid:
+                    self._card(t, note)
+                else:
+                    self._show("Candidature", [note], t)
             elif msg[0] == "long":                 # « détails », « relances » : le temps de lire
                 self.busy = False
                 self._show(msg[1], msg[2], t)
@@ -795,16 +989,20 @@ class Candidature:
                 self.busy = False
                 self._show("Candidature impossible", [msg[1]], t)
                 core.last_gesture = (f"CANDIDATURE : {msg[1]}".upper()[:60], t)
-        return []
 
     def actions(self, acts, core, t):
         rest = []
         for a in acts:
             if a[0] == "cand":
-                self.ask(a[1], t)
+                try:
+                    self.ask(a[1], t)
+                except Exception:                 # frappe, ouverture d'un lien… : dit, jamais bloquant
+                    log.exception("cvgen : %s", a[1])
+                    self.busy = False
+                    self._show("Candidature", [f"« {a[1]} » n'a pas marché : redis-le"], t)
             elif a[0] == "cand_off":
                 self.lines, self.offres = None, None
-                self.profile, self.todo = None, []   # profil relu à la prochaine ouverture
+                self.profile, self.todo, self.reponse = None, [], None   # profil relu à la prochaine ouverture
             elif a[0] in ("rappel_merci", "ask_close") and self.lines is not None:
                 self.lines = None              # « iris merci » / « iris ferme » : la carte se ferme
                 rest.append(a)

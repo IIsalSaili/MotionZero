@@ -95,8 +95,8 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
 OPEN_STOP = {"open": "open_stop", "close": "close_stop", "message": "message_stop", "salon": "salon_stop",
              "rappel": "rappel_stop", "timer": "timer_stop",
-             "volume": "volume_stop", "instruction": "instruction_stop"}
-OPEN_WAIT = {"open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
+             "volume": "volume_stop", "instruction": "instruction_stop", "candq": "candq_stop"}
+OPEN_WAIT = {"candq": "QUESTION : je prépare la réponse…", "open": "OUVRE : je cherche l'appli…", "close": "FERME : je cherche l'appli…",
              "message": "MESSAGE : envoi au bot…", "salon": "SALON : je cherche…",
              "rappel": "RAPPEL : Iris reflechit…", "timer": "TIMER : je lis la duree…",
              "volume": "VOLUME : je regle…", "instruction": "INSTRUCTION : Iris reflechit…"}
@@ -715,6 +715,11 @@ class Core:
         """Mode candidature : ses mots sans « iris » ; « candidature » (seul ou après « iris ») l'éteint."""
         if not self.cand_on(t):
             return None
+        if word == "question":                # #46 : la question du formulaire est enregistrée (Whisper)
+            self.cand_until = t + CAND_IDLE_S
+            self._heard_alone(word, t, "")
+            self.last_gesture = (self._start_open("candq", t, acts, "QUESTION : dis la question du formulaire"), t)
+            return acts
         if word in CAND_WORDS:
             self.cand_until = t + CAND_IDLE_S
             self._heard_alone(word, t, f"CANDIDATURE : {word.upper()}")
@@ -1231,7 +1236,7 @@ class Core:
         close = kind == "close"
         spoke = last_speech_t > self.open_t0 + c.dictation_echo_s
         # un message est une phrase : même silence que la dictée ; un nom (appli, salon) est court
-        silence = c.type_silence_s if kind in ("message", "rappel", "instruction") else c.open_silence_s
+        silence = c.type_silence_s if kind in ("message", "rappel", "instruction", "candq") else c.open_silence_s
         if spoke and t - last_speech_t >= silence:
             self.opening = False
             self.last_gesture = (OPEN_WAIT[kind], t)
@@ -1244,7 +1249,8 @@ class Core:
                                       "rappel": "RIEN ENTENDU : rappel annule",
                                       "timer": "RIEN ENTENDU : timer annule",
                                       "volume": "RIEN ENTENDU : volume inchange",
-                                      "instruction": "RIEN ENTENDU : instruction annulee"}[kind], t)
+                                      "instruction": "RIEN ENTENDU : instruction annulee",
+                                      "candq": "RIEN ENTENDU : question annulee"}[kind], t)
             return [("open_cancel",)]
         return []
 

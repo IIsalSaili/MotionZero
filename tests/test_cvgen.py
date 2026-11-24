@@ -156,7 +156,7 @@ def test_demande_pendant_une_autre():
 
 def test_http_cvgen_eteint():
     with pytest.raises(cv.CvgenError, match="ne répond pas"):
-        cv._http("GET", "/api/health", base="http://127.0.0.1:9", timeout=0.5)
+        cv._http("GET", "/api/health", base="http://127.0.0.1:9", timeout=5)
 
 
 def test_carte_fermee_par_merci():
@@ -934,3 +934,189 @@ def test_preparation_reprise_apres_relance_d_iris():
     c2.ask("état", 0.0)
     _attendre(c2, core2)
     assert not [x for x in faux2.calls if x[1] == "/api/offres/v2"]
+
+
+def test_panneau_ville_teletravail_salaire():
+    """#64 : ce que CVGEN lit dans l'annonce s'affiche ; contrat en français de CVGEN d'abord ; absents : rien."""
+    import datetime as dt
+    o = dict(_offre("v1", "generee", 4.0), contratLibelle="CDI", ville="Lyon", teletravail="Hybride",
+             salaire="45 k€", contrat="FULL_TIME")
+    chips = cv.offer_view([o], 0, dt.date(2026, 11, 24))["chips"]
+    assert chips[:4] == ["CDI", "Lyon", "Hybride", "45 k€"]
+    nu = cv.offer_view([dict(_offre("v1", "generee", 4.0), contrat="FULL_TIME", ville=None)], 0, dt.date(2026, 11, 24))
+    assert nu["chips"][0] == "Temps plein" and None not in nu["chips"]
+
+
+def test_etiquettes_sur_deux_lignes():
+    from motionzero.ui import chip_rows
+    w = lambda c: 10 * len(c)
+    assert chip_rows(w, ["aaaa", "bbbb", "cccc"], 130) == [["aaaa", "bbbb"], ["cccc"]]
+    assert chip_rows(w, ["a" * 50, "ok"], 130) == [["ok"]]           # trop longue : laissée de côté
+    assert len(chip_rows(w, ["aaaaaaaaaa"] * 5, 130)) == 2           # jamais plus de deux lignes
+    assert chip_rows(w, [], 130) == [[]]
+
+
+# ---- #46 : question libre du formulaire ; #47 : brouillon d'e-mail
+def test_question_lance_l_ecoute_puis_s_arrete_au_silence():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("candidature", 1.3)
+    assert core.voice("question", 2.0) == [("open_start",)] and core.opening
+    assert core.voice("garde", 2.5) == []                            # pendant la question : du texte
+    assert core.open_tick(2.2, 2.0) == []
+    assert core.open_tick(10.0, 3.0) == [("candq_stop",)] and not core.opening
+    core.voice("question", 11.0)
+    assert core.open_tick(60.0, 0.0) == [("open_cancel",)]           # rien dit : abandon
+    assert "question annulee" in core.last_gesture[0]
+
+
+class FauxLlm(FauxCvgen):
+    def __init__(self, reponse="Réponse : J'aime vos projets.", texte="Écrire à jobs@acme.fr. Merci", **kw):
+        super().__init__(**kw)
+        self.reponse, self.texte = reponse, texte
+
+    def __call__(self, method, path, body=None):
+        if path == "/api/llm":
+            self.calls.append((method, path, body))
+            if isinstance(self.reponse, Exception):
+                raise self.reponse
+            return {"content": self.reponse}
+        if path == "/api/profile":
+            return PROFIL
+        if method == "GET" and path.startswith("/api/offres/") and path != "/api/offres/compte":
+            return {"texte": self.texte}
+        if path.endswith("/en-cours"):
+            return {"cv": self.cv_pdf, "lettre": None}
+        return super().__call__(method, path, body)
+
+
+def _q(faux, navigateur=True):
+    ecrit = []
+    c = cv.Candidature(http=faux, launch=lambda: None, typer=lambda s, enter=False: ecrit.append(s),
+                       browser_front=lambda: navigateur, open_url=lambda p: ecrit.append(("ouvert", p)))
+    core = Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    return c, core, ecrit
+
+
+def test_question_reponse_puis_ecris():
+    faux = FauxLlm()
+    c, core, ecrit = _q(faux)
+    c.submit_question(b"audio", lambda a: "  Pourquoi notre entreprise ? ")
+    st = _attendre(c, core)
+    assert st["title"] == "Réponse proposée" and st["lines"][1] == "J'aime vos projets."
+    prompt = faux.calls[-1][2]["messages"][0]["content"]
+    assert "Pourquoi notre entreprise ?" in prompt and "jobs@acme.fr" in prompt
+    assert "06 00 00 00 00" not in prompt and "1 rue des Fleurs" not in prompt   # rien de privé au modèle
+    c.ask("écris", 0.0)
+    assert ecrit == ["J'aime vos projets."]
+
+
+def test_question_echecs():
+    c, core, ecrit = _q(FauxLlm())
+    c.ask("écris", 0.0)
+    assert "Pas de réponse prête" in c.state(0.0)["lines"][0] and ecrit == []
+    c.submit_question(b"", lambda a: "")                              # rien entendu
+    assert "Rien compris" in _attendre(c, core)["lines"][0]
+    c.submit_question(b"", lambda a: 1 / 0)                           # transcription en panne
+    assert "Rien compris" in _attendre(c, core)["lines"][0]
+    c2, core2, _ = _q(FauxLlm(reponse=cv.CvgenError("Ollama ne répond pas")))
+    c2.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "Ollama" in _attendre(c2, core2)["lines"][0] and c2.reponse is None
+    c3, core3, e3 = _q(FauxLlm(reponse="   "), navigateur=False)
+    c3.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "Pas de réponse du modèle" in _attendre(c3, core3)["lines"][0]
+    c3.reponse = "x"
+    c3.ask("écris", 0.0)
+    assert e3 == [] and "pas devant" in c3.state(0.0)["lines"][0]
+
+
+def test_adresse_mail_de_l_annonce():
+    assert cv.offer_email("Envoyez CV à rh.paris@acme-group.fr.") == "rh.paris@acme-group.fr"
+    assert cv.offer_email("noreply@x.fr puis jobs@x.fr") == "jobs@x.fr"
+    assert cv.offer_email("postulez sur le site") is None and cv.offer_email(None) is None
+
+
+def test_brouillon_eml(tmp_path):
+    import email
+    pdf = tmp_path / "CV Ada.pdf"
+    pdf.write_bytes(b"%PDF-1.4 x")
+    raw = cv.draft_eml("jobs@acme.fr", {"poste": "Dev", "entreprise": "ACME"}, PROFIL, [str(pdf)])
+    m = email.message_from_bytes(raw)
+    assert m["To"] == "jobs@acme.fr" and m["Subject"] == "Candidature : Dev" and m["X-Unsent"] == "1"
+    noms = [p.get_filename() for p in m.walk() if p.get_filename()]
+    assert noms == ["CV Ada.pdf"]
+
+
+def test_brouillon_de_bout_en_bout_et_echecs(tmp_path):
+    pdf = tmp_path / "CV.pdf"
+    pdf.write_bytes(b"%PDF")
+    faux = FauxLlm()
+    faux.cv_pdf = str(pdf)
+    c, core, ecrit = _q(faux)
+    c.i = 2                                                           # v1 : CV prêt
+    c.ask("brouillon", 0.0)
+    st = _attendre(c, core)
+    assert ecrit[-1][0] == "ouvert" and ecrit[-1][1].endswith(".eml") and "jobs@acme.fr" in st["lines"][-1]
+    faux.texte = "postulez sur le site"                               # pas d'adresse
+    c.ask("brouillon", 0.0)
+    assert "Pas d'adresse" in _attendre(c, core)["lines"][-1]
+    faux.texte, faux.cv_pdf = "jobs@acme.fr", None                    # pas de PDF
+    c.ask("brouillon", 0.0)
+    assert "Pas de PDF" in _attendre(c, core)["lines"][-1]
+    c.i = 0                                                           # offre à trier : pas de CV
+    c.ask("brouillon", 0.0)
+    assert "dis « garde »" in c.state(0.0)["lines"][-1]
+
+
+# ---- 24/11 : rien d'imprévu ne bloque le mode
+def test_serveur_trop_lent_message_clair():
+    import socket
+    import threading as th
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen(1)                                                     # accepte, ne répond jamais
+    port = srv.getsockname()[1]
+    try:
+        with pytest.raises(cv.CvgenError, match="trop de temps"):
+            cv._http("GET", "/api/health", base=f"http://127.0.0.1:{port}", timeout=0.5)
+    finally:
+        srv.close()
+    assert cv.ROUTE_TIMEOUT_S["llm"] >= 60                            # le modèle a le temps de se réveiller
+
+
+def test_question_sans_offre_affiche_l_attente_et_repond():
+    faux = FauxLlm()
+    c = cv.Candidature(http=faux, launch=lambda: None, browser_front=lambda: True, typer=lambda s, enter=False: None)
+    c.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "sans offre affichée" in c.lines[0]                       # quelque chose à l'écran tout de suite
+    st = _attendre(c, Core(Config()))
+    assert st["title"] == "Réponse proposée"
+    assert not [x for x in faux.calls if x[1].startswith("/api/offres/") and x[0] == "GET"]
+
+
+def test_demande_perdue_debloquee():
+    c = cv.Candidature(http=FauxCvgen(), launch=lambda: None)
+    core = Core(Config())
+    c.busy = True                                                     # aucune réponse n'arrivera
+    c.events(core, 0.0)
+    c.events(core, cv.BUSY_MAX_S - 1)
+    assert c.busy
+    c.events(core, cv.BUSY_MAX_S + 1)
+    assert not c.busy and "n'a pas répondu" in c.lines[0]
+
+
+def test_message_qui_plante_ne_bloque_pas():
+    def boom(s, enter=False):
+        raise OSError("clavier")
+    c = cv.Candidature(http=FauxDepot(), launch=lambda: None, typer=boom, browser_front=lambda: True)
+    core = Core(Config())
+    c.ask("mail", 0.0)
+    st = _attendre(c, core)
+    assert not c.busy and "Erreur inattendue" in st["lines"][0]
+    c.reponse = "x"
+    assert c.actions([("cand", "écris")], core, 0.0) == []           # frappe en panne : dit, pas d'exception
+    assert "n'a pas marché" in c.lines[0] and not c.busy
+    c._q.put(("inconnu",))                                            # message inattendu : ignoré sans planter
+    c.events(core, 0.0)

@@ -544,7 +544,7 @@ class Engine:
             acts = question_actions(acts, d.listener, d.asker)
             acts = type_actions(acts, d.listener, d.typer, d.sounds)
             acts = open_actions(acts, d.listener, d.launcher, d.asker, d.bot, d.app_message, d.desk,
-                                getattr(d, "instructeur", None))
+                                getattr(d, "instructeur", None), getattr(d, "candidature", None))
         if getattr(d, "instructeur", None) is not None:
             acts = d.instructeur.actions(acts, d.core, t)
         if getattr(d, "candidature", None) is not None:
@@ -1025,7 +1025,8 @@ def bot_absent(bot):
     return "BOT DISCORD ABSENT"
 
 
-def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None, instructeur=None):
+def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None, desk=None, instructeur=None,
+                 candidature=None):
     """« iris ouvre / message / salon » : ce qui suit est enregistré, transcrit, puis traité."""
     rest = []
     for a in acts:
@@ -1062,6 +1063,10 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
                 continue
             threading.Thread(target=discord_spoken, args=(a[0], audio, asker, bot, on_message),
                              name="discord", daemon=True).start()
+        elif a[0] == "candq_stop":               # #46 : question libre du formulaire
+            audio = listener.stop_capture()
+            if candidature is not None and asker is not None:
+                candidature.submit_question(audio, lambda au: asker._transcribe(au, 16000))
         elif a[0] == "open_stop":
             launcher.open_spoken(listener.stop_capture())
         elif a[0] == "close_stop":
