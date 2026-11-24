@@ -954,3 +954,117 @@ def test_etiquettes_sur_deux_lignes():
     assert chip_rows(w, ["a" * 50, "ok"], 130) == [["ok"]]           # trop longue : laissée de côté
     assert len(chip_rows(w, ["aaaaaaaaaa"] * 5, 130)) == 2           # jamais plus de deux lignes
     assert chip_rows(w, [], 130) == [[]]
+
+
+# ---- #46 : question libre du formulaire ; #47 : brouillon d'e-mail
+def test_question_lance_l_ecoute_puis_s_arrete_au_silence():
+    core = Core(Config())
+    core.voice("iris", 1.0)
+    core.voice("candidature", 1.3)
+    assert core.voice("question", 2.0) == [("open_start",)] and core.opening
+    assert core.voice("garde", 2.5) == []                            # pendant la question : du texte
+    assert core.open_tick(2.2, 2.0) == []
+    assert core.open_tick(10.0, 3.0) == [("candq_stop",)] and not core.opening
+    core.voice("question", 11.0)
+    assert core.open_tick(60.0, 0.0) == [("open_cancel",)]           # rien dit : abandon
+    assert "question annulee" in core.last_gesture[0]
+
+
+class FauxLlm(FauxCvgen):
+    def __init__(self, reponse="Réponse : J'aime vos projets.", texte="Écrire à jobs@acme.fr. Merci", **kw):
+        super().__init__(**kw)
+        self.reponse, self.texte = reponse, texte
+
+    def __call__(self, method, path, body=None):
+        if path == "/api/llm":
+            self.calls.append((method, path, body))
+            if isinstance(self.reponse, Exception):
+                raise self.reponse
+            return {"content": self.reponse}
+        if path == "/api/profile":
+            return PROFIL
+        if method == "GET" and path.startswith("/api/offres/") and path != "/api/offres/compte":
+            return {"texte": self.texte}
+        if path.endswith("/en-cours"):
+            return {"cv": self.cv_pdf, "lettre": None}
+        return super().__call__(method, path, body)
+
+
+def _q(faux, navigateur=True):
+    ecrit = []
+    c = cv.Candidature(http=faux, launch=lambda: None, typer=lambda s, enter=False: ecrit.append(s),
+                       browser_front=lambda: navigateur, open_url=lambda p: ecrit.append(("ouvert", p)))
+    core = Core(Config())
+    c.ask("liste", 0.0)
+    _attendre(c, core)
+    return c, core, ecrit
+
+
+def test_question_reponse_puis_ecris():
+    faux = FauxLlm()
+    c, core, ecrit = _q(faux)
+    c.submit_question(b"audio", lambda a: "  Pourquoi notre entreprise ? ")
+    st = _attendre(c, core)
+    assert st["title"] == "Réponse proposée" and st["lines"][1] == "J'aime vos projets."
+    prompt = faux.calls[-1][2]["messages"][0]["content"]
+    assert "Pourquoi notre entreprise ?" in prompt and "jobs@acme.fr" in prompt
+    assert "06 00 00 00 00" not in prompt and "1 rue des Fleurs" not in prompt   # rien de privé au modèle
+    c.ask("écris", 0.0)
+    assert ecrit == ["J'aime vos projets."]
+
+
+def test_question_echecs():
+    c, core, ecrit = _q(FauxLlm())
+    c.ask("écris", 0.0)
+    assert "Pas de réponse prête" in c.state(0.0)["lines"][0] and ecrit == []
+    c.submit_question(b"", lambda a: "")                              # rien entendu
+    assert "Rien compris" in _attendre(c, core)["lines"][0]
+    c.submit_question(b"", lambda a: 1 / 0)                           # transcription en panne
+    assert "Rien compris" in _attendre(c, core)["lines"][0]
+    c2, core2, _ = _q(FauxLlm(reponse=cv.CvgenError("Ollama ne répond pas")))
+    c2.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "Ollama" in _attendre(c2, core2)["lines"][0] and c2.reponse is None
+    c3, core3, e3 = _q(FauxLlm(reponse="   "), navigateur=False)
+    c3.submit_question(b"a", lambda a: "pourquoi nous ?")
+    assert "Pas de réponse du modèle" in _attendre(c3, core3)["lines"][0]
+    c3.reponse = "x"
+    c3.ask("écris", 0.0)
+    assert e3 == [] and "pas devant" in c3.state(0.0)["lines"][0]
+
+
+def test_adresse_mail_de_l_annonce():
+    assert cv.offer_email("Envoyez CV à rh.paris@acme-group.fr.") == "rh.paris@acme-group.fr"
+    assert cv.offer_email("noreply@x.fr puis jobs@x.fr") == "jobs@x.fr"
+    assert cv.offer_email("postulez sur le site") is None and cv.offer_email(None) is None
+
+
+def test_brouillon_eml(tmp_path):
+    import email
+    pdf = tmp_path / "CV Ada.pdf"
+    pdf.write_bytes(b"%PDF-1.4 x")
+    raw = cv.draft_eml("jobs@acme.fr", {"poste": "Dev", "entreprise": "ACME"}, PROFIL, [str(pdf)])
+    m = email.message_from_bytes(raw)
+    assert m["To"] == "jobs@acme.fr" and m["Subject"] == "Candidature : Dev" and m["X-Unsent"] == "1"
+    noms = [p.get_filename() for p in m.walk() if p.get_filename()]
+    assert noms == ["CV Ada.pdf"]
+
+
+def test_brouillon_de_bout_en_bout_et_echecs(tmp_path):
+    pdf = tmp_path / "CV.pdf"
+    pdf.write_bytes(b"%PDF")
+    faux = FauxLlm()
+    faux.cv_pdf = str(pdf)
+    c, core, ecrit = _q(faux)
+    c.i = 2                                                           # v1 : CV prêt
+    c.ask("brouillon", 0.0)
+    st = _attendre(c, core)
+    assert ecrit[-1][0] == "ouvert" and ecrit[-1][1].endswith(".eml") and "jobs@acme.fr" in st["lines"][-1]
+    faux.texte = "postulez sur le site"                               # pas d'adresse
+    c.ask("brouillon", 0.0)
+    assert "Pas d'adresse" in _attendre(c, core)["lines"][-1]
+    faux.texte, faux.cv_pdf = "jobs@acme.fr", None                    # pas de PDF
+    c.ask("brouillon", 0.0)
+    assert "Pas de PDF" in _attendre(c, core)["lines"][-1]
+    c.i = 0                                                           # offre à trier : pas de CV
+    c.ask("brouillon", 0.0)
+    assert "dis « garde »" in c.state(0.0)["lines"][-1]
