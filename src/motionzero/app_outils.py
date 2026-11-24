@@ -85,7 +85,8 @@ def top_shown(d, t):
         ins = getattr(d, "instructeur", None)
         card = ins is not None and ins.state(t) is not None      # carte de l'instruction (aide, plan, résultat)
         return bool(qa) or bool(rem) or card
-    except Exception:
+    except Exception:                          # #52 : jamais avalé en silence
+        _log.exception("top_shown")
         return False
 
 
@@ -117,6 +118,7 @@ def reminder_shown(d):
         desk = getattr(d, "desk", None)
         return desk is not None and bool(desk.r.active)
     except Exception:
+        _log.exception("reminder_shown")
         return False
 
 

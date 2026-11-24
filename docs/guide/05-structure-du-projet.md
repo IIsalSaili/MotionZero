@@ -47,10 +47,19 @@ graph LR
 
 | Module | Rôle | Lignes | Tests |
 |---|---|---|---|
-| `app.py` | `main()` : crée tout ; classe `Engine` (boucle) ; fonctions `*_actions` | 843 | test_engine, test_drain, test_mode_chrome, test_type, test_power, test_tete, test_discord_link, test_perf |
-| `core.py` | machine à états ; `voice()` ; tables `COMMANDS`, `SIMPLE_ACTIONS`, `VOICE_HOTKEYS`, `CHROME_KEYS`, `ALIASES` | 1081 | test_voice, test_texte_fenetres, test_souris_*, test_dictation, test_mode_chrome, … |
+| `app.py` | `main()` : crée tout ; classe `Engine` (boucle) | 806 | test_engine, test_drain, test_perf, … |
+| `app_actions.py` | fonctions `*_actions` : question, ouvre / ferme, Discord, dictée, VS Code et Chrome | 345 | test_mode_chrome, test_type, test_discord_link, … |
+| `app_outils.py` | fonctions pures et petits fichiers de réglages (volume, voix basse, pointeur…) | 230 | test_petites_issues, test_voix_basse, test_audit |
+| `core.py` | machine à états : `Core` (main, souris, défilement, appli devant) ; hérite des trois suivants | 622 | test_voice, test_souris_*, test_mode_chrome, … |
+| `core_mots.py` | constantes de `Core` : `Mode`, tables `COMMANDS`, `SIMPLE_ACTIONS`, `VOICE_HOTKEYS`, `CHROME_KEYS`, `ALIASES`, délais | 130 | test_voice, test_outils |
+| `core_voix.py` | `voice()` et l'aiguillage des mots (confirmation, calendrier, aide, stop, candidature, sans « iris ») | 334 | test_voice, test_dictation, test_cvgen |
+| `core_commandes.py` | commandes « iris + mot » (`_cmd_*`) | 168 | test_voice, test_bypass, … |
+| `core_ecoute.py` | écoutes en cours : dictée Claude, question, frappe, phrase libre, confirmations | 171 | test_dictation, test_type, test_cvgen |
 | `voice.py` | Vosk, grammaire fermée, `WORDS`, 2e avis, capture audio | 436 | test_voice, test_sweep, test_dictation |
-| `ui.py` | fenêtres Qt : accueil, verre, STOP, œil, réparation, île | 1475 | test_island, test_main_fantome, test_stats, … |
+| `ui.py` | `Bridge` (signaux moteur -> Qt) ; réexporte les trois suivants | 41 | — |
+| `ui_ile.py` | île en haut, panneau candidature, calendrier, aide, rappels, sous-titres, volume ; calculs purs | 1380 | test_island, test_cvgen, test_stats, … |
+| `ui_accueil_fen.py` | fenêtre d'aperçu caméra et page d'accueil | 315 | test_accueil |
+| `ui_verre.py` | verre plein écran, boutons STOP / œil / réparer, capteur de touches | 480 | test_main_fantome |
 | `overlay.py` | dessin de l'aperçu caméra et de l'aide | 251 | test_sweep |
 | `camera.py` | capture DirectShow MJPG, images corrompues jetées, reconnexion | 178 | test_camera_validation |
 | `hand.py` | caractéristiques de la main, suivi des deux mains | 126 | test_engine, test_real_recording |
