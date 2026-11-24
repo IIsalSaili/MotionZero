@@ -120,8 +120,10 @@ SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un 
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
          ("double", "clic"): "double"}
-# mots en deux morceaux du mode candidature : recollés, mais jamais ajoutés aux grammaires de base
-CAND_SPLIT = {("code", "postal"): "code postal", ("prépare", "tout"): "prépare tout"}   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
+# mots en deux morceaux des modes (candidature, Chrome) : recollés, mais jamais ajoutés aux grammaires de base
+MODE_SPLIT = {("code", "postal"): "code postal", ("prépare", "tout"): "prépare tout",
+              ("dé", "zoom"): "dézoom"}   # « dézoom » absent du modèle : « dé zoom », mode Chrome seulement
+SPOKEN = {v: f"{a} {b}" for (a, b), v in MODE_SPLIT.items()}   # mot de mode -> ce que Vosk doit chercher   # « double clic » dit en entier = « double » (2 mots : rejeté avant)
 SOLO_TOO = {"double"}                     # aussi écouté seul (contrairement à « démute », absent du modèle)
 CAL_ONLY = set()   # mots du calendrier (jours, mois, nombres) : écoutés seulement calendrier ouvert
 
@@ -137,7 +139,7 @@ def grammar(extra=(), mouse=True):
     phrases += [f"{a} {b}" for a, b in SPLIT if mouse or SPLIT[(a, b)] not in MOUSE_ONLY]
     if not mouse:   # souris éteinte : seulement précédés de « iris » (16/11 : « iris clic » devenait « iris lis »)
         phrases += [f"iris {w}" for w in sorted(MOUSE_ONLY)] + ["iris double clic"]
-    phrases += [w for w in extra if w not in phrases]
+    phrases += [SPOKEN.get(w, w) for w in extra if SPOKEN.get(w, w) not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
 
@@ -184,9 +186,9 @@ def _join_demute(words):
     while i < len(words):
         w = words[i]
         pair = (w["word"], words[i + 1]["word"]) if i + 1 < len(words) else None
-        if pair in SPLIT or pair in CAND_SPLIT:
+        if pair in SPLIT or pair in MODE_SPLIT:
             nxt = words[i + 1]
-            out.append({"word": SPLIT.get(pair) or CAND_SPLIT[pair], "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
+            out.append({"word": SPLIT.get(pair) or MODE_SPLIT[pair], "conf": min(w["conf"], nxt["conf"]), "start": w["start"], "end": nxt["end"]})
             i += 2
             continue
         out.append(w)

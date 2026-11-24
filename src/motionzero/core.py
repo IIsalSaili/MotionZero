@@ -51,12 +51,13 @@ CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
                "recharge": ["f5"],
                "descends": ["pagedown"], "monte": ["pageup"],
                "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
+               "zoom": ["ctrl", "plus"], "dézoom": ["ctrl", "minus"],     # 24/11 : mots dédiés, Chrome seulement
                "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
 CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
                  "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
                  "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE",
                  "descends": "PAGE BAS", "monte": "PAGE HAUT",
-                 "agrandis": "ZOOM +", "réduis": "ZOOM -", "recherche": "RECHERCHE : parle"}
+                 "agrandis": "ZOOM +", "réduis": "ZOOM -", "zoom": "ZOOM +", "dézoom": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 # fenêtres d'Iris (fenêtre invisible des raccourcis Discord, accueil, aide…) : ne comptent jamais comme
 # « une autre appli devant » (14/11 : « iris mute » faisait quitter le mode Chrome, 53 « iris chrome » redits en 4 jours)

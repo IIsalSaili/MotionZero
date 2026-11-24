@@ -205,7 +205,8 @@ def test_mots_chrome_absents_de_la_liste_de_base():
     assert "haut" not in chrome and "bas" not in chrome                   # retiré le 19/11 : une syllabe, déclenché sans le vouloir
     for w in ("retour", "recharge", "descends"):
         assert w not in base and w in chrome, w
-    assert all(w in chrome for w in CHROME_KEYS)
+    from motionzero.voice import SPOKEN
+    assert all(SPOKEN.get(w, w) in chrome for w in CHROME_KEYS)   # « dézoom » : cherché « dé zoom »
     # en mode Chrome, les commandes habituelles restent (« iris clic » : « clic » y est seul)
     assert all(w.removeprefix("iris ") in chrome for w in base)
 
@@ -343,3 +344,19 @@ def test_chrome_lance_par_l_explorateur(monkeypatch):
     monkeypatch.setattr(vscode.os.path, "exists", lambda p: False)
     assert vscode.open_app("chrome") == "CHROME INTROUVABLE" and len(lance) == 1
     assert vscode.open_app("studio") is None and lance[-1] == vscode.APPS["studio"][1]   # les autres : inchangé
+
+
+def test_zoom_et_dezoom_seulement_dans_chrome():
+    """24/11 : « zoom » / « dézoom » en mode Chrome ; ailleurs, rien (agrandis / réduis gardent leur sens)."""
+    import json
+    from motionzero.voice import GRAMMARS, _join_demute
+    core = _chrome()
+    assert ("chrome_keys", ["ctrl", "plus"]) in core.voice("zoom", 20.0)
+    assert ("chrome_keys", ["ctrl", "minus"]) in core.voice("dézoom", 21.0)
+    g = json.loads(GRAMMARS["chrome"])
+    assert "zoom" in g and "dé zoom" in g and "dé zoom" not in json.loads(GRAMMARS["base"])
+    w = [{"word": "dé", "conf": 1, "start": 0, "end": 1}, {"word": "zoom", "conf": 1, "start": 1, "end": 2}]
+    assert [x["word"] for x in _join_demute(w)] == ["dézoom"]
+    hors = Core(Config())
+    hors.voice("iris", 1.0)
+    assert not [a for a in hors.voice("zoom", 1.2) if a[0] == "chrome_keys"]
