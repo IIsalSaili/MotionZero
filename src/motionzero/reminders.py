@@ -437,7 +437,7 @@ class Desk:
                     self.sounds.play("ALARME" if x.alarm else "RAPPEL")
                     if x.alarm:
                         self._last_ring = t           # la sonnerie en boucle reprend 1,5 s plus tard
-                self._say(("Alarme : " if x.alarm else "Rappel : ") + x.text)
+                # #27 : plus de lecture à voix haute à l'échéance (« Alarme : … » insupportable) : son + bandeau
                 self._notify(("Alarme : " if x.alarm else "Rappel : ") + x.text)
         if self.timers.tick(t):
             from .timers import spoken
@@ -447,7 +447,6 @@ class Desk:
             self._last_ring = t
             if self.sounds is not None:
                 self.sounds.play("ALARME")
-            self._say(what)
             self._notify("Timer : " + what)
             log.info("%s", what)
         core.timer_running = self.timers.timer_end is not None

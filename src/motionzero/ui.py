@@ -824,7 +824,11 @@ ISLAND_H = 46
 ISLAND_MAX_W = 960
 ISLAND_FADE_S = 3.0      # sans rien de nouveau : l'île s'estompe…
 ISLAND_FADED = 0.25      # … à 25 % d'opacité
-TOAST_S = 2.5            # durée d'affichage d'une commande comprise / ignorée
+TOAST_S = 4.0            # durée d'affichage d'une commande comprise / ignorée (ligne du bas, le temps de défiler)
+TICKER_W = 460           # largeur de la ligne du bas
+TICKER_H = 30
+TICKER_SPEED = 60.0      # px/s quand le texte est trop long
+TICKER_PAUSE_S = 0.8
 MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "CHROME": "CHROME", "DESACTIVE": "PAUSE"}
 
 # pastille Discord, à gauche de l'îlot : micro barré (micro coupé), casque barré + micro barré (sourdine)
@@ -1155,48 +1159,51 @@ def load_fonts():
         QFontDatabase.addApplicationFont(_os.path.join(_FONT_DIR, name))
 
 
+FLAG_ORDER = ("AGRIPPE", "SOURIS", "CANDIDATURE", "FOCUS", "BYPASS")   # le plus important d'abord
+
+
 def island_text(st):
-    """(mode affiché, message ou None, actif ?) d'après l'état envoyé par le moteur. Pur : testable."""
-    mode = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
-    if st.get("mouse"):
-        mode = "SOURIS" if mode in ("NEUTRE", "") else f"{mode} · SOURIS"   # la souris s'ajoute au mode
-    if st.get("focus"):
-        mode = f"{mode} · FOCUS" if mode else "FOCUS"
-    if st.get("bypass"):
-        mode = f"{mode} · BYPASS" if mode else "BYPASS"
-    if st.get("candidature"):
-        mode = f"{mode} · CANDIDATURE" if mode else "CANDIDATURE"
-    if st.get("dragging"):                    # « agrippe » : bouton tenu, visible tant qu'il l'est (19/11)
-        mode = f"{mode} · AGRIPPE" if mode else "AGRIPPE"
-    qa = st.get("qa") or {}
-    if qa.get("phase") == "listening":
-        return mode, "Pose ta question…", True
-    if qa.get("phase") == "thinking":
-        return mode, "Iris réfléchit…", True
-    if qa.get("phase") == "searching":
-        return mode, "Iris cherche sur internet…", True
-    if qa.get("phase") == "answer":
-        return mode, "Iris répond", True
-    if qa.get("phase") == "error":
-        return mode, "Question : échec", True
-    if st.get("dictating"):
-        return mode, "Claude t'écoute", True
-    if st.get("typing"):
-        return mode, "Dicte ton texte…", True
-    if st.get("confirming"):
-        pending = (st.get("reminders") or {}).get("pending")
-        return mode, (f"{pending} — dis ENVOIE" if pending else "Dis ENVOIE ou ANNULE"), True
-    if st.get("listening"):
-        return mode, "Iris écoute…", True
+    """(haut, ligne du bas ou None, actif ?) d'après l'état du moteur. Pur : testable.
+    #18 / #27 (demande de l'utilisateur, 24/11) : en haut, un ou deux mots fixes (le mode, plus l'état le plus
+    important) ; en bas, une ligne courte qui défile : le dernier retour, sinon les autres états allumés
+    (focus, bypass… restent visibles, jamais éteints en silence)."""
+    base = MODE_NAMES.get(st.get("mode"), st.get("mode") or "")
+    base = "" if base == "NEUTRE" else base
+    on = {"SOURIS": st.get("mouse"), "FOCUS": st.get("focus"), "BYPASS": st.get("bypass"),
+          "CANDIDATURE": st.get("candidature"), "AGRIPPE": st.get("dragging")}
+    flags = [f for f in FLAG_ORDER if on[f]]
+    shown = flags[:1] if base else flags[:2]
+    top = " · ".join(([base] if base else []) + shown) or "NEUTRE"
+    rest = " · ".join(f.lower() for f in flags if f not in shown) or None
     head = st.get("pointer") == "tete"
-    if st.get("lost") and st.get("mouse"):
-        return mode, "Visage non détecté" if head else "Main non détectée", True
-    if st.get("arming"):
-        return mode, "Tête de face pour démarrer" if head else "Main au centre pour démarrer", True
+    phase = (st.get("qa") or {}).get("phase")
+    pending = (st.get("reminders") or {}).get("pending")
+    for cond, text in (
+            (phase == "listening", "Ta question"), (phase == "thinking", "Iris réfléchit…"),
+            (phase == "searching", "Recherche sur internet…"), (phase == "answer", "Iris répond"),
+            (phase == "error", "Question : échec"),
+            (st.get("dictating"), "Claude écoute"), (st.get("typing"), "Dictée"),
+            (st.get("confirming"), f"{pending} · envoie ?" if pending else "Envoie ou annule"),
+            (st.get("listening"), "Écoute"),
+            (st.get("lost") and st.get("mouse"), "Visage perdu" if head else "Main perdue"),
+            (st.get("arming"), "Tête de face" if head else "Main au centre")):
+        if cond:
+            return top, text, True
     toast, age = st.get("toast"), st.get("toast_age", 1e9)
     if toast and age <= TOAST_S:
-        return mode, toast, True
-    return mode, None, False
+        return top, toast, True
+    return top, rest, False
+
+
+def ticker_offset(text_w, room, elapsed, speed=TICKER_SPEED, pause=TICKER_PAUSE_S):
+    """Décalage du texte de la ligne du bas : 0 s'il tient ; sinon il défile, puis repart après une pause. Pur."""
+    if text_w <= room:
+        return 0.0
+    run = (text_w - room) / speed
+    k = elapsed % (pause + run + pause)
+    if k < pause:
+        return 0.0
+    return -min((k - pause) * speed, text_w - room)
 
 
 CLAUDE_ORANGE = "#D97757"
@@ -1323,7 +1330,10 @@ class _IslandPainter:
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
                    rem_key, self.next_rem, tuple(self.timer_pills), self.quota, repr(panel) if panel else None)
         if content != self.content:
+            if not self.content or content[1] != self.content[1]:
+                self.ticker_t0 = now           # nouveau texte en bas : il défile depuis le début
             self.content, self.last_change = content, now
+        self.now = now
         if st.get("ok_flash"):
             self.last_change = now
         # clignement : 0,5 s, à intervalle irrégulier
@@ -1351,7 +1361,10 @@ class _IslandPainter:
         """Vrai pendant l'animation du logo ou une alarme qui pulse : redessiner à 60 images/s."""
         moving = self.motion and self.clk_start is not None and (self.clk_end is not None or now - self.clk_start < CLOCK_ANIM_S)
         ringing = bool(self.rem and self.rem[0] == "current" and self.rem[1].get("ringing"))
-        return moving or (ringing and self.motion)
+        scrolling = False
+        if self.content and self.content[1] and self.motion:
+            scrolling = QFontMetrics(self.font_small).horizontalAdvance(self.content[1]) > TICKER_W - 32
+        return moving or (ringing and self.motion) or scrolling
 
     def paint(self, p):
         if not self.content:
@@ -1612,16 +1625,9 @@ class _IslandPainter:
         if getattr(self, "qa", None):
             self._paint_answer(p, mode, msg)
             return
-        fm_mode, fm_msg = QFontMetrics(self.font_mode), QFontMetrics(self.font_msg)
-        pad, dot, gap = 20, 10, 14
+        fm_mode = QFontMetrics(self.font_mode)
+        pad, dot = 20, 10
         w = pad + dot + 10 + fm_mode.horizontalAdvance(mode) + pad
-        font_msg = self.font_msg
-        if msg:
-            room = ISLAND_MAX_W - w - gap - pad
-            font_msg = fit_font(self.font_msg, msg, room)
-            fm_msg = QFontMetrics(font_msg)
-            msg = fm_msg.elidedText(msg, Qt.TextElideMode.ElideRight, room)
-            w += gap + fm_msg.horizontalAdvance(msg)
         gx = (self.width - (ISLET + ISLET_GAP + w)) / 2       # îlot + île, centrés ensemble
         x, y = gx + ISLET + ISLET_GAP, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         p.save()
@@ -1638,19 +1644,38 @@ class _IslandPainter:
         tx = x + pad + dot + 10
         p.drawText(QRectF(tx, y, fm_mode.horizontalAdvance(mode) + 2, ISLAND_H),
                    Qt.AlignmentFlag.AlignVCenter, mode)
-        if msg:
-            p.setPen(QColor(255, 255, 255, 200))
-            p.setFont(font_msg)
-            mx = tx + fm_mode.horizontalAdvance(mode) + gap
-            p.drawText(QRectF(mx, y, w - (mx - x) - pad + 2, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, msg)
         p.restore()
-        self._paint_clock(p, x, y + ISLAND_H + CLOCK_GAP)
         ty = y + ISLAND_H + CLOCK_GAP
+        if msg:
+            self._paint_ticker(p, x, ty, msg)
+            ty += TICKER_H + CLOCK_GAP
+        self._paint_clock(p, x, ty)
         if self.next_rem:
             ty += ISLAND_H + CLOCK_GAP
         tx = x
         for text, countdown in getattr(self, "timer_pills", []):
             tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
+
+    def _paint_ticker(self, p, x, y, text):
+        """Ligne du bas : petite, sous les mots fixes ; défile si le texte est trop long (#18)."""
+        pad = 16
+        fm = QFontMetrics(self.font_small)
+        tw = fm.horizontalAdvance(text)
+        w = min(TICKER_W, tw + 2 * pad)
+        room = w - 2 * pad
+        off = ticker_offset(tw, room, getattr(self, "now", 0.0) - getattr(self, "ticker_t0", 0.0)) \
+            if self.motion else 0.0
+        p.save()
+        p.setOpacity(self.opacity)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 215))
+        p.drawRoundedRect(QRectF(x, y, w, TICKER_H), TICKER_H / 2, TICKER_H / 2)
+        p.setClipRect(QRectF(x + pad, y, room, TICKER_H))
+        p.setPen(QColor(255, 255, 255, 215))
+        p.setFont(self.font_small)
+        shown = text if self.motion or tw <= room else fm.elidedText(text, Qt.TextElideMode.ElideRight, int(room))
+        p.drawText(QRectF(x + pad + off, y, max(tw, room) + 4, TICKER_H), Qt.AlignmentFlag.AlignVCenter, shown)
+        p.restore()
 
     def _paint_timer_pill(self, p, x, y, text, countdown):
         """Fiche « sablier + temps » ; renvoie sa largeur."""

@@ -98,7 +98,7 @@ Mode : « tous » sauf mention.
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `claude` | VS Code devant, micro de Claude allumé ; coupé après 2,75 s de silence | oui pour redicter, après une dictée | tous |
-| `question` | question enregistrée, puis Whisper, puis Haiku ; si la réponse demande une info récente, recherche internet (Startpage, puis Bing) dans un navigateur sans fenêtre, puis réponse sourcée ; réponse dans l'île (« Iris cherche sur internet… » pendant la recherche) | non | tous |
+| `question` | question enregistrée, puis Whisper, puis Haiku ; si la réponse demande une info récente, recherche internet (Startpage, puis Bing) dans un navigateur sans fenêtre, puis réponse sourcée ; réponse dans l'île (« Recherche sur internet… » pendant la recherche) | non | tous |
 
 ```mermaid
 sequenceDiagram
@@ -213,6 +213,7 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `recharge` | F5 | recharge |
 | `monte` / `descends` | Page haut / Page bas | une page |
 | `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |
+| `zoom` / `dézoom` | Ctrl+plus / Ctrl+moins | zoom (mots dédiés ; « dézoom » est écouté sous la forme « dé zoom ») |
 | `recherche` | Ctrl+L puis dictée | barre d'adresse |
 
 Aussi sans « iris » en Chrome : `skip`, `back`, `space`, `clic`, `double`.
