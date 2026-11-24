@@ -27,6 +27,18 @@ Si les « Effets d'animation » sont coupés dans Windows (Accessibilité > Effe
 
 De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. Le bouton **Voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
 
+## Caméra
+
+Le bouton **Caméra** de l'accueil rend la webcam aux autres applis (appel vidéo Discord : une webcam ne sert qu'à une appli à la fois). Les gestes sont en pause tant qu'elle est coupée ; le même bouton la reprend. Une relance d'Iris la rallume.
+
+## Mode conversation
+
+Bouton **Mode conversation** de l'accueil, coché par défaut. Coché : un mot dit au milieu d'une conversation est ignoré (2e vérification par reconnaissance libre). Décoché : tout mot reconnu agit, sans cette vérification ; « iris » reste demandé là où il l'est. Choix gardé dans `conversation.txt`.
+
+## Fermer Iris
+
+Bouton **Fermer Iris** de l'accueil (rouge) : arrêt voulu, comme le STOP ; le gardien ne la relance pas.
+
 ## Arrêter
 
 - **Bouton STOP** (en bas à droite) : un vrai clic seulement (souris, ou clic d'Iris en mode souris). Le survol ne l'active pas.

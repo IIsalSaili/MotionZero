@@ -208,6 +208,23 @@ def foreground_exe():
     return _exe_of(hwnd) if hwnd else ""
 
 
+def chrome_tab_count(hwnd=None):
+    """Onglets de la fenêtre Chrome au premier plan (UI Automation), ou None si illisible.
+    22/11 : « ferme » (Ctrl+W) sur le dernier onglet fermait Chrome entier."""
+    try:
+        import comtypes.client
+        hwnd = hwnd or ctypes.windll.user32.GetForegroundWindow()
+        comtypes.client.GetModule("UIAutomationCore.dll")
+        from comtypes.gen.UIAutomationClient import CUIAutomation, IUIAutomation, TreeScope_Descendants
+        uia = comtypes.client.CreateObject(CUIAutomation, interface=IUIAutomation)
+        root = uia.ElementFromHandle(hwnd)
+        cond = uia.CreatePropertyCondition(30003, 50019)        # ControlType = TabItem
+        return root.FindAll(TreeScope_Descendants, cond).Length
+    except Exception:
+        log.exception("onglets de Chrome illisibles")
+        return None
+
+
 def chrome_in_front():
     """Chrome est-il la fenêtre au premier plan ? (mode CHROME : aucune touche envoyée ailleurs)"""
     hwnd = ctypes.windll.user32.GetForegroundWindow()
@@ -294,7 +311,12 @@ def open_app(name):
         log.info("%s au premier plan", name)
         return None
     try:
-        subprocess.Popen(cmd, close_fds=True)
+        if name == "chrome":               # par l'explorateur : Chrome n'est pas un enfant d'Iris (#58)
+            if not os.path.exists(cmd[0]):
+                raise OSError(cmd[0])
+            subprocess.Popen(["explorer.exe", cmd[0]], close_fds=True, creationflags=0x08000000)
+        else:
+            subprocess.Popen(cmd, close_fds=True)
     except OSError:
         log.warning("%s introuvable : %s", name, cmd[0])
         return f"{name.upper()} INTROUVABLE"

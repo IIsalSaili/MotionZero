@@ -19,7 +19,7 @@ def test_aucun_nouveau_mot_guette():
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
     assert len(WORDS) == 117   # « espace », « muet », « activation », « favori » retirés (#50)
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 67, "souris": 67, "chrome": 75, "calendrier": 119, "candidature": 27, "candidature_souris": 33}
+        {"base": 67, "souris": 67, "chrome": 75, "calendrier": 119, "candidature": 40, "candidature_souris": 46}   # 21/11 : annule, détails, vérifie, relances
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 
@@ -264,3 +264,118 @@ def test_appli_absente_mais_site_connu():
         check_step("ferme_app", "netflix", apps)              # fermer : jamais remplacé par un site
     with pytest.raises(PlanError):
         check_step("ouvre_app", "zzqq", apps)
+
+
+def test_bouton_camera_coupe_puis_rallume():
+    import queue
+    from types import SimpleNamespace
+    from motionzero.app import Engine as Loop
+    from motionzero.ui import camera_button_text
+    from motionzero.voice import WORDS
+    assert "caméra" not in WORDS                     # un bouton, jamais un mot de plus pour Vosk
+    shown = []
+    d = SimpleNamespace(camera_requests=queue.Queue(), cam=SimpleNamespace(paused=False),
+                        bridge=SimpleNamespace(camera=SimpleNamespace(emit=shown.append)))
+    loop = Loop.__new__(Loop)
+    loop.d = d
+    d.camera_requests.put(1)
+    loop._camera()
+    assert d.cam.paused and shown == [True] and "rallumer" in camera_button_text(True)
+    d.camera_requests.put(1)
+    loop._camera()
+    assert not d.cam.paused and shown == [True, False] and "couper" in camera_button_text(False)
+
+
+def test_camera_en_pause_rend_puis_rouvre_la_webcam(monkeypatch):
+    import threading
+    import time
+    from motionzero import camera as cm
+
+    class Cap:
+        released = False
+        def read(self):
+            time.sleep(0.01)
+            return False, None
+        def release(self):
+            self.released = True
+    opened = []
+    cam = cm.Camera(lost_after_s=99)
+    monkeypatch.setattr(cam, "_open", lambda: opened.append(Cap()) or opened[-1])
+    cam.cap, cam.running = Cap(), True
+    first = cam.cap
+    th = threading.Thread(target=cam._run, daemon=True)
+    th.start()
+    cam.paused = True
+    time.sleep(0.3)
+    assert first.released and cam.cap is None and cam.status == cm.PAUSED
+    cam.paused = False
+    time.sleep(0.3)
+    assert opened and cam.cap is opened[0]
+    # webcam encore prise ailleurs à la reprise : pas de plantage, nouvelle tentative
+    cam.paused = True
+    time.sleep(0.3)
+    monkeypatch.setattr(cam, "_open", lambda: None)
+    cam.paused = False
+    time.sleep(0.3)
+    assert cam.cap is None and th.is_alive()
+    cam.running = False
+    th.join(2)
+
+
+def test_candidature_entendu_meme_dans_une_phrase():
+    from motionzero.voice import confirmed
+    w = [{"word": "candidature", "conf": 1.0}]
+    assert confirmed(w, "l'appli marche plus du tout candidature je dois quitter ce mode", 1)
+    assert not confirmed([{"word": "suivante", "conf": 1.0}], "tu as vu la série hier soir avec les copains", 1)
+
+
+def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
+    import queue
+    from types import SimpleNamespace
+    from motionzero.app import Engine, read_conversation
+    import motionzero.app as app
+    from motionzero.voice import VoiceListener
+    assert read_conversation(str(tmp_path / "absent.txt")) is True       # coché par défaut
+    (tmp_path / "c.txt").write_text("non", encoding="utf-8")
+    assert read_conversation(str(tmp_path / "c.txt")) is False
+    # bouton : bascule, enregistre, prévient le micro
+    app_conv = tmp_path / "conv.txt"
+    old, app.CONV_FILE = app.CONV_FILE, str(app_conv)
+    try:
+        shown, lis = [], SimpleNamespace(conversation=True)
+        d = SimpleNamespace(conversation_requests=queue.Queue(), conversation=True, listener=lis,
+                            bridge=SimpleNamespace(conversation=SimpleNamespace(emit=shown.append)))
+        e = Engine.__new__(Engine)
+        e.d = d
+        d.conversation_requests.put(1)
+        e._conversation()
+        assert lis.conversation is False and shown == [False] and app_conv.read_text(encoding="utf-8") == "non"
+        d.listener = None                     # sans la voix : le bouton marche quand même
+        d.conversation_requests.put(1)
+        e._conversation()
+        assert d.conversation is True and app_conv.read_text(encoding="utf-8") == "oui"
+    finally:
+        app.CONV_FILE = old
+    # micro : mot noyé dans une phrase -> ignoré si coché, accepté si décoché
+    got = []
+    v = VoiceListener.__new__(VoiceListener)
+    v.min_conf, v._iris_ok_t, v.quiet, v.last_rejected = 0.6, -1e9, False, None
+    v._handle = lambda *a, **k: got.append(a)
+    res = {"result": [{"word": "suivante", "conf": 1.0, "start": 0.0, "end": 0.4}], "text": "suivante"}
+    long = "tu as vu la série hier soir avec les copains suivante"
+    v.conversation = True
+    v._emit(res, long)
+    assert v.last_rejected is not None
+    v.last_rejected = None
+    v.conversation = False
+    try:
+        v._emit(res, long)
+    except AttributeError:
+        pass                                  # la suite de _emit (file de mots) n'est pas montée ici
+    assert v.last_rejected is None            # décoché : jamais « pas sûr de l'avoir entendu »
+
+
+def test_ferme_ne_ferme_jamais_le_dernier_onglet():
+    from motionzero.app import last_tab
+    assert last_tab(1) and last_tab(0)            # dernier onglet, ou choix du profil : on ne touche à rien
+    assert not last_tab(2) and not last_tab(None)  # plusieurs onglets, ou illisible : Ctrl+W comme avant
