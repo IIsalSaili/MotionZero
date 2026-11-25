@@ -44,6 +44,7 @@ class EcouteMixin:
         self._camera()
         self._conversation()
         self._volume()
+        self._lecture()
         if t - self.chrome_check_t >= 0.3:
             self.chrome_check_t = t           # le mode Chrome suit Chrome au premier plan (14/11)
             acts += core.front_app(foreground_exe(), t)
@@ -114,6 +115,20 @@ class EcouteMixin:
             d.bridge.iris_volume.emit(vol)
             d.sounds.play("OK")
             _log.info("volume d'Iris : %d %%", round(vol * 100))
+
+    def _lecture(self):
+        """Case « lecture à voix haute » : enregistrée ; décochée, la voix ne lit plus rien (rappels compris)."""
+        d = self.d
+        for _ in drain(getattr(d, "lecture_requests", None) or queue.Queue()):
+            d.lecture = not getattr(d, "lecture", False)
+            from . import reglages
+            reglages.write_flag(reglages.LECTURE_FILE, d.lecture)
+            if d.speaker is not None:
+                d.speaker.allowed = d.lecture
+                if not d.lecture:
+                    d.speaker.hush()          # décochée : la phrase en cours s'arrête aussi
+            d.bridge.lecture.emit(d.lecture)
+            _log.info("lecture a voix haute %s", "cochee" if d.lecture else "decochee")
 
     def _camera(self):
         """Clics sur « caméra » : le fil caméra ferme / rouvre la webcam lui-même. Seulement boucle principale."""

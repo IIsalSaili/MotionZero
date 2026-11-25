@@ -64,7 +64,9 @@ graph LR
 | `voice.py` | Vosk, grammaire fermée, `WORDS`, 2e avis, capture audio | 436 | test_voice, test_sweep, test_dictation |
 | `ui.py` | `Bridge` (signaux moteur -> Qt) ; réexporte les trois suivants | 41 | — |
 | `ui_ile.py` | île en haut, panneau candidature, calendrier, aide, rappels, sous-titres, volume ; calculs purs | 1380 | test_island, test_cvgen, test_stats, … |
-| `ui_accueil_fen.py` | fenêtre d'aperçu caméra et page d'accueil | 315 | test_accueil |
+| `ui_accueil_fen.py` | page d'accueil, menu latéral : Maintenant, Réglages, Conso | 288 | test_accueil, test_reglages |
+| `ui_accueil_pages.py` | cartes de réglage, menu, courbes de consommation | 268 | test_reglages |
+| `reglages.py` | registre des réglages de l'accueil (sans Qt) | 104 | test_reglages |
 | `ui_verre.py` | verre plein écran, boutons STOP / œil / réparer, capteur de touches | 480 | test_main_fantome |
 | `overlay.py` | dessin de l'aperçu caméra et de l'aide | 251 | test_sweep |
 | `camera.py` | capture DirectShow MJPG, images corrompues jetées, reconnexion | 178 | test_camera_validation |

@@ -191,8 +191,8 @@ def test_choix_garde_au_redemarrage(tmp_path):
 
 
 def test_texte_du_bouton():
-    from motionzero.ui import pointer_button_text
-    assert "tête" in pointer_button_text("main") and "main" in pointer_button_text("tete")
+    from motionzero.reglages import tile_text
+    assert "tête" in tile_text("souris", "main")[1] and "main" in tile_text("souris", "tete")[1]
 
 
 # --- « défile » à la tête --------------------------------------------------------

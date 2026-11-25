@@ -15,9 +15,20 @@
 | Ligne de commande | `.venv/Scripts/python -m motionzero --voice` (`--simulation` : rien n'est envoyé à Windows). |
 | Navigateur de « iris question » | une fois après l'installation : `.venv/Scripts/python -m playwright install chromium` (sans lui, Iris répond sans internet et le dit). |
 
+## Page d'accueil
+
+Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gardée d'un démarrage à l'autre (`accueil_section.txt`). En bas du menu, **Fermer** (rouge).
+- **Maintenant** : image de la caméra, dernières commandes, mots utiles ici, capteurs, consommation sur une ligne.
+- **Réglages** : une carte par réglage, rangée par groupe (Entrées, Voix et sons, Dépannage). Un clic passe au choix suivant. Les réglages sont décrits dans `reglages.py` : en ajouter un = une entrée du registre, son texte et son effet dans la boucle principale.
+- **Conso** : courbes du processeur (Iris et PC entier, 2 dernières minutes), mémoire, carte graphique, modèles, fils les plus occupés. Rien n'est mesuré tant que la fenêtre est réduite.
+
+## Lecture à voix haute
+
+Carte **Lecture à voix haute** (Réglages), **désactivée par défaut**. Activée : la voix de Windows lit les rappels et les messages Discord (« iris silence » / « iris lis » ne concernent que Discord). Désactivée : rien n'est lu, rappels compris, et la phrase en cours s'arrête. Choix gardé dans `lecture.txt`.
+
 ## Volume d'Iris
 
-Le bouton **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `volume_iris.txt`.
+La carte **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `volume_iris.txt`.
 
 ## Le bandeau en haut
 
@@ -29,19 +40,19 @@ Si les « Effets d'animation » sont coupés dans Windows (Accessibilité > Effe
 
 ## Voix basse
 
-De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. Le bouton **Voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
+De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. La carte **Voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
 
 ## Caméra
 
-Le bouton **Caméra** de l'accueil rend la webcam aux autres applis (appel vidéo Discord : une webcam ne sert qu'à une appli à la fois). Les gestes sont en pause tant qu'elle est coupée ; le même bouton la reprend. Une relance d'Iris la rallume.
+La carte **Caméra** de l'accueil rend la webcam aux autres applis (appel vidéo Discord : une webcam ne sert qu'à une appli à la fois). Les gestes sont en pause tant qu'elle est coupée ; le même bouton la reprend. Une relance d'Iris la rallume.
 
 ## Mode conversation
 
-Bouton **Mode conversation** de l'accueil, coché par défaut. Coché : un mot dit au milieu d'une conversation est ignoré (2e vérification par reconnaissance libre). Décoché : tout mot reconnu agit, sans cette vérification ; « iris » reste demandé là où il l'est. Choix gardé dans `conversation.txt`.
+Carte **Mode conversation** de l'accueil, coché par défaut. Coché : un mot dit au milieu d'une conversation est ignoré (2e vérification par reconnaissance libre). Décoché : tout mot reconnu agit, sans cette vérification ; « iris » reste demandé là où il l'est. Choix gardé dans `conversation.txt`.
 
 ## Fermer Iris
 
-Bouton **Fermer Iris** de l'accueil (rouge) : arrêt voulu, comme le STOP ; le gardien ne la relance pas.
+Bouton **Fermer** du menu de l'accueil (rouge) : arrêt voulu, comme le STOP ; le gardien ne la relance pas.
 
 ## Arrêter
 
@@ -102,7 +113,7 @@ Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans s
 
 ### Main ou tête
 
-- « iris tête » / « iris main », ou le bouton de l'accueil. Le choix est gardé d'une session à l'autre (`pointeur.txt`).
+- « iris tête » / « iris main », ou la carte **Souris** de l'accueil. Le choix est gardé d'une session à l'autre (`pointeur.txt`).
 - À la tête, seul le visage est détecté. « iris centre » : la tête de face devient le centre.
 
 ## Défilement

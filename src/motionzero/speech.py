@@ -18,14 +18,15 @@ class Speaker:
         self.rate = rate
         self._q = queue.Queue(maxsize=backlog)
         self._factory = factory or _sapi_voice
-        self.enabled = True
+        self.enabled = True       # « iris silence / lis » : messages Discord seulement
+        self.allowed = True       # case « lecture à voix haute » de l'accueil : coupe tout, rappels compris
         self.ok = True
         self._hush = threading.Event()
         threading.Thread(target=self._run, name="lecture", daemon=True).start()
 
     def say(self, text, force=False):
         """force : lu même après « iris silence » (qui ne coupe que les messages Discord)."""
-        if (not self.enabled and not force) or not self.ok or not text:
+        if not self.allowed or (not self.enabled and not force) or not self.ok or not text:
             return False
         if len(text) > MAX_CHARS:
             text = text[:MAX_CHARS].rsplit(" ", 1)[0] + ", la suite à l'écran"
