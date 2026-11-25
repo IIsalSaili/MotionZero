@@ -161,18 +161,30 @@ def main(argv=None):
 
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
     qt = QApplication.instance() or QApplication([])
-    view_win = PreviewWindow(pointer=cfg.pointer, quiet=quiet_choice, volume=sounds.mixer.volume)
+    from .reglages import LECTURE_FILE, SECTION_FILE, read_flag
+    lecture = read_flag(LECTURE_FILE, False)   # lecture à voix haute : décochée par défaut
+    speaker.allowed = lecture
+    view_win = PreviewWindow(pointer=cfg.pointer, quiet=quiet_choice, volume=sounds.mixer.volume, lecture=lecture,
+                             section_file=SECTION_FILE)
     volume_requests = queue.Queue()            # clics sur « volume d'Iris » (fil Qt) -> boucle principale
-    view_win.volume_clicked.connect(lambda: volume_requests.put(1))
-    view_win.quiet_clicked.connect(lambda: quiet_requests.put(1))
-    view_win.camera_clicked.connect(lambda: camera_requests.put(1))
-    view_win.conversation_clicked.connect(lambda: conversation_requests.put(1))
-    def _pointer_clicked():
-        log.info("bouton main / tete de l'accueil")
-        pointer_requests.put(1)
-    view_win.pointer_clicked.connect(_pointer_clicked)
+    lecture_requests = queue.Queue()           # clics sur « lecture à voix haute » (fil Qt) -> boucle principale
+    # une carte de réglage cliquée (fil Qt) -> la file de la boucle principale qui l'applique (jamais Core ici)
+    setting_queues = {"souris": pointer_requests, "camera": camera_requests, "conversation": conversation_requests,
+                      "voix_basse": quiet_requests, "volume": volume_requests, "lecture": lecture_requests}
+    setting_actions = {}                       # réglages sans file : « son » (rempli plus bas)
+
+    def on_setting(rid):
+        log.info("accueil : carte %s", rid)
+        if rid in setting_queues:
+            setting_queues[rid].put(1)
+        elif rid in setting_actions:
+            setting_actions[rid]()
+        else:
+            log.warning("accueil : reglage inconnu %s", rid)
+    view_win.reglage_clicked.connect(on_setting)
     stop = threading.Event()
     bridge = Bridge()
+    bridge.lecture.connect(view_win.set_lecture)
     bridge.quiet.connect(view_win.set_quiet)
     bridge.camera.connect(view_win.set_camera)
     bridge.conversation.connect(view_win.set_conversation)
@@ -233,10 +245,13 @@ def main(argv=None):
         if repair_btn.busy:
             return
         repair_btn.set_busy(True)
+        view_win.set_repair_busy(True)
         threading.Thread(target=repair_sound, name="reparation", daemon=True).start()
 
     repair_btn.triggered.connect(on_repair)
+    setting_actions["son"] = on_repair         # carte « Son : réparer » de l'accueil : même chemin que le bouton
     bridge.repair_done.connect(lambda: repair_btn.set_busy(False))
+    bridge.repair_done.connect(lambda: view_win.set_repair_busy(False))
 
     def show_in_captures(visible):
         for w in (glass, stop_btn):
@@ -291,7 +306,7 @@ def main(argv=None):
         face_landmarker=face_landmarker, listener=listener, asker=asker, typer=typer, traducteur=traducteur, instructeur=instructeur, candidature=candidature, launcher=launcher,
         app_messages=app_messages, app_message=app_message, pointer_requests=pointer_requests, bot=bot,
         quiet_requests=quiet_requests, camera_requests=camera_requests,
-        conversation_requests=conversation_requests, conversation=conversation, quiet_choice=quiet_choice, volume_requests=volume_requests,
+        conversation_requests=conversation_requests, lecture_requests=lecture_requests, lecture=lecture, conversation=conversation, quiet_choice=quiet_choice, volume_requests=volume_requests,
         speaker=speaker, desk=desk, quota=Quota(), discord_voice=discord_voice, sounds=sounds, ctl=ctl, vscode_ctl=vscode_ctl,
         bridge=bridge, view_win=view_win, show=show, args=args, live=live, stop=stop))
 

@@ -83,7 +83,7 @@ class Stats:
         self._threads = self._thread_times()
         self._t = time.perf_counter()
         self.history = {"app_cpu": deque(maxlen=HISTORY), "pc_cpu": deque(maxlen=HISTORY),
-                        "app_gpu": deque(maxlen=HISTORY), "pc_gpu": deque(maxlen=HISTORY)}
+                        "app_gpu": deque(maxlen=HISTORY), "pc_gpu": deque(maxlen=HISTORY), "app_private": deque(maxlen=HISTORY)}
         self.nvml = None
         try:
             import pynvml

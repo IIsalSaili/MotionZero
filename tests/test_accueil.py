@@ -77,16 +77,17 @@ def test_page_se_dessine_dans_tous_les_cas():
     w.grab()
 
 
-def test_main_tete_au_clic():
+def test_carte_souris_envoie_son_id():
     from motionzero.ui import PreviewWindow, QApplication
     QApplication.instance() or QApplication([])
     w = PreviewWindow(pointer="main")
     clicks = []
-    w.pointer_clicked.connect(lambda: clicks.append(w.pointer))
-    w.main_btn.click()                          # déjà à la main : rien
-    w.head_btn.click()
-    w.head_btn.click()                          # déjà à la tête : rien
-    assert clicks == ["tete"]
+    w.reglage_clicked.connect(clicks.append)
+    w.show_section("reglages")
+    w.settings.tiles["souris"].click()
+    assert clicks == ["souris"]
+    w.set_pointer("tete")                       # choix fait (voix ou clic) : la carte suit
+    assert w.pointer == "tete" and w.settings.tiles["souris"].v.text() == "À la tête"
 
 
 def test_moteur_publie_l_accueil(monkeypatch):

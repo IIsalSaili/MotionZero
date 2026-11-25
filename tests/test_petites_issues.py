@@ -86,7 +86,7 @@ def test_reglage_windows_illisible(monkeypatch):
 
 def test_volume_de_l_accueil(tmp_path, monkeypatch):
     import motionzero.app as app
-    from motionzero.ui import volume_button_text
+    from motionzero.reglages import tile_text
     assert [app.next_volume(v) for v in (0.3, 0.5, 0.7, 1.0, 0.42)] == [0.5, 0.7, 1.0, 0.3, 0.5]
     assert app.read_volume(str(tmp_path / "absent"), 0.5) == 0.5
     bad = tmp_path / "v.txt"
@@ -105,7 +105,7 @@ def test_volume_de_l_accueil(tmp_path, monkeypatch):
     eng._volume()
     assert d.sounds.mixer.volume == 0.7 and emitted == [0.7] and played == ["OK"]
     assert app.read_volume(app.VOLUME_FILE, 0.5) == 0.7
-    assert volume_button_text(0.7) == "Volume d'Iris : 70 %"
+    assert tile_text("volume", 0.7)[0] == "70 %"
     eng.d = SimpleNamespace()                                       # sans file : rien ne plante
     eng._volume()
 

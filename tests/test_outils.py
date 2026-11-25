@@ -270,7 +270,7 @@ def test_bouton_camera_coupe_puis_rallume():
     import queue
     from types import SimpleNamespace
     from motionzero.app import Engine as Loop
-    from motionzero.ui import camera_button_text
+    from motionzero.reglages import tile_text
     from motionzero.voice import WORDS
     assert "caméra" not in WORDS                     # un bouton, jamais un mot de plus pour Vosk
     shown = []
@@ -280,10 +280,10 @@ def test_bouton_camera_coupe_puis_rallume():
     loop.d = d
     d.camera_requests.put(1)
     loop._camera()
-    assert d.cam.paused and shown == [True] and "rallumer" in camera_button_text(True)
+    assert d.cam.paused and shown == [True] and "rallumer" in tile_text("camera", True)[1]
     d.camera_requests.put(1)
     loop._camera()
-    assert not d.cam.paused and shown == [True, False] and "couper" in camera_button_text(False)
+    assert not d.cam.paused and shown == [True, False] and "Discord" in tile_text("camera", False)[1]
 
 
 def test_camera_en_pause_rend_puis_rouvre_la_webcam(monkeypatch):
