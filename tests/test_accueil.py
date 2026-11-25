@@ -65,7 +65,7 @@ def test_page_se_dessine_dans_tous_les_cas():
     QApplication.instance() or QApplication([])
     w = PreviewWindow(pointer="tete", quiet="oui", volume=0.3)
     w.grab()
-    for mode in (Mode.NEUTRAL, Mode.CHROME, Mode.READING, Mode.DISABLED, "INCONNU"):
+    for mode in (Mode.NEUTRAL, Mode.CHROME, Mode.DISABLED, "INCONNU"):
         v = home_view(mode, mouse=True, listening=True, sensor_list=sensors(cam_status="perdue"),
                       feed=[("<b>balise</b> & co", 1.0)], now=2.0)
         w.set_home(v)

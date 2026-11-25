@@ -33,23 +33,6 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
     h, w = frame.shape[:2]
     cam = frame
 
-    # bandes de bord (lecture)
-    if core.mode == Mode.READING:
-        xl, xr = int(cfg.page_band_left * w), int(cfg.page_band_right * w)
-        prog = core.zone_progress
-        _blend_rect(cam, 0, xl, (216, 78, 29), 0.25 + (0.5 * prog if core.zone_side == "prev" else 0))
-        _blend_rect(cam, xr, w, (216, 78, 29), 0.25 + (0.5 * prog if core.zone_side == "next" else 0))
-        _text(cam, "< PAGE", (8, h // 2), 0.6, WHITE, 2)
-        _text(cam, "PAGE >", (xr + 8, h // 2), 0.6, WHITE, 2)
-        # bandes de défilement (haut / bas, entre les bandes de page)
-        yt, yb = int(cfg.scroll_band_top * h), int(cfg.scroll_band_bottom * h)
-        sp = core.scroll_progress
-        for y0, y1, side, label in ((48, yt, "up", "DEFILE ^"), (yb, h - 28, "down", "DEFILE v")):
-            roi = cam[y0:y1, xl:xr]
-            a = 0.18 + (0.45 * sp if core.scroll_side == side else 0)
-            cv2.addWeighted(np.full_like(roi, (120, 90, 20)), a, roi, 1 - a, 0, roi)
-            _text(cam, label, ((xl + xr) // 2 - 40, (y0 + y1) // 2 + 6), 0.55, WHITE, 2)
-
     # souris pas encore armée : zone où amener la paume
     if core.mouse and not core.armed:
         ac = _px(cam, cfg.arm_center)
@@ -70,12 +53,6 @@ def render(frame, core, tracks, fps, simulation, cam_status, active_id=None, voi
         if pr:
             cv2.ellipse(cam, c, (34, 34), -90, 0, int(360 * pr[1]), GREEN, 5)
             _text(cam, pr[0], (c[0] - 50, c[1] + 54), 0.5, GREEN, 1)
-        # bulle « SOURIS ? »
-        if core.bubble is not None:
-            bx, by = c[0], max(c[1] - 90, 70)
-            cv2.rectangle(cam, (bx - 70, by - 26), (bx + 70, by + 10), (12, 65, 194), -1)
-            _text(cam, "SOURIS ?", (bx - 58, by), 0.7, WHITE, 2)
-            cv2.arrowedLine(cam, (c[0], c[1] - 40), (c[0], by + 14), WHITE, 2, tipLength=0.3)
         # menu à 4 directions
         if core.menu.is_open:
             mc = _px(cam, core.menu.center)

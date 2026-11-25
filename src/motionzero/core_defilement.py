@@ -117,14 +117,7 @@ class DefilementMixin:
     def progress(self):
         """(texte, 0..1) de l'action en cours de préparation, ou None."""
         c = self.cfg
-        if self.mode == Mode.READING and not self.mouse:
-            if self.zone_progress > 0:
-                return ("page suivante" if self.zone_side == "next" else "page precedente", self.zone_progress)
-            if self.scroll_side is not None:
-                return ("defile " + ("haut" if self.scroll_side == "up" else "bas"), self.scroll_progress)
-            if c.mouse_bubble and self.bubble is None and not self.need_move and self.still_for > 0.2:
-                return ("bulle SOURIS", min(self.still_for / c.mouse_enter_still_s, 1.0))
-        elif self.mouse and c.click_menu_on_still and not self.menu.is_open \
+        if self.mouse and c.click_menu_on_still and not self.menu.is_open \
                 and self.travel >= c.rearm_px \
                 and self.still_for > 0.1:
             return ("menu de clic", min(self.still_for / c.dwell_menu_s, 1.0))

@@ -56,15 +56,6 @@ def test_pause_eteint_la_souris():
     assert core.mode == Mode.DISABLED and not core.mouse
 
 
-def test_lecture_eteint_la_souris():
-    core = Core(Config())
-    core.voice("iris", 1.0)
-    core.voice("souris", 1.2)
-    core.voice("iris", 2.0)
-    core.voice("lecture", 2.2)
-    assert core.mode == Mode.READING and not core.mouse
-
-
 def test_ilot_et_cercle_avec_souris():
     from motionzero.ui import ORANGE, island_text, islet_ring
     st = {"mode": "CHROME", "mouse": True}

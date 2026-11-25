@@ -11,8 +11,7 @@ class VoixMixin:
         """L'écoute est ouverte après « iris », ou tant que la bulle / le menu (main immobile) sont affichés."""
         # (après une dictée, envoie / annule / claude sont traités à part : l'écoute n'est pas ouverte
         # pour autant, sinon n'importe quel mot seul serait exécuté pendant 30 s)
-        return self.mode != Mode.DISABLED and (t < self.listen_until or self.bubble is not None
-                                               or self.menu.is_open)
+        return self.mode != Mode.DISABLED and (t < self.listen_until or self.menu.is_open)
 
     def focus_on(self, t):
         """Mode focus : plus besoin de dire « iris » (pas de conversation à côté). Jamais en pause."""
@@ -123,8 +122,6 @@ class VoixMixin:
                 self._end_scroll(t)
             elif self.mouse:
                 self.set_mouse(False, t, acts)  # souris allumée : « stop » l'éteint seulement, le mode reste
-            elif self.mode == Mode.READING:     # Chrome : le mode suit Chrome devant, « stop » ne le quitte plus
-                self.set_mode(Mode.NEUTRAL, t, acts, why="stop")
             self.last_gesture = ("STOP", t)
             self.last_word = (word, t, True)
             return acts
@@ -314,9 +311,8 @@ class VoixMixin:
         self.travel = 0.0
 
     def _quiet(self):
-        """Ferme le menu et la bulle de la main (avant une dictée, une écoute, ou sur « stop »)."""
+        """Ferme le menu de la main (avant une dictée, une écoute, ou sur « stop »)."""
         self.menu.close()
-        self.bubble = None
 
     def _start_open(self, kind, t, acts, label=None):
         """Écoute d'une phrase libre (Whisper) : nom d'appli, durée, message, rappel, volume…"""

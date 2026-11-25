@@ -21,8 +21,8 @@ def test_relecture_d_un_enregistrement(tmp_path):
     add(0.5)                        # pas de main
     add(0.5, "open")                # main au centre
     add(0.2, "open", 0.5, 0.9)      # vers le bord droit
-    add(0.6, "open", 0.9)           # reste au bord -> page suivante
+    add(0.6, "open", 0.9)           # reste au bord : plus de page tournée (mode lecture retiré)
     path.write_text("\n".join(json.dumps(r) for r in lines), encoding="utf-8")
 
-    actions = [a for _, a in replay(str(path), Config(start_mode="LECTURE"))]
-    assert ("key", "right") in actions
+    actions = [a for _, a in replay(str(path), Config())]
+    assert [a for a in actions if a[0] not in ("move", "release_all")] == []   # neutre : la main ne fait rien

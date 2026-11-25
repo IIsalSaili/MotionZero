@@ -15,7 +15,7 @@
 
 | Domaine | Exemples |
 |---|---|
-| Gestes de la main | tourner les pages (paume au bord), défiler, souris type pavé tactile, clic main ouverte |
+| Gestes de la main | souris type pavé tactile, défilement (« iris scroll »), clic main ouverte |
 | Tête | la souris suit l'orientation de la tête (« iris tête ») |
 | Mots-clés | « iris clic », « iris entrée », « iris chrome », « stop »… (Vosk, hors ligne) |
 | Phrases libres | dictée « iris type », nom d'appli « iris ouvre », durée « iris timer » (Whisper, carte graphique) |
@@ -51,7 +51,7 @@ flowchart LR
 - **Verre** plein écran transparent aux clics : l'« île » en haut (dernière commande, réponses, rappels), le curseur, la main fantôme, la jauge de défilement, la barre de volume.
 - **Bouton STOP** en bas à droite, **bouton œil** (masquer l'overlay dans les partages d'écran), **bouton de réparation du son** en bas à gauche.
 
-> **Note** La voix sert à ce que la main ne fait pas bien. La main sert à viser, tourner les pages et défiler.
+> **Note** La voix sert à ce que la main ne fait pas bien. La main sert à viser et à défiler.
 
 ---
 [← Sommaire](README.md) · [Sommaire](README.md) · [Utilisation →](02-utilisation.md)

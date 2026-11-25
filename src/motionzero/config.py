@@ -21,11 +21,9 @@ class Config:
     pose_tolerance_s: float = 0.15     # micro-coupures de pose ignorées (tremblements)
 
     # changements de mode
-    hold_open_s: float = 0.8           # paume ouverte -> lecture
     hold_point_s: float = 0.6          # index pointé -> souris
     hold_fist_s: float = 1.0           # poing -> repos
     transition_cooldown_s: float = 0.8
-    absent_reading_s: float = 60.0     # main absente -> repos (lecture) : pas besoin de réarmer à chaque page
     absent_mouse_s: float = 0.0        # 0 = la main absente ne fait plus sortir du mode souris (« iris stop »)
     release_absent_s: float = 0.5      # main absente -> on relâche tout
 
@@ -62,30 +60,11 @@ class Config:
     dwell_radius_px: float = 25.0
 
     # ===== Gestes v2 : aucune pose de doigts, aucun pincement (coordonnées normalisées de l'image) =====
-    # pages : amener la paume au bord de l'image (bord droit = suivante)
-    page_band_right: float = 0.80
-    page_band_left: float = 0.20
-    page_hold_s: float = 0.35
-    page_rearm_lo: float = 0.30          # revenir au centre pour réarmer
-    page_rearm_hi: float = 0.70
-    page_refractory_s: float = 1.0
-
-    # défilement (lecture) : paume en haut / en bas de l'image
-    scroll_band_top: float = 0.12        # zones de défilement étroites (0,25 jugé beaucoup trop large)
-    scroll_band_bottom: float = 0.88
-    scroll_hold_s: float = 0.3           # avant de commencer à défiler
-    scroll_interval_s: float = 0.15      # un cran toutes les 0,15 s tant que la main y reste
-    scroll_notch: int = 120              # un cran de molette Windows
+    scroll_notch: int = 120              # un cran de molette Windows (défilement vocal)
 
     # immobilité (à calibrer sur la main posée de l'utilisateur)
     still_window_s: float = 0.5
     still_radius: float = 0.012
-
-    # entrer en souris : main immobile, bulle « SOURIS ? », petit mouvement vers le haut pour confirmer
-    mouse_enter_still_s: float = 1.5
-    bubble_confirm_dist: float = 0.05
-    bubble_cancel_dist: float = 0.08
-    bubble_timeout_s: float = 2.0
 
     # curseur relatif (type pavé tactile), gain selon la vitesse de la main
     # x2 le 12/11 (demande de l'utilisateur : le moins de mouvements possible, pas la précision)
@@ -108,10 +87,9 @@ class Config:
     palm_min_cutoff: float = 1.5         # filtre One Euro sur la paume
     palm_beta: float = 5.0
 
-    # clic : main immobile -> menu à 4 directions (gauche, droit, double, retour lecture)
+    # clic : main immobile -> menu à 4 directions (gauche, droit, double, souris éteinte)
     dwell_menu_s: float = 0.8
-    start_mode: str = "NEUTRE"         # au démarrage : neutre (la main ne fait rien). « iris lecture » / « iris souris »
-    mouse_bubble: bool = False         # bulle « SOURIS ? » sur main immobile ; remplacée par « iris souris »
+    start_mode: str = "NEUTRE"         # au démarrage : neutre (la main ne fait rien). « iris souris » pour la souris
     click_menu_on_still: bool = False  # main immobile -> menu de clic. Désactivé : réfléchir ne doit rien ouvrir
     arm_center: tuple = (0.5, 0.5)     # souris : le curseur ne bouge qu'une fois la paume amenée ici (image)
     arm_radius: float = 0.08           # tolérance autour de ce centre (largeur d'image)

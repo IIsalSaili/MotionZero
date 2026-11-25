@@ -36,7 +36,7 @@ TICKER_W = 460           # largeur de la ligne du bas
 TICKER_H = 30
 TICKER_SPEED = 60.0      # px/s quand le texte est trop long
 TICKER_PAUSE_S = 0.8
-MODE_NAMES = {"NEUTRE": "NEUTRE", "LECTURE": "LECTURE", "SOURIS": "SOURIS", "CHROME": "CHROME", "DESACTIVE": "PAUSE"}
+MODE_NAMES = {"NEUTRE": "NEUTRE", "SOURIS": "SOURIS", "CHROME": "CHROME", "DESACTIVE": "PAUSE"}
 
 # pastille Discord, à gauche de l'îlot : micro barré (micro coupé), casque barré + micro barré (sourdine)
 _ICON_DIR = _os.path.join(_os.path.dirname(_FONT_DIR), "icons")

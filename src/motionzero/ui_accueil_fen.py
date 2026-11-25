@@ -12,7 +12,7 @@ from .ui_accueil_conso import ConsoPage
 from .ui_accueil_pages import _FONT, HOME, RailButton, SettingsPage
 from .ui_ile import HomeLogo, load_fonts
 
-MODE_COLORS_HOME = {"CHROME": HOME["chrome"], "LECTURE": HOME["lecture"], "NEUTRE": HOME["off"], "PAUSE": HOME["off"]}
+MODE_COLORS_HOME = {"CHROME": HOME["chrome"], "NEUTRE": HOME["off"], "PAUSE": HOME["off"]}
 TONE_COLORS = {"listen": HOME["ok"], "busy": HOME["lecture"], "off": HOME["off"], "idle": HOME["texte"]}
 SENSOR_COLORS = {"ok": HOME["ok"], "off": HOME["souris"], "idle": HOME["off"], "fail": HOME["erreur"]}
 SECTION_NAMES = {"maintenant": "Maintenant", "reglages": "Réglages", "conso": "Conso"}

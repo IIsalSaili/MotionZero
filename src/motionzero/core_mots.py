@@ -8,10 +8,8 @@ from .cvgen import WORDS as CAND_WORDS  # noqa: F401
 class Mode:
     DISABLED = "DESACTIVE"
     NEUTRAL = "NEUTRE"    # par défaut : la main ne déclenche rien, seule la voix agit
-    READING = "LECTURE"
     MOUSE = "SOURIS"      # n'est plus un mode : un outil qui s'ajoute au mode en cours (voir Core.mouse)
     CHROME = "CHROME"     # commandes de navigation à la voix, tant que Chrome est devant (automatique, 14/11)
-    IDLE = READING  # compatibilité : l'ancien « repos » est désormais la lecture
 
 
 MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC", "down": "SOURIS ETEINTE"}
@@ -63,7 +61,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "type": "DICTEE : parle",
                 "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "sourdine": "DISCORD SOURDINE", "souris": "SOURIS",
-                "lecture": "LECTURE", "message": "MESSAGE DISCORD : salon puis texte",
+                "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
                 "lis": "LECTURE DISCORD ACTIVE",
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
@@ -107,7 +105,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
             "instruction": "listen",   # « iris instruction » puis une demande libre (#45)
-            "tête": "pointer", "main": "pointer", "centre": "center", "lecture": "reading",
+            "tête": "pointer", "main": "pointer", "centre": "center",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
             "traducteur": "translator", "bypass": "bypass", "candidature": "candidature"}

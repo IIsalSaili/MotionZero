@@ -28,7 +28,7 @@ flowchart TD
 | « iris » ne fait plus rien, aucun son | micro figé par le moteur audio de Windows (`audiodg.exe`) | bouton **réparation du son** (en bas à gauche) : redémarre les services audio ; Windows demande « Oui / Non » (droits administrateur) |
 | Le mot est affiché « ignore : dis IRIS avant » | mot dit sans « iris » | redire avec « iris » ; voir [mots sans iris](03-commandes-vocales.md#mots-sans-iris) |
 | « HAUT : seulement en mode Chrome » | mot de Chrome hors mode Chrome | « iris chrome » d'abord |
-| Rien ne se passe sur la main | mode NEUTRE ou DÉSACTIVÉ | « iris lecture » ou « iris souris » ; en pause : « iris » |
+| Rien ne se passe sur la main | mode NEUTRE ou DÉSACTIVÉ | « iris souris » ; en pause : « iris » |
 | Le curseur ne bouge pas en souris | souris pas encore **armée** | amener la main (ou la tête) au centre : suivre la main fantôme |
 | Défilement inerte | pas armé | main au centre de l'image, la jauge s'arme |
 | Image grisée, état « perdue » | caméra muette (débranchée, prise par une autre appli) | Iris relâche tout et se reconnecte seule ; sinon débrancher / rebrancher, puis raccourci « Iris » |

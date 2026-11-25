@@ -135,12 +135,6 @@ class CommandesMixin:
             self._center(acts)
         return "CURSEUR AU CENTRE"
 
-    def _cmd_reading(self, word, t, acts):
-        self.set_mouse(False, t, acts)        # la main sert aux pages, plus au curseur
-        if self.mode != Mode.READING:
-            self.set_mode(Mode.READING, t, acts, why="iris lecture")
-        return "LECTURE"
-
     def _cmd_app(self, word, t, acts):
         acts.append(("open_app", word))
         if word == "chrome" and self.mode in (Mode.NEUTRAL, Mode.CHROME):

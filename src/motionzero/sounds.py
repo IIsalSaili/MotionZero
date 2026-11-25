@@ -14,7 +14,7 @@ RATE = 44100
 # événement -> fichier. Les modes (et la souris) partagent le même son ; « CLIC » n'a plus de son (choix du 12/11).
 FILES = {"ECOUTE": "ecoute", "OK": "ok", "NON": "non", "MODE": "mode", "PARLE": "parle", "COUPE": "coupe",
          "RAPPEL": "rappel", "ALARME": "alarme"}
-ALIASES = {"LECTURE": "MODE", "CHROME": "MODE", "NEUTRE": "MODE", "REPOS": "MODE", "SOURIS": "MODE",
+ALIASES = {"CHROME": "MODE", "NEUTRE": "MODE", "REPOS": "MODE", "SOURIS": "MODE",
            "DESACTIVE": "MODE"}
 RAMP_S = 5.0                  # alarme : de léger au volume normal en 5 s (60 s : inaudible pendant que la voix lit)
 RAMP_FROM_DB, RAMP_TO_DB = -18.0, -2.0   # 13/11 : partait de -30 dB, sous le volume général divisé par 2 :

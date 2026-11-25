@@ -127,17 +127,6 @@ def test_mute_demute_gardent_chrome():
         assert core.mode == Mode.CHROME, w
 
 
-def test_lecture_n_est_pas_remplacee_par_chrome():
-    core = Core(Config())
-    core.voice("iris", 1.0)
-    core.voice("lecture", 1.2)
-    core.front_app("chrome.exe", 2.0)
-    assert core.mode == Mode.READING
-    core.voice("stop", 3.0)                              # quitte la lecture...
-    core.front_app("chrome.exe", 3.3)                    # ... Chrome devant : mode Chrome
-    assert core.mode == Mode.CHROME
-
-
 def test_pause_garde_le_mode_de_l_appli_devant():
     core = Core(Config())
     core.front_app("chrome.exe", 1.0)
