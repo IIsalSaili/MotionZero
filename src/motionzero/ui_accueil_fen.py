@@ -8,7 +8,8 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QSizePolicy, QS
 
 from .accueil import HOME_TITLE, conso_line
 from .reglages import SECTIONS, read_section, write_section
-from .ui_accueil_pages import _FONT, HOME, ConsoPage, RailButton, SettingsPage
+from .ui_accueil_conso import ConsoPage
+from .ui_accueil_pages import _FONT, HOME, RailButton, SettingsPage
 from .ui_ile import HomeLogo, load_fonts
 
 MODE_COLORS_HOME = {"CHROME": HOME["chrome"], "LECTURE": HOME["lecture"], "NEUTRE": HOME["off"], "PAUSE": HOME["off"]}

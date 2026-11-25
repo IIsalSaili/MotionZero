@@ -136,10 +136,13 @@ def test_page_trois_sections_et_etats(qt, tmp_path):
     w.grab()
 
 
-def test_details_de_conso():
-    from motionzero.ui_accueil_pages import conso_details
-    assert conso_details(None) == ["Mesure en cours…"]
-    lines = conso_details({"app_cpu": 6, "pc_cpu": 30, "app_private": 1434, "pc_ram_used": 9.2, "pc_ram_total": 16,
-                           "app_gpu": 12, "whisper": False, "detect_hz": 15, "threads": [("voix", 3.0)]})
-    assert lines[0] == "Processeur : Iris 6 % · PC 30 %" and "1,4 Go" in lines[1]
-    assert any("Whisper au repos" in l for l in lines) and any("voix 3 %" in l for l in lines)
+def test_vue_de_conso():
+    from motionzero.ui_accueil_conso import conso_view
+    v = conso_view(None)
+    assert not v["measured"] and v["cpu"]["iris"] == [] and v["cores"] == [] and v["threads"] == []
+    v = conso_view({"app_cpu": 6, "app_private": 1434, "pc_ram_used": 9.2, "pc_ram_total": 16, "cores": [10, "x", 90],
+                    "threads": [("voix", 3.0), ("bizarre",), ("cam", "n/a")], "whisper": False, "detect_hz": 15,
+                    "history": {"app_cpu": [1, None, 3], "app_private": [1024, 2048]}})
+    assert v["cpu"]["iris"] == [1.0, 3.0] and v["cores"] == [10.0, 90.0] and v["threads"] == [("voix", 3.0)]
+    assert v["ram"]["trend"] == [1.0, 2.0] and not v["gpu"]["on"]
+    assert v["models"][0] == ("Whisper", "au repos", False)

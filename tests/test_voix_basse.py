@@ -58,7 +58,7 @@ def test_bouton_previent_le_micro(tmp_path, monkeypatch):
     d.quiet_requests.put(1)                     # -> « toujours »
     eng._quiet(1.1)
     assert eng.quiet_choice == "oui" and emitted == ["auto", "oui"] and d.listener.quiet is True
-    assert read_quiet(app.QUIET_FILE) == "oui"
+    assert read_quiet(str(tmp_path / "v.txt")) == "oui"
 
 
 def test_sans_micro_rien_ne_plante():
