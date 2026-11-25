@@ -248,10 +248,10 @@ class ConsoPage(QWidget):
         g = dict(v["gpu"], absent="mesure en cours…" if not v["measured"] else "carte graphique illisible")
         self.gpu.set(_pct(g["now"] if g["now"] is not None else g["pc_now"]), g)
         r, vr = v["ram"], v["vram"]
-        rows = [("Mémoire du PC", r["used"], r["total"], r["iris_go"],
-                 f"Iris {_dec(r['iris_go'])} Go" if r["iris_go"] is not None else ""),
+        rows = [("Mémoire vive", r["used"], r["total"], r["iris_go"],
+                 f"{_dec(r['used'] or 0)} / {r['total']:.0f} Go" if r["total"] else ""),
                 ("Mémoire graphique", vr["used"], vr["total"], vr["iris"],
-                 f"Iris {vr['iris']:.0f} Mo" if vr["iris"] is not None else "")]
+                 f"{_dec((vr['used'] or 0) / 1024)} / {vr['total'] / 1024:.0f} Go" if vr["total"] else "")]
         self.mem.set("–" if r["iris_go"] is None else f"{_dec(r['iris_go'])} Go", rows)
         n = len(v["cores"])
         self.cores.set(f"{n} cœurs" if n else "–", v["cores"])
