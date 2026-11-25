@@ -146,3 +146,17 @@ def test_vue_de_conso():
     assert v["cpu"]["iris"] == [1.0, 3.0] and v["cores"] == [10.0, 90.0] and v["threads"] == [("voix", 3.0)]
     assert v["ram"]["trend"] == [1.0, 2.0] and not v["gpu"]["on"]
     assert v["models"][0] == ("Whisper", "au repos", False)
+
+
+def test_bulle_de_memoire(qt):
+    from motionzero.ui_accueil_conso import ConsoPage, gauge_tip
+    assert gauge_tip(1.4, 9.0, 1) == ("Iris : 1,4 Go", "PC : 9,0 Go")
+    assert gauge_tip(None, 3072, 1024) == ("Iris : 0,0 Go", "PC : 3,0 Go")
+    page = ConsoPage()
+    page.resize(1100, 700)
+    page.set_stats({"app_private": 1434, "pc_ram_used": 9.0, "pc_ram_total": 16, "pc_vram_used": 3072,
+                    "pc_vram_total": 8192, "app_vram": 900})
+    page.show()
+    page.grab()
+    texts = [t for _, t in page.mem.chart.hits]
+    assert texts == ["Iris : 1,4 Go", "PC : 9,0 Go", "Iris : 0,9 Go", "PC : 3,0 Go"]

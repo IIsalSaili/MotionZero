@@ -1,7 +1,7 @@
 """Section « Consommation » de l'accueil : des graphes, un chiffre clé par carte (plan-accueil.md, étape 4)."""
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPolygonF
-from PySide6.QtWidgets import QGridLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QGridLayout, QLabel, QToolTip, QVBoxLayout, QWidget
 
 from .ui_accueil_pages import _FONT, HOME
 
@@ -105,15 +105,35 @@ class Lines(Chart):
             p.drawPolyline(poly)
 
 
+def gauge_tip(iris, used, scale):
+    """Bulle au survol d'une barre : (texte sur le vert, texte sur le bleu). Pur : testable."""
+    go = lambda x: f"{_dec((x or 0) / scale)} Go"
+    return f"Iris : {go(iris)}", f"PC : {go(used)}"
+
+
 class Gauges(Chart):
-    """Barres horizontales « utilisé / total », avec la part d'Iris en vert par-dessus."""
+    """Barres horizontales « utilisé / total », avec la part d'Iris en vert par-dessus. Survol : le chiffre."""
+    def __init__(self):
+        super().__init__()
+        self.hits = []                     # [(QRectF, texte)] : le vert d'abord, puis le bleu
+        self.setMouseTracking(True)
+
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        for rect, text in self.hits:
+            if rect.contains(pos):
+                QToolTip.showText(event.globalPosition().toPoint(), text, self)
+                return
+        QToolTip.hideText()
+
     def draw(self, p, w, h, rows):
+        self.hits = []
         rows = [r for r in (rows or []) if r[2]]
         if not rows:
             return self.empty(p, w, h, "indisponible")
         bh, gap = 26, 34
         top = max(24, (h - len(rows) * (bh + gap) + gap) / 2 + 10)
-        for i, (label, used, total, iris, text) in enumerate(rows):
+        for i, (label, used, total, iris, text, scale) in enumerate(rows):
             y = top + i * (bh + gap)
             p.setPen(QColor(HOME["texte2"]))
             p.setFont(_font(13, True))
@@ -123,10 +143,15 @@ class Gauges(Chart):
             p.setBrush(QColor(HOME["bord"]))
             p.drawRoundedRect(QRectF(0, y, w, bh), 8, 8)
             p.setBrush(QColor(PC))
-            p.drawRoundedRect(QRectF(0, y, w * min((used or 0) / total, 1), bh), 8, 8)
+            blue = QRectF(0, y, w * min((used or 0) / total, 1), bh)
+            p.drawRoundedRect(blue, 8, 8)
+            tip_iris, tip_pc = gauge_tip(iris, used, scale)
             if iris:
                 p.setBrush(QColor(IRIS))
-                p.drawRoundedRect(QRectF(0, y, max(w * min(iris / total, 1), 4), bh), 8, 8)
+                green = QRectF(0, y, max(w * min(iris / total, 1), 4), bh)
+                p.drawRoundedRect(green, 8, 8)
+                self.hits.append((green, tip_iris))
+            self.hits.append((blue, tip_pc))
 
 
 class Columns(Chart):
@@ -249,9 +274,9 @@ class ConsoPage(QWidget):
         self.gpu.set(_pct(g["now"] if g["now"] is not None else g["pc_now"]), g)
         r, vr = v["ram"], v["vram"]
         rows = [("Mémoire vive", r["used"], r["total"], r["iris_go"],
-                 f"{_dec(r['used'] or 0)} / {r['total']:.0f} Go" if r["total"] else ""),
+                 f"{_dec(r['used'] or 0)} / {r['total']:.0f} Go" if r["total"] else "", 1),
                 ("Mémoire graphique", vr["used"], vr["total"], vr["iris"],
-                 f"{_dec((vr['used'] or 0) / 1024)} / {vr['total'] / 1024:.0f} Go" if vr["total"] else "")]
+                 f"{_dec((vr['used'] or 0) / 1024)} / {vr['total'] / 1024:.0f} Go" if vr["total"] else "", 1024)]
         self.mem.set("–" if r["iris_go"] is None else f"{_dec(r['iris_go'])} Go", rows)
         n = len(v["cores"])
         self.cores.set(f"{n} cœurs" if n else "–", v["cores"])
