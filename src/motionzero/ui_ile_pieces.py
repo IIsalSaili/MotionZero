@@ -66,8 +66,29 @@ class PiecesMixin:
         if self.next_rem:
             ty += ISLAND_H + CLOCK_GAP
         tx = x
-        for text, countdown in getattr(self, "timer_pills", []):
+        pills = getattr(self, "timer_pills", [])
+        for text, countdown in pills:
             tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
+        if getattr(self, "alttab", None):
+            self._paint_alttab(p, ty + (ISLAND_H + CLOCK_GAP if pills else 0))
+
+    def _paint_alttab(self, p, y):
+        """« iris alt-tab » : bandeau des fenêtres numérotées, centré sur l'écran, sans animation du logo."""
+        fm = QFontMetrics(self.font_msg)
+        pad, gap = 18, 10
+        w = 2 * pad + ICON + gap + fm.horizontalAdvance(self.alttab)
+        x = (self.width() - w) / 2
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 235))
+        p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
+        icon = self.icons.get("app-window")
+        if icon is not None:
+            icon.render(p, QRectF(x + pad, y + (ISLAND_H - ICON) / 2, ICON, ICON))
+        p.setPen(QColor(255, 255, 255))
+        p.setFont(self.font_msg)
+        p.drawText(QRectF(x + pad + ICON + gap, y, w, ISLAND_H), Qt.AlignmentFlag.AlignVCenter, self.alttab)
+        p.restore()
 
     def _paint_ticker(self, p, x, y, room, text, h=TICKER_H):
         """Ligne sous les mots, dans l'île : petite, centrée ; défile si elle est trop longue (#18)."""
@@ -120,7 +141,7 @@ class PiecesMixin:
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))
         p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
-        clock = self.icons.get(getattr(self, "pill_icon", "clock"))
+        clock = self.icons.get("clock")
         if clock is not None:
             clock.render(p, QRectF(x + pad, y + (ISLAND_H - ICON) / 2, ICON, ICON))
         p.setPen(QColor(255, 255, 255))
