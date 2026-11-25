@@ -66,6 +66,9 @@ def open_actions(acts, listener, launcher, asker=None, bot=None, on_message=None
             audio = listener.stop_capture()
             if desk is not None:
                 desk.submit(audio)
+        elif a[0] == "instruction_warm":
+            if instructeur is not None:
+                instructeur.warm()
         elif a[0] == "instruction_stop":
             audio = listener.stop_capture()
             if instructeur is not None:

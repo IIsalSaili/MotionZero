@@ -11,8 +11,9 @@ import logging
 import os
 import queue
 import threading
+import time
 from .instruction_base import (BLOCKED_APPS, BLOCKED_TEXT, CLOSE_HINT, CONFIRM_S, DIRECT, EXPANDING, HELP_HINT, HELP_S, HELP_WORDS, KEEP_ALIVE, KEY_NAMES, LLM_TIMEOUT_S, MAX_STEPS, MODEL, OLLAMA, OLLAMA_FLAGS, PlanError, SAFE_COMBOS, SAFE_SINGLE, SCHEMA, SHOW_DONE_S, STEP_PAUSE_S, SYSTEM, TOOLS, UA, _app, _http, check_step, ensure_ollama, is_help, normalize_url, parse_keys)  # noqa: F401
-from .instruction_base2 import (ask_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first, youtube_latest)  # noqa: F401
+from .instruction_base2 import (ask_local, warm_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first, youtube_latest)  # noqa: F401
 from .instruction_outils import OutilsMixin
 
 log = logging.getLogger("motionzero.instruction")
@@ -23,8 +24,9 @@ class Instructeur(OutilsMixin):
     """submit(audio) depuis la boucle ; events / actions / state appelés par la boucle principale seulement."""
 
     def __init__(self, transcribe, launcher=None, desk=None, ask=ask_local, open_url=None, runner=None,
-                 routines=None, favoris=None, bot=None):
+                 routines=None, favoris=None, bot=None, warm=warm_local):
         self.transcribe, self.launcher, self.desk, self.ask = transcribe, launcher, desk, ask
+        self._warm, self._warming = warm, threading.Lock()
         self.routines, self.favoris, self.bot = routines, favoris, bot    # outils.Store (routines.json, favoris.json)
         self.last_raw = None      # étapes brutes de la dernière instruction réussie (« refais »)
         self._pending_raw = None
@@ -43,7 +45,24 @@ class Instructeur(OutilsMixin):
     def submit(self, audio):
         threading.Thread(target=self._think, args=(audio,), name="instruction", daemon=True).start()
 
+    def warm(self):
+        """« iris instruction » entendu : précharge le modèle pendant que l'utilisateur parle (#76)."""
+        threading.Thread(target=self._warm_once, name="instruction-warm", daemon=True).start()
+
+    def _warm_once(self):
+        if not self._warming.acquire(blocking=False):     # déjà en cours
+            return
+        try:
+            t0 = time.perf_counter()
+            ok = self._warm()
+            log.info("instruction : modele precharge=%s en %.1f s", ok, time.perf_counter() - t0)
+        except Exception:
+            log.exception("instruction : prechargement")
+        finally:
+            self._warming.release()
+
     def _think(self, audio):
+        t0 = time.perf_counter()
         try:
             phrase = (self.transcribe(audio) or "").strip(" .")
         except Exception:
@@ -55,8 +74,10 @@ class Instructeur(OutilsMixin):
         if is_help(phrase):                   # sans le modèle : toujours la même réponse, tout de suite
             self._q.put(("help",))
             return
+        t1 = time.perf_counter()
         try:
             raw = self.ask(phrase + self._context())
+            log.info("instruction : transcription %.1f s, modele %.1f s", t1 - t0, time.perf_counter() - t1)
             names = self.launcher.all if self.launcher is not None and self.launcher.all else None
             plan, flat = check_plan_raw(raw, names, {"routines": self.routines, "favoris": self.favoris,
                                                      "last": self.last_raw})
