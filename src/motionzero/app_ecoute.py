@@ -65,6 +65,9 @@ class EcouteMixin:
                 listener.grammar = "calendrier"   # jours, mois, nombres : seulement calendrier ouvert
             elif core.cand_on(t):             # « iris candidature » : ses mots seulement (souris : allumée)
                 listener.grammar = "candidature_souris" if core.mouse or core.dragging else "candidature"
+            elif t < core.alttab_until:       # liste d'« alt-tab » : ses chiffres sans « iris »
+                listener.grammar = ("alttab_chrome" if core.mode == Mode.CHROME
+                                    else "alttab_souris" if core.mouse or core.dragging else "alttab")
             elif core.mode == Mode.CHROME:
                 listener.grammar = "chrome"
             else:                             # mots de la souris : seulement souris allumée ou bouton tenu

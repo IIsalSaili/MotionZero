@@ -59,7 +59,7 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "annule": "TOUCHE ECHAP", "copie": "COPIER (Ctrl+C)", "colle": "COLLER (Ctrl+V)",
                 "claude": "MICRO CLAUDE : parle",
                 "type": "DICTEE : parle",
-                "tab": "FENETRE SUIVANTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
+                "alt-tab": "FENETRE PRECEDENTE (Alt+Tab)", "discord": "DISCORD", "chrome": "CHROME", "studio": "VS CODE", "accueil": "ACCUEIL MOTIONZERO",
                 "mute": "DISCORD COUPE", "démute": "DISCORD RALLUME", "sourdine": "DISCORD SOURDINE", "souris": "SOURIS",
                 "message": "MESSAGE DISCORD : salon puis texte",
                 "salon": "SALON VOCAL : dis son nom", "silence": "LECTURE DISCORD COUPEE",
@@ -86,7 +86,7 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "agrandis": (("window", "max"), "PLEIN ECRAN"),      # hors mode Chrome (là : zoom)
                   "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
-                  "tab": (("alt_tab",), None),
+                  "alt-tab": (("alt_tab", 2), None),   # (voir core_voix : « alt-tab trois », liste en haut)
                   "réveil": (("wake",), "ECRAN RALLUME"),
                   "chronomètre": (("chrono",), "CHRONOMETRE"),
                   "plus tard": (("rappel_tard",), None),

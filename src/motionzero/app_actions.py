@@ -245,7 +245,7 @@ def type_actions(acts, listener, typer, sounds):
 
 def vscode_actions(acts, core, ctl, sounds, t, discord=None):
     """Exécute les actions VS Code (« vscode_dictation », « vscode_keys ») ; renvoie les autres."""
-    from .vscode import (alt_tab, discord_mute_toggle, find_window, focus_and_send, open_app,
+    from .vscode import (alt_tab_to, discord_mute_toggle, find_window, focus_and_send, open_app,
                          toggle_claude_dictation, vscode_in_front, foreground_exe, IRIS_EXES)
 
     def send(keys):
@@ -296,8 +296,15 @@ def vscode_actions(acts, core, ctl, sounds, t, discord=None):
                 rest.append(("hotkey", ["escape"]))                         # ailleurs : touche Échap
                 continue
         elif a[0] == "alt_tab":
-            alt_tab()
-            err = None
+            from .alttab import list_text
+            try:
+                ok, err, titles = alt_tab_to(a[1])
+            except Exception:                  # une fenêtre fermée entre-temps, une erreur Windows : Iris continue
+                _log.exception("alt-tab")
+                ok, err, titles = False, "ALT-TAB : ECHEC", []
+            core.alttab_text = list_text(titles)
+            if not core.alttab_text:
+                core.alttab_until = -1e9       # aucune autre fenêtre : rien à afficher, chiffres plus écoutés
         elif a[0] == "open_app":
             err = open_app(a[1])
         elif a[0] in ("discord_mute", "discord_unmute"):

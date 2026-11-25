@@ -120,7 +120,7 @@ class PiecesMixin:
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))
         p.drawRoundedRect(QRectF(x, y, w, ISLAND_H), ISLAND_H / 2, ISLAND_H / 2)
-        clock = self.icons.get("clock")
+        clock = self.icons.get(getattr(self, "pill_icon", "clock"))
         if clock is not None:
             clock.render(p, QRectF(x + pad, y + (ISLAND_H - ICON) / 2, ICON, ICON))
         p.setPen(QColor(255, 255, 255))

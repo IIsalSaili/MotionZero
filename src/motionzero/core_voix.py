@@ -1,6 +1,7 @@
 """Aiguillage des mots reconnus : confirmation, calendrier, aide, stop, candidature, sans « iris », réveil. Méthodes de Core (découpé de core.py, #52) : seulement boucle principale."""
 
 from .cvgen import WORDS as CAND_WORDS
+from .alttab import ALTTAB_NUMBERS, ALTTAB_S, number_of
 from .core_mots import (ALIASES, BYPASS_IDLE_S, CAL_IDLE_S, CAL_WORDS, CAND_IDLE_S, CHROME_GRACE_S, CHROME_KEYS, CHROME_LABELS, COMMANDS, EDITOR_TABS, FOCUS_IDLE_S, HELP_S, IRIS_EXES, MENU_LABELS, Mode, OPEN_STOP, OPEN_WAIT, REPEATABLE, SIMPLE_ACTIONS, TYPE_ERASE_S, TYPE_WAIT_S, VOICE_HOTKEYS, VOICE_LABELS, WAKE_WORD, head_gain)  # noqa: F401
 
 
@@ -27,7 +28,7 @@ class VoixMixin:
             self.last_word = (word, t, False)
             return []
         acts = []
-        for step in (self._v_confirm, self._v_calendar, self._v_help, self._v_stop, self._v_candidature, self._v_without_iris, self._v_wake, self._v_resume):
+        for step in (self._v_confirm, self._v_alttab, self._v_calendar, self._v_help, self._v_stop, self._v_candidature, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
             if done is not None:
                 lw = self.last_word
@@ -70,6 +71,24 @@ class VoixMixin:
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
             return [("rappel_ok",)] if word == "envoie" else [("rappel_non",)]
+        return None
+
+    def _v_alttab(self, word, t, t_start, acts):
+        """Liste d'« alt-tab » affichée : « deux » … « six » sans « iris » ; « ferme » / « merci » la retirent."""
+        if t >= self.alttab_until:
+            return None
+        n = number_of(word) if word in ALTTAB_NUMBERS else None
+        if n:
+            self.alttab_until = t + ALTTAB_S      # la liste se met à jour : on peut enchaîner
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            self.last_gesture = (f"ALT-TAB : FENETRE {n}", t)
+            return [("alt_tab", n)]
+        if word in ("ferme", "merci"):
+            self.alttab_until = -1e9
+            self.last_word = (word, t, True)
+            self.listen_until = -1e9
+            return acts
         return None
 
     def _v_calendar(self, word, t, t_start, acts):
@@ -281,7 +300,12 @@ class VoixMixin:
         if word != "scroll" and self.scrolling(t):
             self._end_scroll(t)               # toute autre commande sort du défilement d'abord
         label = VOICE_LABELS.get(word, word.upper())
-        if word in SIMPLE_ACTIONS:
+        if word == "alt-tab" or word.startswith("alt-tab "):
+            n = number_of(word)
+            acts.append(("alt_tab", n))
+            self.alttab_until = t + ALTTAB_S      # la liste s'affiche ; ses chiffres marchent sans « iris »
+            label = VOICE_LABELS["alt-tab"] if n == 2 else f"ALT-TAB : FENETRE {n}"
+        elif word in SIMPLE_ACTIONS:
             action, simple_label = SIMPLE_ACTIONS[word]
             acts.append(action)
             label = simple_label or label

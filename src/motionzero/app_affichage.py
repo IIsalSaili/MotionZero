@@ -120,6 +120,7 @@ class AffichageMixin:
             "discord": (d.discord_voice["mute"], d.discord_voice["deaf"]),
             "reminders": d.desk.state(t, calendar_open=t < core.calendar_until),
             "clock": clock_text(datetime.datetime.now()) if t < core.clock_until else None,
+            "alttab": core.alttab_text if t < core.alttab_until else None,   # « iris alt-tab » : fenêtres numérotées
             "quota": self._quota(t),
             "subs": d.traducteur.snapshot() if getattr(d, "traducteur", None) is not None else None,
             "plan": plan_card(d, t),

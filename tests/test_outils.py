@@ -19,7 +19,8 @@ def test_aucun_nouveau_mot_guette():
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
     assert len(WORDS) == 116   # « espace », « muet », « activation », « favori » (#50), « lecture » retirés
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 66, "souris": 66, "chrome": 76, "calendrier": 118, "candidature": 43, "candidature_souris": 49}   # 21/11 : annule, détails, vérifie, relances
+        {"base": 71, "souris": 71, "chrome": 81, "calendrier": 123, "candidature": 43, "candidature_souris": 49,
+         "alttab": 76, "alttab_souris": 76, "alttab_chrome": 86}   # 25/11 (#75) : « tab » -> « alt tab » + « alt tab deux…six » ; chiffres seuls liste affichée
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 

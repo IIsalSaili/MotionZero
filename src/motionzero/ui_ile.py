@@ -42,7 +42,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"),
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"), ("app-window", "#FFFFFF"),
                             ("camera-off", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
@@ -90,7 +90,9 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
             self.timer_pills.append(("Timer " + tm["timer"]["text"], True))
         if self.timer_pills:
             active = True
-        clock = st.get("clock")                # « jeudi 12/11/2026 · 14:05 », seulement après « iris heure »
+        clock = st.get("clock") or st.get("alttab")   # « jeudi 12/11/2026 · 14:05 » après « iris heure » ; fenêtres après « iris alt-tab »
+        if clock:
+            self.pill_icon = "clock" if st.get("clock") else "app-window"
         if clock and (self.clk_start is None or self.clk_end is not None):
             self.clk_start, self.clk_end = now, None          # (re)commence l'aller
         elif not clock and self.clk_start is not None and self.clk_end is None:

@@ -4,6 +4,8 @@ import logging
 import os
 from dataclasses import dataclass
 
+from .alttab import ALTTAB_NUMBERS
+
 log = logging.getLogger("motionzero.voice")
 
 # reconnaissance libre (2e avis) réveillée seulement par la parole : ~moitié moins de processeur au repos
@@ -56,7 +58,7 @@ WORDS = {
     "aide": "aide",       # « iris aide » : toutes les commandes, celles du mode en cours en tête
     "guide": "guide",     # « iris guide » : la documentation sur GitHub
     "reprise": "reprise", # « iris reprise » : sort de la pause (« iris » seul ne suffit plus)
-    "tab": "tab",         # « iris tab » : comme Alt+Tab
+    "alt-tab": "alt tab", # « iris alt-tab » : fenêtre d'avant, puis « deux »… : liste en haut (#75)
     "discord": "Discord", # « iris discord » : Discord au premier plan (ou lancé)
     "chrome": "Chrome",   # « iris chrome » : Chrome au premier plan (ou lancé)
     "accueil": "accueil", # « iris accueil » (« home » se confondait avec « chrome ») : la fenêtre d aperçu de motionzero au premier plan
@@ -109,7 +111,8 @@ SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un 
          ("plus", "tard"): "plus tard",
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
-         ("double", "clic"): "double"}
+         ("double", "clic"): "double",
+         ("alt", "tab"): "alt-tab"}
 # mots en deux morceaux des modes (candidature, Chrome) : recollés, mais jamais ajoutés aux grammaires de base
 MODE_SPLIT = {("code", "postal"): "code postal", ("prépare", "tout"): "prépare tout",
               ("dé", "zoom"): "dézoom"}   # « dézoom » absent du modèle : « dé zoom », mode Chrome seulement
@@ -129,6 +132,7 @@ def grammar(extra=(), mouse=True):
     phrases += [f"{a} {b}" for a, b in SPLIT if mouse or SPLIT[(a, b)] not in MOUSE_ONLY]
     if not mouse:   # souris éteinte : seulement précédés de « iris » (16/11 : « iris clic » devenait « iris lis »)
         phrases += [f"iris {w}" for w in sorted(MOUSE_ONLY)] + ["iris double clic"]
+    phrases += [f"alt tab {n}" for n in ALTTAB_NUMBERS]   # « iris alt-tab trois » d'un trait
     phrases += [SPOKEN.get(w, w) for w in extra if SPOKEN.get(w, w) not in phrases]
     return json.dumps(phrases + ["[unk]"], ensure_ascii=False)
 
@@ -152,7 +156,10 @@ def _grammars():
     pour ne pas prendre un mot de la conversation pour une commande (demande de l'utilisateur, 12/11)."""
     from .calendar_view import WORDS as CAL
     from .core import CHROME_KEYS
+    nums = list(ALTTAB_NUMBERS)   # liste d'« alt-tab » affichée : ses chiffres, en plus des mots du moment
     return {"base": GRAMMAR, "souris": grammar(), "chrome": grammar(CHROME_KEYS),
+            "alttab": grammar(nums, mouse=False), "alttab_souris": grammar(nums),
+            "alttab_chrome": grammar(list(CHROME_KEYS) + nums),
             "calendrier": grammar(CAL, mouse=False),
             "candidature": cand_grammar(False), "candidature_souris": cand_grammar(True)}
 
@@ -224,6 +231,11 @@ def accepted_words(res, min_conf=0.6, max_words=1, relaxed=frozenset(), bypass=F
         if nxt["word"] not in ("[unk]", WAKE_WORD) and nxt["conf"] >= need_next:
             if _gap(words[i], nxt) > IRIS_GAP_S:
                 return []                              # « iris m'a mis en sourdine » : des mots au milieu
+            num = words[i + 2] if i + 2 < len(words) else None
+            if (nxt["word"] == "alt-tab" and num and num["word"] in ALTTAB_NUMBERS and num["conf"] >= min_conf
+                    and _gap(nxt, num) <= IRIS_GAP_S):  # « iris alt-tab trois » : un seul mot, « alt-tab trois »
+                return [words[i], dict(nxt, word=f"alt-tab {num['word']}", conf=min(nxt["conf"], num["conf"]),
+                                       end=num["end"])]
             return [words[i], nxt]
     if any(w["word"] == "[unk]" for w in words) or len(words) > max_words:
         return []
