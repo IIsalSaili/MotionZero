@@ -80,6 +80,9 @@ class Chart(QWidget):
         finally:
             p.end()
 
+    def draw(self, p, w, h, data):
+        """Dessin du graphe : défini par chaque sorte de graphe."""
+
     def empty(self, p, w, h, text="mesure en cours…"):
         p.setPen(QColor(HOME["off"]))
         p.setFont(_font(14))
