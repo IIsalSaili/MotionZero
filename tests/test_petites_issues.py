@@ -94,7 +94,7 @@ def test_volume_de_l_accueil(tmp_path, monkeypatch):
     assert app.read_volume(str(bad), 0.5) == 0.5
     bad.write_text("7", encoding="utf-8")
     assert app.read_volume(str(bad), 0.5) == 0.5                    # hors de 0..1
-    monkeypatch.setattr(app, "VOLUME_FILE", str(tmp_path / "vol.txt"))
+    monkeypatch.setattr("motionzero.app_ecoute.VOLUME_FILE", str(tmp_path / "vol.txt"))
     played, emitted = [], []
     d = SimpleNamespace(volume_requests=queue.Queue(),
                         sounds=SimpleNamespace(mixer=SimpleNamespace(volume=0.5), play=played.append),

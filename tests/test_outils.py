@@ -333,7 +333,7 @@ def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
     import queue
     from types import SimpleNamespace
     from motionzero.app import Engine, read_conversation
-    import motionzero.app as app
+    import motionzero.app_ecoute as app   # #52 : _conversation vit dans app_ecoute
     from motionzero.voice import VoiceListener
     assert read_conversation(str(tmp_path / "absent.txt")) is True       # coché par défaut
     (tmp_path / "c.txt").write_text("non", encoding="utf-8")
