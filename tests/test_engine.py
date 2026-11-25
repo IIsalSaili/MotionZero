@@ -364,7 +364,7 @@ def test_main_revenue_le_curseur_repart_du_centre():
 
 def _poses(core, monkeypatch, seq):
     """Fait « voir » une suite de poses au moteur (sans vraie main en 3D)."""
-    import motionzero.core as mc
+    import motionzero.core_main as mc   # #52 : le clic par la main vit là
     it = iter(seq)
     monkeypatch.setattr(mc, "flexion", lambda w: None)
     monkeypatch.setattr(mc, "classify", lambda f, c: (next(it), None))
