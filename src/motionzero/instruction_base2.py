@@ -100,6 +100,18 @@ def youtube_latest(channel, get=_get):
     return "https://www.youtube.com/watch?v=" + vid
 
 
+def warm_local():
+    """Démarre Ollama si besoin et charge le modèle sur la carte graphique, sans question (#76).
+    Appelé dès « iris instruction » : le chargement (~4 s) se fait pendant que l'utilisateur parle. Ne lève jamais."""
+    try:
+        if ensure_ollama():
+            _http(OLLAMA + "/api/generate", {"model": MODEL, "keep_alive": KEEP_ALIVE}, timeout=LLM_TIMEOUT_S)
+            return True
+    except Exception:
+        log.warning("prechargement du modele local impossible", exc_info=True)
+    return False
+
+
 def ask_local(phrase):
     """Plan brut (dict) du modèle local pour la phrase. Lève RuntimeError si le modèle est indisponible."""
     if not ensure_ollama():

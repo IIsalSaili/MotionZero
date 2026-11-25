@@ -123,7 +123,9 @@ class CommandesMixin:
         self._quiet()
         self._start_open(word, t, acts)
         if word == "volume":
-            acts.append(("volume_show",))     # barre de volume à droite, avec le niveau actuel
+            acts.append(("volume_show",))
+        elif word == "instruction":
+            acts.append(("instruction_warm",))   # #76 : modèle chargé pendant que l'utilisateur parle     # barre de volume à droite, avec le niveau actuel
 
     def _cmd_pointer(self, word, t, acts):
         self.set_pointer("tete" if word == "tête" else "main", t, acts)

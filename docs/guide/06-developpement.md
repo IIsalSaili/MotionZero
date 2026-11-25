@@ -81,6 +81,7 @@ flowchart TD
 | Piège | Ce qu'il faut savoir |
 |---|---|
 | Whisper GPU | tourne via les DLL `nvidia-cublas-cu12` / `nvidia-cudnn-cu12` du venv ; chargé seulement avec `--voice`, déchargé après 10 min d'inactivité (2-3 s pour le recharger) |
+| Modèle de l'instruction | Ollama est démarré avec Iris ; qwen3:4b est chargé dès « iris instruction » (pendant la phrase) et déchargé après 5 min sans instruction. Le journal donne les temps : préchargement, transcription, modèle |
 | `taskkill /T` | **jamais** : il tue aussi les applis ouvertes par Iris (Chrome) et le bot Discord. Toujours `taskkill /F /PID` sur le processus `-m motionzero` |
 | Deux instances | arrêter l'ancienne avant de relancer (le raccourci « Iris » le fait) |
 | Gardien | après un arrêt pour test, `arret_voulu` empêche la relance : relancer par `tools/relancer.pyw` |

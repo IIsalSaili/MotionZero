@@ -372,3 +372,78 @@ def test_ollama_introuvable_renvoie_false(monkeypatch):
         raise OSError("introuvable")
     monkeypatch.setattr(instruction.subprocess, "Popen", absent)
     assert instruction.ensure_ollama(wait_s=0.0) is False
+
+
+# ---- #76 : modèle préchargé dès « iris instruction », pendant que l'utilisateur parle
+def _wait(cond, timeout=2.0):
+    end = time.time() + timeout
+    while time.time() < end and not cond():
+        time.sleep(0.01)
+    return cond()
+
+
+def test_core_instruction_demande_le_prechargement():
+    from motionzero.core import Core
+    core = Core.__new__(Core)
+    core._quiet = lambda: None
+    core._start_open = lambda word, t, acts: acts.append(("open_start",))
+    acts = []
+    core._cmd_listen("instruction", 0.0, acts)
+    assert acts == [("open_start",), ("instruction_warm",)]
+    acts = []
+    core._cmd_listen("rappel", 0.0, acts)          # les autres écoutes ne chargent rien
+    assert acts == [("open_start",)]
+
+
+def test_prechargement_appelle_le_modele():
+    calls = []
+    instr = Instructeur(lambda a: "", warm=lambda: calls.append(1) or True)
+    instr.warm()
+    assert _wait(lambda: calls == [1])
+
+
+def test_prechargement_une_seule_fois_a_la_fois():
+    import threading
+    gate, calls = threading.Event(), []
+    instr = Instructeur(lambda a: "", warm=lambda: calls.append(1) or gate.wait(2))
+    instr.warm()
+    assert _wait(lambda: calls == [1])
+    instr.warm()                                    # le premier n'a pas fini : ignoré
+    time.sleep(0.05)
+    gate.set()
+    assert calls == [1]
+
+
+def test_prechargement_en_erreur_ne_bloque_pas_l_instruction():
+    def boom():
+        raise RuntimeError("ollama planté")
+    instr = Instructeur(lambda a: "", warm=boom)
+    instr.warm()
+    assert _wait(lambda: not instr._warming.locked())
+    instr.warm()                                    # le verrou a bien été rendu
+    assert _wait(lambda: not instr._warming.locked())
+
+
+def test_warm_local_sans_ollama(monkeypatch):
+    from motionzero import instruction_base2 as b2
+    monkeypatch.setattr(b2, "ensure_ollama", lambda: False)
+    assert b2.warm_local() is False
+
+
+def test_warm_local_modele_en_erreur(monkeypatch):
+    from motionzero import instruction_base2 as b2
+    monkeypatch.setattr(b2, "ensure_ollama", lambda: True)
+    def http(*a, **k):
+        raise OSError("refusé")
+    monkeypatch.setattr(b2, "_http", http)
+    assert b2.warm_local() is False
+
+
+def test_warm_local_charge_le_modele_sans_question(monkeypatch):
+    from motionzero import instruction_base2 as b2
+    sent = []
+    monkeypatch.setattr(b2, "ensure_ollama", lambda: True)
+    monkeypatch.setattr(b2, "_http", lambda url, data=None, timeout=0: sent.append((url, data)) or {})
+    assert b2.warm_local() is True
+    url, data = sent[0]
+    assert url.endswith("/api/generate") and data["model"] == b2.MODEL and "prompt" not in data
