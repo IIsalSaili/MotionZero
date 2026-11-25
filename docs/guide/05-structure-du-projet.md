@@ -45,6 +45,12 @@ graph LR
 
 ## Modules
 
+> **Découpage (#52, 25/11)** : aucun fichier de `src/motionzero` ne dépasse 400 lignes (300 visés). Un gros module garde son nom et réexporte tout (les `from .x import y` restent valables) ; son contenu vit dans des fichiers voisins :
+> - `x_base.py`, `x_base2.py` : constantes et fonctions pures du module `x` ;
+> - classes partielles (mixins) dont hérite la classe principale : `Core` = `core_main` (main, souris) + `core_defilement` + `core_voix` + `core_commandes` + `core_ecoute`, constantes dans `core_mots` ; `Engine` (`app.py`) = `app_detection` + `app_ecoute` + `app_affichage`, `main()` dans `app_main` ; l'île (`ui_ile.py`) = `ui_ile_panneau` + `ui_ile_cartes` + `ui_ile_calendrier` + `ui_ile_pieces` ; `Candidature` (`cvgen.py`) = `cvgen_fil` + `cvgen_evenements` + `cvgen_commandes` ; `Instructeur` = `instruction_outils`.
+> - Un test qui remplace une fonction (`monkeypatch`) vise le fichier où elle vit vraiment, pas le module qui la réexporte.
+> Les nombres de lignes ci-dessous datent d'avant ce découpage.
+
 | Module | Rôle | Lignes | Tests |
 |---|---|---|---|
 | `app.py` | `main()` : crée tout ; classe `Engine` (boucle) | 806 | test_engine, test_drain, test_perf, … |
