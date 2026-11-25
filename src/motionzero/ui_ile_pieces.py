@@ -77,7 +77,7 @@ class PiecesMixin:
         fm = QFontMetrics(self.font_msg)
         pad, gap = 18, 10
         w = 2 * pad + ICON + gap + fm.horizontalAdvance(self.alttab)
-        x = (self.width() - w) / 2
+        x = (self.width - w) / 2
         p.save()
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QColor(0, 0, 0, 235))

@@ -110,3 +110,18 @@ def test_appli_exception_ne_plante_pas(monkeypatch):
     vscode_actions([("alt_tab", 2)], core, None, None, 2.0)
     assert core.alttab_text is None and core.alttab_until < 0
     assert "ECHEC" in core.last_gesture[0]
+
+
+def test_bandeau_se_dessine_sans_erreur():
+    """25/11 : le bandeau plantait à chaque image (« erreur répétée ») : il doit se dessiner, centré."""
+    from PySide6.QtGui import QImage, QPainter
+    from motionzero.ui import QApplication, _IslandPainter
+    QApplication.instance() or QApplication([])
+    p = _IslandPainter(1920, 1080)
+    img = QImage(1920, 1080, QImage.Format.Format_ARGB32)
+    for st in ({"mode": "NEUTRE", "alttab": "2 Chrome   3 Steam"},
+               {"mode": "NEUTRE", "alttab": "2 Chrome", "timers": {"timer": {"text": "2:00"}}}):
+        p.update(st, 1.0)
+        painter = QPainter(img)
+        p.paint(painter)
+        painter.end()
