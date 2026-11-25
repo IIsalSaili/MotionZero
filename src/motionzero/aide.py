@@ -33,7 +33,7 @@ GROUPS = [
         ("plein écran", "aussi « agrandis »"),
         ("réduis", "fenêtre réduite"),
         ("gauche / droite", "sur une moitié"),
-        ("tab", "fenêtre suivante"),
+        ("alt-tab", "fenêtre d'avant, puis 2, 3… : liste en haut"),
         ("ferme", "puis le nom"),
         ("chrome", "Chrome et ses mots"),
         ("suivant / précédent", "onglet de VS Code"),

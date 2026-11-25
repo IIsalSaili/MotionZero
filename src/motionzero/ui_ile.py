@@ -42,7 +42,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         self.icons = {}
         from PySide6.QtCore import QByteArray
         from PySide6.QtSvg import QSvgRenderer
-        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"),
+        for name, color in (("mic-off", DISCORD_RED), ("headphone-off", DISCORD_RED), ("bell", "#FFFFFF"), ("clock", "#FFFFFF"), ("timer", "#FFFFFF"), ("app-window", "#FFFFFF"),
                             ("camera-off", "#FFFFFF")):
             try:
                 svg = open(_os.path.join(_ICON_DIR, f"{name}.svg"), encoding="utf-8").read()
@@ -90,6 +90,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
             self.timer_pills.append(("Timer " + tm["timer"]["text"], True))
         if self.timer_pills:
             active = True
+        self.alttab = st.get("alttab")         # « iris alt-tab » : fenêtres numérotées, bandeau centré sous l'île
         clock = st.get("clock")                # « jeudi 12/11/2026 · 14:05 », seulement après « iris heure »
         if clock and (self.clk_start is None or self.clk_end is not None):
             self.clk_start, self.clk_end = now, None          # (re)commence l'aller
@@ -104,7 +105,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         self.anim_now = now
         if self.next_rem:
             active = True
-        if self.rem or self.help:
+        if self.rem or self.help or self.alttab:
             active = True
         rem_key = (self.rem[0], str(self.rem[1])) if self.rem else (("help", str(self.help["now"])) if self.help else None)
         q = st.get("quota")                    # [(« 5 h », « 40 % · reset 22h59 »), (« Semaine », …)] si allumé
@@ -124,7 +125,8 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         if panel:
             active = True
         content = (mode, msg, (qa.get("phase"), qa.get("answer"), int(qa.get("left", 0))) if self.qa else None,
-                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota, repr(panel) if panel else None)
+                   rem_key, self.next_rem, tuple(self.timer_pills), self.quota, repr(panel) if panel else None,
+                   self.alttab)
         if content != self.content:
             if not self.content or content[1] != self.content[1]:
                 self.ticker_t0 = now           # nouveau texte en bas : il défile depuis le début

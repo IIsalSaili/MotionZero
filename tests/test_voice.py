@@ -66,15 +66,15 @@ def test_page_n_est_plus_un_mot_vocal():
     assert "page" not in WORDS
 
 
-def test_iris_tab_passe_a_la_fenetre_suivante():
+def test_iris_alt_tab_passe_a_la_fenetre_d_avant():
     core = Core(Config())
     core.voice("iris", 1.0)
-    assert core.voice("tab", 1.5) == [("alt_tab",)]
+    assert core.voice("alt-tab", 1.5) == [("alt_tab", 2)]
 
 
-def test_tab_exige_iris():
+def test_alt_tab_exige_iris():
     core = Core(Config())
-    assert core.voice("tab", 1.2) == []
+    assert core.voice("alt-tab", 1.2) == []
 
 
 def test_stop_toujours_ecoute_et_prioritaire():

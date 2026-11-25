@@ -89,6 +89,8 @@ class Core(MainMixin, DefilementMixin, VoixMixin, CommandesMixin, EcouteMixin):
         self.help_until = -1e9                # « iris aide » : affichée jusqu'à cet instant
         self.calendar_until = -1e9            # « iris calendrier » : ouvert jusqu'à cet instant
         self.timer_running = False            # mis à jour par les rappels (même fil) : « iris timer » l'annule
+        self.alttab_until = -1e9              # « iris alt-tab » : liste des fenêtres affichée, chiffres sans « iris »
+        self.alttab_text = None               # cette liste (écrite par l'appli, fil principal)
         self.clock_until = -1e9               # « iris heure / date » : pastille de l'heure jusqu'à cet instant
         self.translating = False              # « iris traducteur » : sous-titres du son du PC (#14)
         self.quota_shown = False              # « iris quota » : quota Claude affiché en permanence (repris au démarrage)

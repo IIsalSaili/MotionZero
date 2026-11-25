@@ -134,15 +134,47 @@ def claude_mic_state(pattern=CLAUDE_LOG_GLOB, tail=65536):
 SINK_HWND = None   # fenêtre invisible de motionzero qui reçoit le raccourci Discord (voir ui.KeySink)
 
 
-# --- « Iris, tab » : comme Alt+Tab -------------------------------------------------------------------
-def alt_tab():
-    u = ctypes.windll.user32
-    u.keybd_event(0x12, 0x38, 0, 0)        # Alt enfoncé
-    u.keybd_event(0x09, 0x0F, 0, 0)        # Tab
-    u.keybd_event(0x09, 0x0F, 2, 0)
-    time.sleep(0.05)
-    u.keybd_event(0x12, 0x38, 2, 0)        # Alt relâché : Windows passe à la fenêtre suivante
-    log.info("alt+tab")
+# --- « Iris, alt-tab » (#75) : les fenêtres dans l'ordre d'Alt+Tab ---------------------------------------
+def alttab_windows(limit=6):
+    """[(hwnd, titre)] des fenêtres qu'Alt+Tab propose, de la plus récente à la plus ancienne (ordre
+    d'affichage de Windows). Les fenêtres d'Iris n'y sont pas : la 1re est la vraie fenêtre de devant."""
+    u, dwm = ctypes.windll.user32, ctypes.windll.dwmapi
+    u.GetWindowLongW.restype = ctypes.c_long
+    found = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def cb(hwnd, _):
+        if not u.IsWindowVisible(hwnd) or u.GetWindowTextLengthW(hwnd) == 0 or u.GetWindow(hwnd, 4):
+            return True                                    # cachée, sans titre ou secondaire (GW_OWNER)
+        ex = u.GetWindowLongW(hwnd, -20)                   # GWL_EXSTYLE
+        if ex & 0x80 or ex & 0x08000000:                   # fenêtre d'outil, ou qui ne prend jamais le focus
+            return True
+        cloaked = wintypes.DWORD()
+        dwm.DwmGetWindowAttribute(hwnd, 14, ctypes.byref(cloaked), 4)   # DWMWA_CLOAKED : autre bureau, appli UWP cachée
+        if cloaked.value:
+            return True
+        title = _title_of(hwnd)
+        if title == "Program Manager" or _exe_of(hwnd) in IRIS_EXES:
+            return True
+        found.append((hwnd, title))
+        return len(found) < limit
+
+    u.EnumWindows(cb, 0)
+    return found
+
+
+def alt_tab_to(n, windows=None, front=None):
+    """Met devant la Nième fenêtre de l'ordre d'Alt+Tab (2 = celle d'avant). Renvoie (ok, message, liste des
+    titres après la bascule). Échecs : pas de fenêtre n, premier plan refusé par Windows."""
+    windows = alttab_windows() if windows is None else windows
+    if n < 2 or n > len(windows):
+        return False, f"ALT-TAB : PAS DE FENETRE {n}", [t for _, t in windows]
+    hwnd, title = windows[n - 1]
+    if not (front or bring_to_front)(hwnd):
+        return False, "ALT-TAB : ECHEC (fenetre refusee)", [t for _, t in windows]
+    log.info("alt-tab %d : %s", n, title)
+    after = [windows[n - 1]] + windows[:n - 1] + windows[n:]   # celle choisie passe devant, l'ordre suit
+    return True, None, [t for _, t in after]
 
 
 # --- Discord : raccourci de micro coupé (Suppr + « + » du pavé numérique) -----------------------------
