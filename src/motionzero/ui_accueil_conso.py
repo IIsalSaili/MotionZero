@@ -91,7 +91,8 @@ class Chart(QWidget):
 
 class Lines(Chart):
     """Courbes Iris / PC, 0-100 %, sur la dernière minute."""
-    def draw(self, p, w, h, d):
+    def draw(self, p, w, h, data):
+        d = data
         if not d or (len(d.get("iris", [])) < 2 and len(d.get("pc", [])) < 2):
             return self.empty(p, w, h, d.get("absent", "mesure en cours…") if d else "mesure en cours…")
         p.setPen(QPen(QColor(HOME["bord"]), 1))
@@ -129,7 +130,8 @@ class Gauges(Chart):
                 return
         QToolTip.hideText()
 
-    def draw(self, p, w, h, rows):
+    def draw(self, p, w, h, data):
+        rows = data
         self.hits = []
         rows = [r for r in (rows or []) if r[2]]
         if not rows:
@@ -159,7 +161,8 @@ class Gauges(Chart):
 
 class Columns(Chart):
     """Une colonne par cœur du processeur, 0-100 %."""
-    def draw(self, p, w, h, cores):
+    def draw(self, p, w, h, data):
+        cores = data
         if not cores:
             return self.empty(p, w, h)
         n = len(cores)
@@ -177,7 +180,8 @@ class Columns(Chart):
 
 class Ranking(Chart):
     """Fils les plus occupés : barres horizontales, nom et % d'un cœur."""
-    def draw(self, p, w, h, rows):
+    def draw(self, p, w, h, data):
+        rows = data
         if not rows:
             return self.empty(p, w, h)
         top_v = max(max(v for _, v in rows), 1)
