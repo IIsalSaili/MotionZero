@@ -96,8 +96,7 @@ def test_bords_gauche_et_droit_atteignables_en_lent():
 def test_arreter_puis_reprendre_la_souris_rearme():
     core, clk = Core(Config()), Clock()
     _arme(core, clk)
-    core.voice("iris", clk.t)
-    core.voice("lecture", clk.t + 0.2)
+    core.voice("stop", clk.t + 0.2)             # éteint la souris
     core.voice("iris", clk.t + 0.5)
     core.voice("souris", clk.t + 0.7)
     assert core.mouse and not core.armed

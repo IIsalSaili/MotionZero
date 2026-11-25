@@ -32,7 +32,7 @@ La carte **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le
 
 ## Le bandeau en haut
 
-À côté du logo, une seule île : en haut, un ou deux mots fixes, le mode (LECTURE, PAUSE…) ou, sinon, l'appli devant (CHROME, VS CODE, DISCORD…), puis l'état le plus important (AGRIPPE, puis SOURIS, CANDIDATURE, FOCUS, BYPASS). En dessous, dans la même île, une ligne courte et centrée : le dernier retour (commande comprise, « Écoute », « Main perdue »…), qui défile s'il est trop long et disparaît après 4 s ; au repos, elle liste les autres états allumés, pour qu'aucun ne soit caché. Rien à dire : le logo seul. Les rappels et les timers sonnent et s'affichent, sans être lus à voix haute.
+À côté du logo, une seule île : en haut, un ou deux mots fixes, le mode (PAUSE…) ou, sinon, l'appli devant (CHROME, VS CODE, DISCORD…), puis l'état le plus important (AGRIPPE, puis SOURIS, CANDIDATURE, FOCUS, BYPASS). En dessous, dans la même île, une ligne courte et centrée : le dernier retour (commande comprise, « Écoute », « Main perdue »…), qui défile s'il est trop long et disparaît après 4 s ; au repos, elle liste les autres états allumés, pour qu'aucun ne soit caché. Rien à dire : le logo seul. Les rappels et les timers sonnent et s'affichent, sans être lus à voix haute.
 
 ## Effets d'animation
 
@@ -81,12 +81,9 @@ Le **mode** dit ce que fait la main. La **souris** n'est pas un mode : c'est un 
 ```mermaid
 stateDiagram-v2
     [*] --> NEUTRE
-    NEUTRE --> LECTURE : iris lecture
     NEUTRE --> CHROME : Chrome devant (ou iris chrome)
     CHROME --> NEUTRE : une autre appli devant
-    LECTURE --> NEUTRE : stop
     NEUTRE --> DESACTIVE : iris pause
-    LECTURE --> DESACTIVE : iris pause
     CHROME --> DESACTIVE : iris pause
     DESACTIVE --> NEUTRE : iris reprise (puis CHROME si Chrome est devant)
     state "Souris (surcouche, garde le mode)" as SOURIS
@@ -94,12 +91,11 @@ stateDiagram-v2
     SOURIS --> NEUTRE : stop ou iris souris
 ```
 
-Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans son à chaque Alt+Tab. Les fenêtres d'Iris (accueil, aide, fenêtre invisible des raccourcis Discord) ne comptent pas : « iris mute » ou « iris accueil » ne font plus quitter Chrome. « stop » ne quitte plus Chrome. La lecture, choisie à la voix, n'est pas remplacée par Chrome. Chaque changement de mode est noté dans le journal avec sa cause. La souris peut aussi s'allumer en LECTURE (bulle) ou en CHROME : le mode reste.
+Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans son à chaque Alt+Tab. Les fenêtres d'Iris (accueil, aide, fenêtre invisible des raccourcis Discord) ne comptent pas : « iris mute » ou « iris accueil » ne font plus quitter Chrome. « stop » ne quitte plus Chrome. Chaque changement de mode est noté dans le journal avec sa cause. La souris peut aussi s'allumer en CHROME : le mode reste.
 
 | Mode | La main… | Particularités |
 |---|---|---|
 | **NEUTRE** | ne fait rien | mode de départ (`start_mode`) |
-| **LECTURE** | paume au bord droit / gauche = page suivante / précédente ; en haut / bas = défile ; immobile 1,5 s = bulle « SOURIS ? » (petit geste vers le haut pour confirmer) | « iris lecture » éteint la souris |
 | **CHROME** | comme NEUTRE | mots de navigation sans « iris » (voir [commandes](03-commandes-vocales.md#mode-chrome)) ; actif tant que Chrome est au premier plan ; « iris chrome » le met devant (5 s pour s'ouvrir, sinon « CHROME INTROUVABLE ») |
 | **DÉSACTIVÉ** | rien, MediaPipe arrêté | « iris » (et « stop ») réveille |
 
@@ -122,8 +118,6 @@ Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans s
 2. Main : amène-la au **centre** (bande horizontale), la jauge à droite s'arme. Tête : armée tout de suite, le centre est la position de la tête à ce moment-là.
 3. Monte la main (ou lève la tête) : ça monte. Descends-la : ça descend. Lent juste hors de la zone verte, de plus en plus vite vers les extrêmes (8 crans / s au plus à la main, 4 à la tête).
 4. Fin : « iris scroll » redit, « stop », une autre commande, ou (à la main) main sortie de l'image.
-
-En LECTURE, la main en haut / bas de l'image défile aussi, sans voix.
 
 ## Dictée
 

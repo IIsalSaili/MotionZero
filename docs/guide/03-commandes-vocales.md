@@ -41,9 +41,8 @@ Mode : « tous » sauf mention.
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `iris` | ouvre l'écoute 3,5 s (en pause, il faut ensuite « reprise ») | — | tous |
-| `stop` | relâche tout, coupe l'alarme ; finit le défilement, sinon éteint la souris, sinon LECTURE / CHROME → NEUTRE ; ferme le calendrier | oui | tous |
+| `stop` | relâche tout, coupe l'alarme ; finit le défilement, sinon éteint la souris, sinon rien (CHROME suit Chrome devant) ; ferme le calendrier | oui | tous |
 | `pause` | relâche tout, mode DÉSACTIVÉ (« iris reprise » pour revenir ; « iris » seul ne réactive plus) | non | tous |
-| `lecture` | éteint la souris, mode LECTURE | non | tous |
 | `souris` | allume / éteint la souris (le mode reste) | non | tous |
 | `tête` / `main` | la souris suit la tête / la main | non | tous |
 | `centre` | curseur au centre ; tête de face = nouvelle référence | non | tous |
@@ -234,7 +233,7 @@ Aussi sans « iris » en Chrome : `skip`, `back`, `space`, `clic`, `double`.
 | Après « iris type » | `envoie`, `annule` : dès la coupure du micro, puis 4 s après l'apparition du texte. Juste après une dictée, ces deux mots sont reconnus plus facilement |
 | Après la répétition d'un rappel (20 s) | `envoie`, `annule` |
 | Calendrier ouvert | mots du calendrier, `ferme`, `merci`, `stop` |
-| Bulle « SOURIS ? » ou menu de clic affichés | l'écoute est ouverte : tout mot de commande |
+| Menu de clic affiché | l'écoute est ouverte : tout mot de commande |
 
 ---
 [← Utilisation](02-utilisation.md) · [Sommaire](README.md) · [Architecture →](04-architecture.md)

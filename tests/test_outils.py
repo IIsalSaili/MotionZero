@@ -17,9 +17,9 @@ def test_aucun_nouveau_mot_guette():
     from motionzero.voice import GRAMMARS, WORDS
     # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté ; puis « candidature » (+1 partout). Les mots
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
-    assert len(WORDS) == 117   # « espace », « muet », « activation », « favori » retirés (#50)
+    assert len(WORDS) == 116   # « espace », « muet », « activation », « favori » (#50), « lecture » retirés
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 67, "souris": 67, "chrome": 77, "calendrier": 119, "candidature": 43, "candidature_souris": 49}   # 21/11 : annule, détails, vérifie, relances
+        {"base": 66, "souris": 66, "chrome": 76, "calendrier": 118, "candidature": 43, "candidature_souris": 49}   # 21/11 : annule, détails, vérifie, relances
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 

@@ -11,7 +11,7 @@ from .core import Mode
 HOME_TITLE = "Iris"   # titre de la fenêtre d'accueil : « iris accueil » la retrouve par lui (vscode.py)
 OK, OFF, IDLE, FAIL = "ok", "off", "idle", "fail"   # vert, orange (éteint exprès), gris (au repos), rouge (panne)
 
-MODE_LABELS = {Mode.NEUTRAL: "NEUTRE", Mode.READING: "LECTURE", Mode.CHROME: "CHROME", Mode.DISABLED: "PAUSE"}
+MODE_LABELS = {Mode.NEUTRAL: "NEUTRE", Mode.CHROME: "CHROME", Mode.DISABLED: "PAUSE"}
 MOUSE_ROWS = [("iris clic", "clic gauche"), ("iris double", "double clic"), ("iris menu", "clic droit"),
               ("iris agrippe", "glisser (redis agrippe pour lâcher)"), ("iris scroll", "faire défiler")]
 LAST_N = 3          # dernières commandes affichées

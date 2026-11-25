@@ -2,12 +2,9 @@
 Seules informations utilisées : présence de la main, centre de la paume, mouvement, immobilité.
 
 Modes :
-  LECTURE : paume au bord droit / gauche de l'image = page suivante / précédente.
-            Main immobile 1,5 s -> bulle « SOURIS ? » ; petit mouvement vers le haut = confirmer.
-  SOURIS  : le curseur suit les mouvements de la main (relatif, comme un pavé tactile).
-            Main immobile 0,8 s -> menu à 4 directions :
-              gauche = clic gauche, droite = clic droit, haut = double clic, bas = retour lecture.
-            Main absente 2 s -> retour lecture.
+  NEUTRE  : la main ne déclenche rien, seule la voix agit.
+  CHROME  : commandes de navigation à la voix tant que Chrome est devant.
+  SOURIS  : un outil (« iris souris ») : le curseur suit la main (relatif, comme un pavé tactile).
   DESACTIVE : bouton STOP ou « iris pause » ; « iris reprise » pour revenir.
 
 Actions renvoyées :
@@ -16,7 +13,7 @@ Actions renvoyées :
 from collections import deque
 
 from .filters import OneEuro
-from .gestures import RadialMenu, ScrollDetector, StillnessDetector, ZoneDetector
+from .gestures import RadialMenu, StillnessDetector
 from .head import HeadPointer
 from .poses import PoseVoter
 from .core_mots import (ALIASES, BYPASS_IDLE_S, CAL_IDLE_S, CAL_WORDS, CAND_IDLE_S, CHROME_GRACE_S, CHROME_KEYS, CHROME_LABELS, COMMANDS, EDITOR_TABS, FOCUS_IDLE_S, HELP_S, IRIS_EXES, MENU_LABELS, Mode, OPEN_STOP, OPEN_WAIT, REPEATABLE, SIMPLE_ACTIONS, TYPE_ERASE_S, TYPE_WAIT_S, VOICE_HOTKEYS, VOICE_LABELS, WAKE_WORD, head_gain)  # noqa: F401
@@ -45,7 +42,8 @@ class Core(MainMixin, DefilementMixin, VoixMixin, CommandesMixin, EcouteMixin):
         self._last_gesture = None
         self.cfg = cfg
         self.screen = screen
-        self.mode = cfg.start_mode
+        # mode de départ inconnu (ancien « LECTURE » dans config.json) : neutre, jamais de plantage
+        self.mode = cfg.start_mode if cfg.start_mode in (Mode.NEUTRAL, Mode.CHROME, Mode.DISABLED) else Mode.NEUTRAL
         # souris : un outil, pas un mode. « iris souris » dans Chrome garde le mode Chrome (demande, 12/11)
         self.mouse = False
         # ce qui pilote la souris : la main ou la tête (choix retenu par l'appli, voir app.POINTER_FILE)
@@ -66,17 +64,11 @@ class Core(MainMixin, DefilementMixin, VoixMixin, CommandesMixin, EcouteMixin):
         self.cursor = (sx + sw // 2, sy + sh // 2)
         self._cursor_f = [float(self.cursor[0]), float(self.cursor[1])]
         self.still = StillnessDetector(cfg)
-        self.zone = ZoneDetector(cfg)
-        self.scroll = ScrollDetector(cfg)
-        self.scroll_progress = 0.0
-        self.scroll_side = None
         self.menu = RadialMenu(cfg)
         self.fx = OneEuro(cfg.palm_min_cutoff, cfg.palm_beta)
         self.fy = OneEuro(cfg.palm_min_cutoff, cfg.palm_beta)
         self.prev_palm = None
         self.prev_t = None
-        self.bubble = None          # (t0, x0, y0) quand la bulle « SOURIS ? » est affichée
-        self.need_move = False      # après une bulle ignorée : bouger avant d'en revoir une
         self.travel = 0.0           # déplacement du curseur depuis le dernier menu (px)
         self.last_click_t = -1e9
         self.cursor_hist = deque(maxlen=90)   # (t, curseur) : pour cliquer là où l'on visait
@@ -133,26 +125,17 @@ class Core(MainMixin, DefilementMixin, VoixMixin, CommandesMixin, EcouteMixin):
         self.open_kind = "open"               # « open » (iris ouvre) ou « close » (iris ferme)
         # pour l'affichage
         self.still_for = 0.0
-        self.zone_progress = 0.0
-        self.zone_side = None
         self.palm = None
 
     # --- modes -------------------------------------------------------------
     def _reset(self):
         self.still.reset()
-        self.zone.reset()
-        self.scroll.reset()
-        self.scroll_progress, self.scroll_side = 0.0, None
         self.menu.close()
         self.fx.reset()
         self.fy.reset()
         self.prev_palm = None
-        self.bubble = None
-        self.need_move = False
         self.travel = 0.0
         self.still_for = 0.0
-        self.zone_progress = 0.0
-        self.zone_side = None
 
     def set_mouse(self, on, t, acts):
         """Allume / éteint la souris à la main, sans toucher au mode en cours."""
@@ -210,8 +193,6 @@ class Core(MainMixin, DefilementMixin, VoixMixin, CommandesMixin, EcouteMixin):
         palm = (self.fx(point[0], t), self.fy(point[1], t))
         self.palm = palm
         self.still_for = self.still.update(palm, t)
-        if self.still_for == 0.0:
-            self.need_move = False
         if t < self.voice_scroll_until:
             self._voice_scroll(palm, t, acts)
         elif self.mouse:

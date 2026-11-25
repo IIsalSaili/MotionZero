@@ -25,8 +25,6 @@ class MainMixin:
         palm = (self.fx(self.features.palm[0], t), self.fy(self.features.palm[1], t))
         self.palm = palm
         self.still_for = self.still.update(palm, t)
-        if self.still_for == 0.0:
-            self.need_move = False
         if t < self.voice_scroll_until:
             self._voice_scroll(palm, t, acts)
             self.prev_palm, self.prev_t = palm, t
@@ -35,8 +33,6 @@ class MainMixin:
             self._mouse(palm, t, acts)
             if self.cfg.hand_click_enabled:
                 self._index_click(world, t, acts)
-        elif self.mode == Mode.READING:
-            self._reading(palm, t, acts)
         self.prev_palm, self.prev_t = palm, t
         return acts
 
@@ -98,52 +94,12 @@ class MainMixin:
             self.set_mouse(False, t, acts)
         # main retirée = « embrayage » : on la repose ailleurs, le curseur ne saute pas
         self.still.reset()
-        self.zone.reset()
-        self.scroll.reset()
         self.menu.close()
         self.fx.reset()
         self.fy.reset()
         self.prev_palm = None
-        self.bubble = None
         self.still_for = 0.0
-        self.zone_progress = 0.0
-        self.scroll_progress, self.scroll_side = 0.0, None
         return acts
-
-    # --- lecture -----------------------------------------------------------
-    def _reading(self, palm, t, acts):
-        c = self.cfg
-        event, self.zone_progress, self.zone_side = self.zone.update(palm[0], t)
-        if event:
-            acts.append(("key", c.key_next if event == "next" else c.key_prev))
-            self.last_gesture = ("PAGE SUIVANTE" if event == "next" else "PAGE PRECEDENTE", t)
-            self.bubble = None
-            return
-        in_center = c.page_rearm_lo <= palm[0] <= c.page_rearm_hi
-        # défilement : en haut / en bas, hors des bandes de page
-        notches, self.scroll_progress, self.scroll_side = self.scroll.update(
-            palm[1], t, allowed=self.zone_side is None and c.page_band_left < palm[0] < c.page_band_right)
-        if notches:
-            acts.append(("scroll", notches * c.scroll_notch))
-            self.last_gesture = ("DEFILE " + ("HAUT" if notches > 0 else "BAS"), t)
-        if self.scroll_side is not None:
-            self.bubble = None
-            return
-        in_center = in_center and c.scroll_band_top < palm[1] < c.scroll_band_bottom
-        if self.bubble is None:
-            if (c.mouse_bubble and in_center and not self.need_move
-                    and self.still_for >= c.mouse_enter_still_s):
-                self.bubble = (t, palm[0], palm[1])
-            return
-        t0, x0, y0 = self.bubble
-        dy = palm[1] - y0
-        dist = math.hypot(palm[0] - x0, dy)
-        if dy <= -c.bubble_confirm_dist and abs(palm[0] - x0) < abs(dy):
-            self.last_gesture = ("SOURIS", t)
-            self.set_mouse(True, t, acts)
-        elif dist >= c.bubble_cancel_dist or t - t0 >= c.bubble_timeout_s:
-            self.bubble = None
-            self.need_move = True
 
     # --- souris ------------------------------------------------------------
     def _gain(self, speed, dt=None):
@@ -172,7 +128,7 @@ class MainMixin:
                 acts += [("click", "left"), ("click", "left")]
             elif choice == "down":
                 self.last_gesture = (MENU_LABELS["down"], t)
-                self.set_mouse(False, t, acts)    # le mode en cours (Chrome, lecture…) reste
+                self.set_mouse(False, t, acts)    # le mode en cours (Chrome…) reste
                 return
             if choice and choice != "cancel":
                 self.last_gesture = (MENU_LABELS[choice], t)

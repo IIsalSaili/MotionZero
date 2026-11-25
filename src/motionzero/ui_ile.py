@@ -32,7 +32,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         self.last_change = 0.0
         self.opacity = 1.0
         self.logos = {}
-        for name in ("neutre", "neutre_ferme", "lecture", "lecture_ferme", "souris", "souris_ferme", "ok"):
+        for name in ("neutre", "neutre_ferme", "souris", "souris_ferme", "ok"):
             pm = QPixmap(_os.path.join(_LOGO_DIR, f"{name}.png"))
             if not pm.isNull():
                 self.logos[name] = pm

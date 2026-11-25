@@ -68,7 +68,6 @@ GROUPS = [
         ("pause", "tout désactiver"),
         ("reprise", "après la pause"),
         ("focus", "sans dire iris, 10 min"),
-        ("lecture", "éteint la souris"),
         ("aide", "cette page"),
         ("guide", "la documentation"),
     ]),

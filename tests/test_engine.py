@@ -17,86 +17,7 @@ def mirror(pts):
 
 
 # --- lecture : bords de l'image ---------------------------------------------
-def test_bord_droit_page_suivante_une_seule_fois():
-    core, clk = Core(READ), Clock()
-    assert core.mode == Mode.READING
-    clk.run(core, 0.5, cx=0.5)
-    acts = clk.run(core, 0.2, cx=0.5, to_cx=0.9) + clk.run(core, 2.0, cx=0.9)
-    assert kinds(acts, "key") == [("key", "right")]
-
-
-def test_bord_gauche_page_precedente_apres_retour_au_centre():
-    core, clk = Core(READ), Clock()
-    clk.run(core, 0.5, cx=0.5)
-    clk.run(core, 0.2, cx=0.5, to_cx=0.9)
-    clk.run(core, 0.6, cx=0.9)
-    clk.run(core, 0.3, cx=0.9, to_cx=0.5)  # retour au centre : réarmé
-    clk.run(core, 0.8, cx=0.5)
-    acts = clk.run(core, 0.2, cx=0.5, to_cx=0.1) + clk.run(core, 0.6, cx=0.1)
-    assert kinds(acts, "key") == [("key", "left")]
-
-
-def test_passage_rapide_au_bord_ne_tourne_pas_la_page():
-    core, clk = Core(Config()), Clock()
-    clk.run(core, 0.5, cx=0.5)
-    acts = clk.run(core, 0.1, cx=0.5, to_cx=0.9) + clk.run(core, 0.1, cx=0.9, to_cx=0.5)
-    assert kinds(acts, "key") == []
-
-
-def test_aucune_forme_de_main_exigee():
-    """Poing, main ouverte, n'importe quoi : seule la position compte."""
-    for pose in ("open", "fist", "point", "thumb_up"):
-        core, clk = Core(READ), Clock()
-        clk.run(core, 0.5, pose, cx=0.5)
-        acts = clk.run(core, 0.2, pose, cx=0.5, to_cx=0.9) + clk.run(core, 0.6, pose, cx=0.9)
-        assert kinds(acts, "key") == [("key", "right")], pose
-
-
-# --- défilement -----------------------------------------------------------------
-def test_paume_en_bas_defile_vers_le_bas_tant_qu_elle_y_reste():
-    core, clk = Core(READ), Clock()
-    clk.run(core, 0.5, cx=0.5, cy=0.5)
-    # (cy = poignet ; la paume est ~0,11 plus haut)
-    # zone du bas étroite (paume au-delà de 0,88) : poignet à 1,02 -> paume ~0,91
-    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=1.02) + clk.run(core, 1.0, cx=0.5, cy=1.02)
-    scrolls = kinds(acts, "scroll")
-    assert len(scrolls) >= 4 and all(s[1] < 0 for s in scrolls)
-    acts = clk.run(core, 0.2, cx=0.5, cy=1.02, to_cy=0.5) + clk.run(core, 0.5, cx=0.5, cy=0.5)
-    assert len(kinds(acts, "scroll")) <= 1  # s'arrête en revenant au centre
-
-
-def test_paume_en_haut_defile_vers_le_haut_sans_bulle():
-    core, clk = Core(READ), Clock()
-    clk.run(core, 0.5, cx=0.5, cy=0.5)
-    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.15) + clk.run(core, 3.0, cx=0.5, cy=0.15)
-    assert kinds(acts, "scroll") and all(s[1] > 0 for s in kinds(acts, "scroll"))
-    assert core.bubble is None and core.mode == Mode.READING
-
-
-def test_passage_bref_en_bas_ne_defile_pas():
-    core, clk = Core(Config()), Clock()
-    clk.run(core, 0.5, cx=0.5, cy=0.5)
-    acts = clk.run(core, 0.1, cx=0.5, cy=0.5, to_cy=0.95) + clk.run(core, 0.1, cx=0.5, cy=0.95, to_cy=0.5)
-    assert kinds(acts, "scroll") == []
-
-
-def test_molette_envoyee_a_windows():
-    fake = FakeBackend()
-    Controller(fake, Config()).execute([("scroll", -120)], 0.0)
-    assert fake.events == [("wheel", -120)]
-
-
-# --- entrer en souris ---------------------------------------------------------
 READ = Config(start_mode="LECTURE")   # tests du mode lecture : il n'est plus le mode de départ
-BUBBLE = Config(mouse_bubble=True, start_mode="LECTURE")   # ancienne bulle « SOURIS ? », gardée en option
-
-
-def _enter_mouse_bubble(core, clk):
-    clk.run(core, 1.7, cx=0.5, cy=0.6, jitter=0.004)       # immobile (avec tremblement) -> bulle
-    assert core.bubble is not None
-    acts = clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)  # petit mouvement vers le haut
-    assert core.mouse
-    return acts
 
 
 def _enter_mouse(core, clk):
@@ -108,30 +29,6 @@ def _enter_mouse(core, clk):
     return acts + clk.run(core, 0.25, cx=0.5, cy=0.6, to_cy=0.52)
 
 
-def test_immobile_puis_haut_entre_en_souris():
-    core, clk = Core(BUBBLE), Clock()
-    acts = _enter_mouse_bubble(core, clk)
-    assert ("mouse", True) in acts
-
-
-def test_bulle_ignoree_ne_revient_pas_sans_bouger():
-    core, clk = Core(BUBBLE), Clock()
-    clk.run(core, 1.7, cx=0.5)
-    assert core.bubble is not None
-    clk.run(core, 2.5, cx=0.5)          # rien : la bulle disparaît
-    assert core.bubble is None and core.mode == Mode.READING
-    clk.run(core, 3.0, cx=0.5)          # toujours immobile : pas de nouvelle bulle
-    assert core.bubble is None
-
-
-def test_main_posee_au_bord_pas_de_bulle():
-    core, clk = Core(Config()), Clock()
-    clk.run(core, 0.5, cx=0.9)
-    clk.run(core, 3.0, cx=0.9)
-    assert core.bubble is None
-
-
-# --- souris -----------------------------------------------------------------------
 def test_curseur_relatif_suit_la_main():
     core, clk = Core(Config()), Clock()
     _enter_mouse(core, clk)
@@ -314,13 +211,6 @@ def test_clic_chrome_sans_iris_vise_le_debut_du_mot():
     assert acts == [("move", *aimed), ("click", "left")]
 
 
-def test_main_immobile_en_lecture_ne_propose_plus_la_souris():
-    """La bulle « SOURIS ? » est remplacée par « iris souris » : rien ne s'ouvre main immobile."""
-    core, clk = Core(READ), Clock()
-    clk.run(core, 10.0, cx=0.5, cy=0.6, jitter=0.004)
-    assert core.bubble is None and core.mode == Mode.READING and not core.listening(clk.t)
-
-
 def test_demarrage_en_neutre_la_main_ne_fait_rien():
     """Main posée sur la cuisse, qui bouge un peu : en neutre, ni page, ni défilement, ni rien."""
     core, clk = Core(Config()), Clock()
@@ -328,8 +218,11 @@ def test_demarrage_en_neutre_la_main_ne_fait_rien():
     acts = clk.run(core, 5.0, cx=0.9, cy=0.9, jitter=0.01) + clk.run(core, 2.0, cx=0.5, cy=0.1, to_cx=0.1)
     assert [a for a in acts if a[0] != "move"] == []
     core.voice("iris", clk.t)
-    core.voice("lecture", clk.t + 0.2)
-    assert core.mode == Mode.READING
+    assert core.voice("lecture", clk.t + 0.2) == [] and core.mode == Mode.NEUTRAL   # mode lecture retiré
+
+
+def test_ancien_mode_lecture_dans_la_config_demarre_en_neutre():
+    assert Core(Config(start_mode="LECTURE")).mode == Mode.NEUTRAL
 
 
 def test_clic_vocal_date_absurde_ne_deplace_pas_le_curseur():
