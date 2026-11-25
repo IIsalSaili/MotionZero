@@ -1,10 +1,12 @@
 """« iris instruction » (#45) : une phrase libre -> Whisper -> modèle local (Ollama) -> plan d'actions d'Iris : constantes et fonctions (2/2, découpé de instruction.py, #52)."""
+import json
 import logging
 import re
 import urllib.parse
 import urllib.request
 
-from .instruction_base import _check_more, EXPANDING, MAX_STEPS, PlanError, UA, _app, check_step
+from .instruction_base import (_check_more, _http, EXPANDING, KEEP_ALIVE, LLM_TIMEOUT_S, MAX_STEPS, MODEL, OLLAMA, PlanError,
+                               SCHEMA, SYSTEM, UA, check_step, ensure_ollama)
 
 log = logging.getLogger("motionzero.instruction")
 
@@ -96,3 +98,22 @@ def youtube_latest(channel, get=_get):
     if not vid:
         raise RuntimeError("aucune vidéo sur la chaîne")
     return "https://www.youtube.com/watch?v=" + vid
+
+
+def ask_local(phrase):
+    """Plan brut (dict) du modèle local pour la phrase. Lève RuntimeError si le modèle est indisponible."""
+    if not ensure_ollama():
+        raise RuntimeError("modèle local indisponible (Ollama)")
+    try:
+        out = _http(OLLAMA + "/api/chat", {
+            "model": MODEL, "stream": False, "think": False, "keep_alive": KEEP_ALIVE, "format": SCHEMA,
+            "options": {"temperature": 0},
+            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": phrase}],
+        }, timeout=LLM_TIMEOUT_S)
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            raise RuntimeError(f"modèle {MODEL} absent (ollama pull {MODEL})") from exc
+        raise RuntimeError(f"modèle local en erreur ({exc.code})") from exc
+    except Exception as exc:
+        raise RuntimeError("modèle local injoignable") from exc
+    return json.loads(out["message"]["content"])

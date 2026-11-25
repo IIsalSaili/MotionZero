@@ -205,23 +205,6 @@ def ensure_ollama(wait_s=15.0):
     return False
 
 
-def ask_local(phrase):
-    """Plan brut (dict) du modèle local pour la phrase. Lève RuntimeError si le modèle est indisponible."""
-    if not ensure_ollama():
-        raise RuntimeError("modèle local indisponible (Ollama)")
-    try:
-        out = _http(OLLAMA + "/api/chat", {
-            "model": MODEL, "stream": False, "think": False, "keep_alive": KEEP_ALIVE, "format": SCHEMA,
-            "options": {"temperature": 0},
-            "messages": [{"role": "system", "content": SYSTEM}, {"role": "user", "content": phrase}],
-        }, timeout=LLM_TIMEOUT_S)
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            raise RuntimeError(f"modèle {MODEL} absent (ollama pull {MODEL})") from exc
-        raise RuntimeError(f"modèle local en erreur ({exc.code})") from exc
-    except Exception as exc:
-        raise RuntimeError("modèle local injoignable") from exc
-    return json.loads(out["message"]["content"])
 
 
 # ---------------------------------------------------------------- plan : vérification (pur, testable)
