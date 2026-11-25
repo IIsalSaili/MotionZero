@@ -45,7 +45,7 @@ def test_choix_de_l_accueil(tmp_path):
 
 def test_bouton_previent_le_micro(tmp_path, monkeypatch):
     import motionzero.app as app
-    monkeypatch.setattr(app, "QUIET_FILE", str(tmp_path / "v.txt"))
+    monkeypatch.setattr("motionzero.app_ecoute.QUIET_FILE", str(tmp_path / "v.txt"))
     emitted = []
     d = SimpleNamespace(quiet_requests=queue.Queue(), quiet_choice="non",
                         listener=SimpleNamespace(quiet=False),

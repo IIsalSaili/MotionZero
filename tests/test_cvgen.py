@@ -654,7 +654,8 @@ def test_panneau_retour_sous_l_offre_puis_message_qui_expire():
 
 def test_panneau_dessine_et_efface():
     """Le panneau se dessine sans erreur (offre, message, liste vide) et la droite est repeinte à l'extinction."""
-    from motionzero.ui import QApplication, QImage, QPainter, _IslandPainter
+    from PySide6.QtGui import QImage, QPainter
+    from motionzero.ui import QApplication, _IslandPainter
     QApplication.instance() or QApplication([])
     c, core = cv.Candidature(http=FauxCvgen(), launch=lambda: None), Core(Config())
     vues = [c.panel(0.0)]

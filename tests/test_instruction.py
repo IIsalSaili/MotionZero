@@ -216,7 +216,7 @@ def test_etape_en_echec_arrete_la_suite():
 
 
 def test_stop_arrete_entre_deux_etapes(monkeypatch):
-    monkeypatch.setattr(ins, "STEP_PAUSE_S", 0.3)
+    monkeypatch.setattr("motionzero.instruction_outils.STEP_PAUSE_S", 0.3)
     instr, ran = _instr(PLAN)
     core = FakeCore()
     instr.submit(b"")
@@ -346,7 +346,7 @@ def test_mots_passes_plus_guettes_mais_compris_en_mp():
 
 
 def _ollama_absent(monkeypatch):
-    from motionzero import instruction
+    from motionzero import instruction_base as instruction   # #52 : ensure_ollama vit là
     def no_http(*a, **k):
         raise OSError("pas de serveur")
     monkeypatch.setattr(instruction, "_http", no_http)

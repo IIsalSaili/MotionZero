@@ -45,12 +45,27 @@ graph LR
 
 ## Modules
 
+> **Découpage (#52, 25/11)** : aucun fichier de `src/motionzero` ne dépasse 400 lignes (300 visés). Un gros module garde son nom et réexporte tout (les `from .x import y` restent valables) ; son contenu vit dans des fichiers voisins :
+> - `x_base.py`, `x_base2.py` : constantes et fonctions pures du module `x` ;
+> - classes partielles (mixins) dont hérite la classe principale : `Core` = `core_main` (main, souris) + `core_defilement` + `core_voix` + `core_commandes` + `core_ecoute`, constantes dans `core_mots` ; `Engine` (`app.py`) = `app_detection` + `app_ecoute` + `app_affichage`, `main()` dans `app_main` ; l'île (`ui_ile.py`) = `ui_ile_panneau` + `ui_ile_cartes` + `ui_ile_calendrier` + `ui_ile_pieces` ; `Candidature` (`cvgen.py`) = `cvgen_fil` + `cvgen_evenements` + `cvgen_commandes` ; `Instructeur` = `instruction_outils`.
+> - Un test qui remplace une fonction (`monkeypatch`) vise le fichier où elle vit vraiment, pas le module qui la réexporte.
+> Les nombres de lignes ci-dessous datent d'avant ce découpage.
+
 | Module | Rôle | Lignes | Tests |
 |---|---|---|---|
-| `app.py` | `main()` : crée tout ; classe `Engine` (boucle) ; fonctions `*_actions` | 843 | test_engine, test_drain, test_mode_chrome, test_type, test_power, test_tete, test_discord_link, test_perf |
-| `core.py` | machine à états ; `voice()` ; tables `COMMANDS`, `SIMPLE_ACTIONS`, `VOICE_HOTKEYS`, `CHROME_KEYS`, `ALIASES` | 1081 | test_voice, test_texte_fenetres, test_souris_*, test_dictation, test_mode_chrome, … |
+| `app.py` | `main()` : crée tout ; classe `Engine` (boucle) | 806 | test_engine, test_drain, test_perf, … |
+| `app_actions.py` | fonctions `*_actions` : question, ouvre / ferme, Discord, dictée, VS Code et Chrome | 345 | test_mode_chrome, test_type, test_discord_link, … |
+| `app_outils.py` | fonctions pures et petits fichiers de réglages (volume, voix basse, pointeur…) | 230 | test_petites_issues, test_voix_basse, test_audit |
+| `core.py` | machine à états : `Core` (main, souris, défilement, appli devant) ; hérite des trois suivants | 622 | test_voice, test_souris_*, test_mode_chrome, … |
+| `core_mots.py` | constantes de `Core` : `Mode`, tables `COMMANDS`, `SIMPLE_ACTIONS`, `VOICE_HOTKEYS`, `CHROME_KEYS`, `ALIASES`, délais | 130 | test_voice, test_outils |
+| `core_voix.py` | `voice()` et l'aiguillage des mots (confirmation, calendrier, aide, stop, candidature, sans « iris ») | 334 | test_voice, test_dictation, test_cvgen |
+| `core_commandes.py` | commandes « iris + mot » (`_cmd_*`) | 168 | test_voice, test_bypass, … |
+| `core_ecoute.py` | écoutes en cours : dictée Claude, question, frappe, phrase libre, confirmations | 171 | test_dictation, test_type, test_cvgen |
 | `voice.py` | Vosk, grammaire fermée, `WORDS`, 2e avis, capture audio | 436 | test_voice, test_sweep, test_dictation |
-| `ui.py` | fenêtres Qt : accueil, verre, STOP, œil, réparation, île | 1475 | test_island, test_main_fantome, test_stats, … |
+| `ui.py` | `Bridge` (signaux moteur -> Qt) ; réexporte les trois suivants | 41 | — |
+| `ui_ile.py` | île en haut, panneau candidature, calendrier, aide, rappels, sous-titres, volume ; calculs purs | 1380 | test_island, test_cvgen, test_stats, … |
+| `ui_accueil_fen.py` | fenêtre d'aperçu caméra et page d'accueil | 315 | test_accueil |
+| `ui_verre.py` | verre plein écran, boutons STOP / œil / réparer, capteur de touches | 480 | test_main_fantome |
 | `overlay.py` | dessin de l'aperçu caméra et de l'aide | 251 | test_sweep |
 | `camera.py` | capture DirectShow MJPG, images corrompues jetées, reconnexion | 178 | test_camera_validation |
 | `hand.py` | caractéristiques de la main, suivi des deux mains | 126 | test_engine, test_real_recording |

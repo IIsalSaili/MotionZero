@@ -183,10 +183,10 @@ def test_chrome_front_hors_mode_ne_fait_rien():
 def test_touches_envoyees_seulement_si_chrome_devant(monkeypatch):
     from motionzero import app
     core = _chrome()
-    monkeypatch.setattr("motionzero.app.chrome_in_front", lambda: False)
+    monkeypatch.setattr("motionzero.app_actions.chrome_in_front", lambda: False)
     rest = app.vscode_actions([("chrome_keys", ["f5"])], core, None, None, 3.0)
     assert rest == [] and "PAS DEVANT" in core.last_gesture[0]
-    monkeypatch.setattr("motionzero.app.chrome_in_front", lambda: True)
+    monkeypatch.setattr("motionzero.app_actions.chrome_in_front", lambda: True)
     assert app.vscode_actions([("chrome_keys", ["f5"])], core, None, None, 3.0) == [("hotkey", ["f5"])]
 
 
