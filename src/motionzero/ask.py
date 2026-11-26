@@ -134,6 +134,7 @@ class Asker:
         self._whisper = None
         self._model_lock = threading.Lock()
         self._used_t = 0.0
+        self.speaker = None   # voix de Windows : lit la réponse si « lecture à voix haute » est cochée
 
     def _set(self, phase, question=None, answer=None):
         with self.lock:
@@ -234,6 +235,7 @@ class Asker:
             question = self._transcribe(audio, sr)
             if not question:
                 self._set("error", answer="Je n'ai pas entendu de question.")
+                self._say("Je n'ai pas entendu de question.")
                 return
             self._set("thinking", question=question)
             log.info("question : %s", question)
@@ -241,9 +243,18 @@ class Asker:
             answer = answer_question(question, on_search=lambda q: self._set("searching"))
             log.info("reponse (%.1f s) : %s", time.perf_counter() - t0, answer)
             self._set("answer", answer=answer)
+            self._say(answer)
         except Exception as exc:
             log.exception("question echouee")
             self._set("error", answer=f"Échec : {exc}"[:140])
+
+    def _say(self, text):
+        """Lu seulement si la case est cochée (Speaker.allowed) ; une voix en panne ne casse pas la question."""
+        try:
+            if self.speaker is not None:
+                self.speaker.say(text, force=True)
+        except Exception:
+            log.exception("lecture de la reponse")
 
     def snapshot(self):
         """État pour l'île : dict, ou None si rien à montrer (réponse expirée comprise)."""

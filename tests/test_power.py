@@ -28,12 +28,12 @@ def test_reveil_rallume_l_ecran_sans_bloquer_la_veille():
     assert not wake_screen(Fake(boom=True), u)
 
 
-def test_iris_reveil_et_wake_retire():
+def test_iris_reveil_et_wake_retires():
     core = Core(Config())
     core.voice("iris", 0.0)
-    assert ("wake",) in core.voice("réveil", 0.2)
+    assert ("wake",) not in core.voice("réveil", 0.2)   # « réveil » retiré le 26/11 (#50)
     from motionzero.voice import WORDS
-    assert "wake" not in WORDS                           # retiré le 14/11 : jamais utilisé
+    assert "wake" not in WORDS and "réveil" not in WORDS    # « wake » retiré le 14/11
 
 
 def test_reveil_sans_iris_ignore():

@@ -1,4 +1,4 @@
-"""Aiguillage des mots reconnus : confirmation, calendrier, aide, stop, candidature, sans « iris », réveil. Méthodes de Core (découpé de core.py, #52) : seulement boucle principale."""
+"""Aiguillage des mots reconnus : confirmation, calendrier, aide, stop, candidature, sans « iris ». Méthodes de Core (découpé de core.py, #52) : seulement boucle principale."""
 
 from .cvgen import WORDS as CAND_WORDS
 from .alttab import ALTTAB_NUMBERS, ALTTAB_S, number_of
@@ -293,7 +293,7 @@ class VoixMixin:
             self._arm_repeat(word, t, [("editor_tab", EDITOR_TABS[word])])
             return acts
         if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
-            # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
+            # hors mode Chrome : « ferme » garde son sens habituel
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts

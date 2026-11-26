@@ -65,7 +65,7 @@ flowchart TD
 1. **Grammaire Vosk** : ajouter le mot à `voice.WORDS` (mot → prononciation). La grammaire (`GRAMMAR`, `GRAMMARS`) en est tirée. Un mot que le modèle ne connaît pas s'écoute en deux morceaux via `SPLIT` (exemple : `("des", "mute"): "démute"`).
 2. **Table de `core.py`** :
    - `VOICE_HOTKEYS` : le mot envoie des touches (`"coupe": ["ctrl", "x"]`).
-   - `SIMPLE_ACTIONS` : une action sans état et son libellé (`"réveil": (("wake",), "ECRAN RALLUME")`).
+   - `SIMPLE_ACTIONS` : une action sans état et son libellé (`"plein écran": (("window", "max"), "PLEIN ECRAN")`).
    - `COMMANDS` : le mot appelle `Core._cmd_<nom>(word, t, acts)`, qui ajoute ses actions et renvoie un libellé ou `None`.
    - `CHROME_KEYS` (+ `CHROME_LABELS`) : seulement en mode Chrome, sans « iris ».
    - `ALIASES` : un synonyme d'un mot existant.

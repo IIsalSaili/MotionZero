@@ -15,7 +15,6 @@ GROUPS = [
         ("scroll", "monte / descends la main"),
         ("souris", "allume / éteint"),
         ("tête / main", "qui guide la souris"),
-        ("centre", "curseur au centre"),
     ]),
     ("Texte", [
         ("type", "dictée au curseur"),
@@ -30,9 +29,7 @@ GROUPS = [
         ("skip / back", "flèches"),
     ]),
     ("Fenêtres et applis", [
-        ("plein écran", "aussi « agrandis »"),
-        ("réduis", "fenêtre réduite"),
-        ("gauche / droite", "sur une moitié"),
+        ("plein écran", "partout, Chrome compris"),
         ("alt-tab", "fenêtre d'avant, puis 2, 3… : liste en haut"),
         ("ferme", "puis le nom"),
         ("chrome", "Chrome et ses mots"),
@@ -40,7 +37,6 @@ GROUPS = [
         ("discord", "Discord devant"),
         ("studio", "VS Code devant"),
         ("accueil", "accueil d'Iris"),
-        ("réveil", "rallume l'écran"),
         ("traducteur", "sous-titres du son, oui / non"),
     ]),
     ("Claude", [
@@ -77,7 +73,7 @@ CHROME_HELP = {"retour": "page précédente", "avance": "page suivante", "suivan
                "précédent": "onglet précédent", "onglet": "nouvel onglet", "ferme": "ferme l'onglet",
                "rouvre": "onglet rouvert", "recharge": "recharge",
                "descends": "une page plus bas", "monte": "une page plus haut",
-               "agrandis": "zoom +", "réduis": "zoom −", "zoom": "zoom +", "dézoom": "zoom −", "recherche": "barre d'adresse"}
+               "zoom": "zoom +", "dézoom": "zoom −", "recherche": "barre d'adresse"}
 
 
 def said_words():
@@ -96,7 +92,7 @@ def now_block(mode, calendar_open=False, confirming=False):
     if calendar_open:
         return "Calendrier ouvert, sans « iris »", [
             ("suivant / précédent", "semaine ou jour"), ("lundi … dimanche", "ce jour en grand"),
-            ("aujourd'hui", "retour à aujourd'hui"), ("un jour, un mois", "« dix-huit », « mars »"),
+            ("un jour, un mois", "« dix-huit », « mars »"),
             ("ferme / merci", "ferme le calendrier")]
     if confirming:
         return "Après la dictée, sans « iris »", [("envoie", "envoie le texte"), ("annule", "l'efface")]

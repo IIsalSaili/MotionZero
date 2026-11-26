@@ -9,7 +9,7 @@ from motionzero.voice import WORDS
 
 def test_chaque_mot_ecoute_est_dans_l_aide():
     """L'ancienne aide listait 20 mots sur 65 : celle-ci doit tous les citer (sauf calendrier et synonymes)."""
-    rest = {"iris", "space", "agrandis", "wake"}   # « space » = espace ; agrandis / wake cités dans les effets
+    rest = {"iris", "space", "wake"}   # « space » = espace ; wake cité dans les effets
     missing = [w for w in WORDS if w not in said_words() | set(ALIASES) | set(CAL) | rest]
     assert missing == []
 

@@ -46,11 +46,8 @@ WORDS = {
     "undo": "undo",       # « iris undo » : Ctrl+Z ; « iris redo » : Ctrl+Y (« redo » absent du modèle : « re do »)
     "redo": "redo",
     "efface": "efface",   # « iris efface » : efface le mot d'avant ; « efface, efface » sans « iris »
-    "agrandis": "agrandis",  # « iris agrandis » : plein écran / « réduis » : fenêtre réduite (en mode Chrome : zoom)
     "plein écran": "plein écran",  # « iris plein écran » : plein écran partout, Chrome compris
-    "réduis": "réduis",
-    "gauche": "gauche",   # « iris gauche / droite » : fenêtre ancrée sur la moitié de l'écran
-    "droite": "droite",
+    # « agrandis », « réduis », « gauche », « droite », « centre » retirés le 26/11 (#50) : jamais utilisés
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
@@ -71,7 +68,6 @@ WORDS = {
     "sourdine": "sourdine",  # « iris sourdine » : sourdine Discord, casque + micro
     "tête": "tête",       # « iris tête » / « iris main » : ce qui pilote la souris
     "main": "main",
-    "centre": "centre",   # « iris centre » : curseur au centre, tête de face = nouvelle référence
     # « activation » et « favori » retirés le 19/11 (#50) : « viens » suffit, le bot est relancé seul
     "démute": "démute",   # « iris démute » : rallume Discord (entendu « des mute », absent du modèle)
     "silence": "silence", # « iris silence » : coupe la lecture à voix haute des messages Discord
@@ -80,7 +76,7 @@ WORDS = {
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "merci": "merci",     # « iris merci » : retire ce qui est affiché en haut (rappel, réponse…) ; « ok » retiré le 14/11
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
-    "réveil": "réveil",   # « iris réveil » : rallume l'écran éteint (« wake » retiré le 14/11 : jamais utilisé)
+    # « réveil » retiré le 26/11 (#50) : jamais utilisé
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",

@@ -1,4 +1,4 @@
-"""« iris plein écran » (et « iris agrandis » hors mode Chrome) : la fenêtre au premier plan prend tout l'écran.
+"""« iris plein écran » : la fenêtre au premier plan prend tout l'écran.
 Par l'API Windows et non Win+Haut : après « iris gauche », Win+Haut ne donne qu'un quart d'écran (13/11)."""
 import ctypes
 import logging
