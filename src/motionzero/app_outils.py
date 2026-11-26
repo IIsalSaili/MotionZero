@@ -254,3 +254,23 @@ def set_app_icon(qt, path=ICON_PATH):
     from PySide6.QtGui import QIcon
     qt.setWindowIcon(QIcon(path))
     return True
+
+
+def make_tray(qt, on_click, path=ICON_PATH):
+    """Icône d'Iris dans la zone de notification (en bas à droite) : un clic rouvre l'accueil.
+    Renvoie l'icône (à garder en vie), ou None si Windows n'en a pas ou si le logo manque."""
+    try:
+        from PySide6.QtGui import QIcon
+        from PySide6.QtWidgets import QSystemTrayIcon
+        if not os.path.isfile(path) or not QSystemTrayIcon.isSystemTrayAvailable():
+            return None
+        tray = QSystemTrayIcon(QIcon(path), qt)
+        tray.setToolTip("Iris : clic pour ouvrir l'accueil")
+        tray.activated.connect(lambda reason: on_click()
+                               if reason in (QSystemTrayIcon.ActivationReason.Trigger,
+                                             QSystemTrayIcon.ActivationReason.DoubleClick) else None)
+        tray.show()
+        return tray
+    except Exception:
+        logging.getLogger("motionzero").exception("icone de la zone de notification")
+        return None

@@ -77,6 +77,7 @@ class PreviewWindow(QWidget):
     closed = Signal()
     reglage_clicked = Signal(str)              # id du registre : traité par la boucle principale (jamais ici)
     quit_clicked = Signal()                    # « fermer Iris » : arrêt voulu, sans relance
+    reopen_requested = Signal()                # « iris accueil » (autre fil) ou clic sur l'icône : rouvre ici
 
     def __init__(self, pointer="main", quiet="auto", volume=0.5, lecture=False, section_file=None):
         super().__init__()
@@ -280,9 +281,15 @@ class PreviewWindow(QWidget):
         self.label.setPixmap(pix)
 
     def closeEvent(self, event):
-        # la croix n'arrête plus l'appli : seul le bouton STOP le fait. Elle réduit la fenêtre.
+        # la croix n'arrête jamais Iris : l'accueil se cache, l'icône près de l'heure reste (26/11)
         event.ignore()
-        self.showMinimized()
+        self.hide()
+
+    def reopen(self):
+        """Rouvre l'accueil caché ou réduit, à sa taille normale, au premier plan."""
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
 
 # --- Étape 2 : verre plein écran, transparent aux clics -----------------------------------------

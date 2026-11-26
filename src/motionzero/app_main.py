@@ -301,6 +301,11 @@ def main(argv=None):
     cursor_glass.closed.connect(lambda: emergency("verre ferme"))
     stop_btn.closed.connect(lambda: emergency("bouton ferme"))
     view_win.quit_clicked.connect(lambda: emergency("bouton fermer Iris de l'accueil"))
+    from . import vscode as _vs
+    from .app_outils import make_tray
+    view_win.reopen_requested.connect(view_win.reopen)
+    _vs.HOME_HOOK = view_win.reopen_requested.emit       # signal Qt : sûr depuis le fil de la boucle principale
+    tray = make_tray(qt, view_win.reopen)                # icône près de l'heure : un clic rouvre l'accueil
     stop_btn.triggered.connect(lambda: emergency("bouton STOP"))
     qt.aboutToQuit.connect(stop.set)
 

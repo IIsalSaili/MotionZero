@@ -20,7 +20,9 @@
 Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gardée d'un démarrage à l'autre (`accueil_section.txt`). En bas du menu, **Fermer** (rouge).
 - **Maintenant** : image de la caméra, dernières commandes, mots utiles ici, capteurs, consommation sur une ligne.
 - **Réglages** : une carte par réglage, rangée par groupe (Entrées, Voix et sons, Dépannage). Un clic passe au choix suivant. Les réglages sont décrits dans `reglages.py` : en ajouter un = une entrée du registre, son texte et son effet dans la boucle principale.
-- **Conso** : des graphes, un chiffre clé par carte : processeur et carte graphique (courbes Iris / PC sur la dernière minute), mémoire (barres, part d'Iris en vert), cœurs du processeur (une colonne chacun), fils les plus occupés ; état des modèles en haut. Rien n'est mesuré tant que la fenêtre est réduite.
+- **Conso** : des graphes, un chiffre clé par carte : processeur et carte graphique (courbes Iris / PC sur la dernière minute), mémoire (barres, part d'Iris en vert), cœurs du processeur (une colonne chacun), fils les plus occupés ; état des modèles en haut. Rien n'est mesuré tant que la fenêtre est réduite ou cachée.
+
+La croix de l'accueil ne ferme jamais Iris : la fenêtre se cache et l'icône d'Iris reste dans la zone de notification (en bas à droite, près de l'heure). Un clic sur l'icône ou « iris accueil » la rouvre. Seul le bouton **Fermer** du menu arrête Iris.
 
 ## Lecture à voix haute
 
