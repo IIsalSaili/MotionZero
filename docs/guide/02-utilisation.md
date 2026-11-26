@@ -24,7 +24,7 @@ Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gar
 
 ## Lecture à voix haute
 
-Carte **Lecture à voix haute** (Réglages), **désactivée par défaut**. Activée : la voix de Windows lit les rappels et les messages Discord (« iris silence » / « iris lis » ne concernent que Discord). Désactivée : rien n'est lu, rappels compris, et la phrase en cours s'arrête. Choix gardé dans `lecture.txt`.
+Carte **Lecture à voix haute** (Réglages), **désactivée par défaut**. Activée : la voix de Windows lit les rappels, les messages Discord, les réponses de « iris question » et le résultat de « iris instruction » (faite, interrompue ou impossible) (« iris silence » / « iris lis » ne concernent que Discord). Désactivée : rien n'est lu, rappels compris, et la phrase en cours s'arrête. Choix gardé dans `lecture.txt`.
 
 ## Volume d'Iris
 

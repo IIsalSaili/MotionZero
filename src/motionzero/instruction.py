@@ -119,6 +119,7 @@ class Instructeur(OutilsMixin):
                 self.lines = ([f"« {msg[1]} »"] if msg[1] else []) + [msg[2], HELP_HINT]
                 self.show_until = t + SHOW_DONE_S
                 core.last_gesture = (f"INSTRUCTION : {msg[2]}".upper()[:60], t)
+                self._say(f"Instruction impossible : {msg[2]}")
             elif kind == "help":
                 from .outils import EXAMPLES
                 self.plan, self.title = None, "Dis « iris instruction », puis par exemple :"
@@ -146,6 +147,7 @@ class Instructeur(OutilsMixin):
                 if msg[1] and getattr(self, "_running_raw", None):
                     self.last_raw = self._running_raw        # « refais » rejoue celle-ci
                 self.title = "Instruction faite" if msg[1] else "Instruction interrompue"
+                self._say(self.title)
                 self.meta = CLOSE_HINT
                 self.show_until = t + SHOW_DONE_S
             elif kind == "main":
@@ -160,6 +162,15 @@ class Instructeur(OutilsMixin):
         if self.plan is not None and not core.confirming(t) and not self.busy and t >= self.show_until:
             self.plan = None                   # pas de réponse : plan abandonné
         return acts
+
+    def _say(self, text):
+        """Lu seulement si « lecture à voix haute » est cochée (Speaker.allowed)."""
+        sp = getattr(self, "speaker", None)
+        try:
+            if sp is not None:
+                sp.say(text, force=True)
+        except Exception:
+            log.exception("lecture instruction")
 
     def _start(self, core, t):
         """Lance le plan en attente dans le fil « instruction-exec » (boucle principale seulement)."""

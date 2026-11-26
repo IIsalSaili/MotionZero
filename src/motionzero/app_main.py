@@ -148,6 +148,7 @@ def main(argv=None):
     instructeur = Instructeur(lambda audio: asker._transcribe(audio, 16000), launcher, desk,
                               routines=Store(os.path.join(ROOT, "routines.json")),     # non versionnés
                               favoris=Store(os.path.join(ROOT, "favoris.json")), bot=bot)
+    asker.speaker = instructeur.speaker = speaker   # réponses lues si « lecture à voix haute » est cochée
     from .instruction_base import ensure_ollama  # #76 : Ollama démarré avec Iris, pas à la 1re instruction (8 s)
     threading.Thread(target=ensure_ollama, name="ollama-start", daemon=True).start()
     from .cvgen import Candidature              # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md)
