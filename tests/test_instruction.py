@@ -44,19 +44,19 @@ def _instr(raw, ran=None, transcribe=lambda a: "ouvre la derniere video de one c
                        runner=lambda outil, arg: ran.append((outil, arg)), **kw), ran
 
 
-PLAN = {"etapes": [{"outil": "youtube_chaine", "arg": "One Click Studio"},
+PLAN = {"etapes": [{"outil": "youtube", "arg": "One Click Studio"},
                    {"outil": "touche", "arg": "f"}], "refus": ""}
 
 
 # ---- vérification du plan
 def test_plan_valide_et_libelles():
     plan = check_plan(PLAN)
-    assert [o for o, _, _ in plan] == ["youtube_chaine", "touche"]
+    assert [o for o, _, _ in plan] == ["youtube", "touche"]
     assert plan[1][1] == ["f"] and "One Click Studio" in plan[0][2]
 
 
 @pytest.mark.parametrize("outil,arg", [("shell", "rm -rf"), ("site", ""),
-                                       ("volume", "beaucoup"), ("discord", "danse"), ("timer", "bientôt"),
+                                       ("volume", "beaucoup"), ("discord", "danse"), ("timer", "10 minutes"), ("chronometre", ""),
                                        ("ecris", ""), ("attends", "longtemps"), ("ouvre_app", "")])
 def test_etape_refusee(outil, arg):
     with pytest.raises(PlanError):
@@ -122,12 +122,7 @@ def test_touches_et_adresse():
 
 
 # ---- YouTube sans clic
-def test_youtube_derniere_video_de_la_chaine():
-    pages = {"results": '"canonicalBaseUrl":"/@oneclick"', "/@oneclick/videos": '"videoId":"D93YJMy5fPE"'}
-    get = lambda url: next(v for k, v in pages.items() if k in url)
-    assert ins.youtube_latest("One Click Studio", get) == "https://www.youtube.com/watch?v=D93YJMy5fPE"
-    with pytest.raises(RuntimeError):
-        ins.youtube_latest("x", lambda url: "rien")
+def test_youtube_rien_trouve():
     with pytest.raises(RuntimeError):
         ins.youtube_first("x", lambda url: "rien")
 
@@ -147,7 +142,7 @@ def test_plan_affiche_puis_execute_apres_envoie():
     rest = instr.actions([("instruction_ok",), ("autre",)], core, 1.0)
     assert rest == [("autre",)]
     _pump(instr, core, 2.0, lambda: not instr.busy)
-    assert [o for o, _ in ran] == ["youtube_chaine", "touche"]
+    assert [o for o, _ in ran] == ["youtube", "touche"]
     assert instr.title == "Instruction faite" and all("fait" in l for l in instr.state(2.0)["lines"])
 
 
@@ -212,7 +207,7 @@ def test_etape_en_echec_arrete_la_suite():
     _pump(instr, core, 0.0, lambda: instr.plan is not None)
     instr.actions([("instruction_ok",)], core, 1.0)
     _pump(instr, core, 2.0, lambda: not instr.busy)
-    assert calls == ["youtube_chaine"] and "échec" in instr.lines[0]
+    assert calls == ["youtube"] and "échec" in instr.lines[0]
 
 
 def test_stop_arrete_entre_deux_etapes(monkeypatch):
@@ -289,28 +284,26 @@ def test_aide_lisible():
 
 
 # ---- commandes passées dans « instruction » (17/11)
-def test_chronometre_direct_sans_envoie():
-    raw = {"etapes": [{"outil": "chronometre", "arg": ""}], "refus": ""}
-    instr = Instructeur(lambda a: "x", ask=lambda p: raw)
-    core = FakeCore()
-    instr.submit(b"")
-    acts = _pump(instr, core, 0.0, lambda: instr.title == "Instruction faite")   # lancé sans « envoie »
-    assert ("chrono",) in acts + instr.events(core, 1.1) and core.confirm_kind is None
-    assert instr.state(1.2)["title"] == "Instruction faite"   # affiché après coup
+def test_timer_et_chronometre_hors_instruction():
+    """26/11 : redevenus des mots à part (« iris timer », « iris chronomètre »), plus des outils."""
+    from motionzero.voice import GRAMMARS
+    assert "timer" not in ins.TOOLS and "chronometre" not in ins.TOOLS
+    assert all("timer" in json.loads(g) and "chronomètre" in json.loads(g)
+               for k, g in GRAMMARS.items() if not k.startswith("candidature"))
 
 
 def test_commandes_directes_sans_envoie():
-    raw = {"etapes": [{"outil": "timer", "arg": "10 minutes"}, {"outil": "volume", "arg": "40"},
+    raw = {"etapes": [{"outil": "site", "arg": "youtube.com"}, {"outil": "volume", "arg": "40"},
                       {"outil": "rappel", "arg": "demain 9 h médecin"}], "refus": ""}
     instr, ran = _instr(raw)
     core = FakeCore()
     instr.submit(b"")
     _pump(instr, core, 0.0, lambda: not instr.busy and len(ran) == 3)
-    assert [o for o, _ in ran] == ["timer", "volume", "rappel"] and core.confirm_kind is None
+    assert [o for o, _ in ran] == ["site", "volume", "rappel"] and core.confirm_kind is None
 
 
 def test_plan_melange_demande_toujours_envoie():
-    raw = {"etapes": [{"outil": "timer", "arg": "10 minutes"}, {"outil": "touche", "arg": "f"}], "refus": ""}
+    raw = {"etapes": [{"outil": "volume", "arg": "40"}, {"outil": "touche", "arg": "f"}], "refus": ""}
     instr, ran = _instr(raw)
     core = FakeCore()
     instr.submit(b"")

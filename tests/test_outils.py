@@ -17,10 +17,10 @@ def test_aucun_nouveau_mot_guette():
     from motionzero.voice import GRAMMARS, WORDS
     # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté ; puis « candidature » (+1 partout). Les mots
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
-    assert len(WORDS) == 110   # 26/11 : « oui » (valide une instruction) ;   # 26/11 aussi réveil, aujourd'hui ; « espace », « muet », « activation », « favori », « lecture », puis 26/11 agrandis, réduis, gauche, droite, centre retirés (#50)
+    assert len(WORDS) == 112   # 26/11 : « oui » (valide une instruction), « timer », « chronomètre » revenus ;   # 26/11 aussi réveil, aujourd'hui ; « espace », « muet », « activation », « favori », « lecture », puis 26/11 agrandis, réduis, gauche, droite, centre retirés (#50)
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 66, "souris": 66, "chrome": 76, "calendrier": 117, "candidature": 43, "candidature_souris": 49,
-         "alttab": 71, "alttab_souris": 71, "alttab_chrome": 81}   # 25/11 (#75) : « tab » -> « alt tab » + « alt tab deux…six » ; chiffres seuls liste affichée
+        {"base": 68, "souris": 68, "chrome": 78, "calendrier": 119, "candidature": 43, "candidature_souris": 49,
+         "alttab": 73, "alttab_souris": 73, "alttab_chrome": 83}   # 25/11 (#75) : « tab » -> « alt tab » + « alt tab deux…six » ; chiffres seuls liste affichée
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 

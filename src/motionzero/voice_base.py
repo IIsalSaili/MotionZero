@@ -51,6 +51,8 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
+    "timer": "timer",     # « iris timer » puis la durée ; redit pendant qu'il tourne : annulé (26/11 : de nouveau seul)
+    "chronomètre": "chronomètre",   # « iris chronomètre » : démarre ; redit : arrête
     "oui": "oui",         # valide une instruction (« iris instruction ») ; sans effet ailleurs
     "pause": "pause",
     "aide": "aide",       # « iris aide » : toutes les commandes, celles du mode en cours en tête
@@ -94,7 +96,7 @@ WORDS = {
 
 # Passées dans « iris instruction » (17/11, choix de l'utilisateur) : plus guettées par Vosk (moins de fausses
 # détections). Toujours comprises en MP Discord et par Core.
-VIA_INSTRUCTION = {"ouvre", "message", "rappel", "chronomètre", "timer", "volume", "salon"}
+VIA_INSTRUCTION = {"ouvre", "message", "rappel", "volume", "salon"}   # 26/11 : timer, chronomètre de nouveau seuls
 
 
 WAKE_WORD = "iris"

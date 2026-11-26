@@ -5,7 +5,7 @@ import urllib.parse
 import urllib.request
 
 from .instruction_base import STEP_PAUSE_S
-from .instruction_base2 import youtube_first, youtube_latest
+from .instruction_base2 import youtube_first
 
 log = logging.getLogger("motionzero.instruction")
 
@@ -51,8 +51,6 @@ class OutilsMixin:
             self.open_url("https://www.google.com/search?q=" + urllib.parse.quote_plus(arg))
         elif outil == "youtube":
             self.open_url(youtube_first(arg))
-        elif outil == "youtube_chaine":
-            self.open_url(youtube_latest(arg))
         elif outil == "touche":
             from .output import VK
             from .typer import _key, _send_inputs

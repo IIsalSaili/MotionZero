@@ -13,7 +13,7 @@ import queue
 import threading
 import time
 from .instruction_base import (BLOCKED_APPS, BLOCKED_TEXT, CLOSE_HINT, CONFIRM_S, DIRECT, EXPANDING, HELP_HINT, HELP_S, HELP_WORDS, KEEP_ALIVE, KEY_NAMES, LLM_TIMEOUT_S, MAX_STEPS, MODEL, OLLAMA, OLLAMA_FLAGS, PlanError, SAFE_COMBOS, SAFE_SINGLE, SCHEMA, SHOW_DONE_S, STEP_PAUSE_S, SYSTEM, TOOLS, UA, _app, _http, check_step, ensure_ollama, is_help, normalize_url, parse_keys)  # noqa: F401
-from .instruction_base2 import (ask_local, warm_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first, youtube_latest)  # noqa: F401
+from .instruction_base2 import (ask_local, warm_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first)  # noqa: F401
 from .instruction_outils import OutilsMixin
 
 log = logging.getLogger("motionzero.instruction")

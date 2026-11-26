@@ -34,9 +34,9 @@ def is_help(phrase):
 
 
 # Faits sans « oui » quand le plan ne contient qu'eux (choix de l'utilisateur, 17/11) : les commandes qui
-# existaient seules avant (ouvre, timer, rappel, volume, chronomètre). Tout autre outil dans le plan, Discord
+# existaient seules avant (ouvre, rappel, volume). Tout autre outil dans le plan, Discord
 # compris (26/11) : « oui » obligatoire pour l'ensemble.
-DIRECT = {"ouvre_app", "site", "timer", "rappel", "volume", "chronometre"}
+DIRECT = {"ouvre_app", "site", "rappel", "volume"}   # 26/11 : timer et chronomètre redevenus des mots à part
 CONFIRM_S = 10.0          # sans « oui » dans ce temps : plan annulé (jamais lancé seul)
 MAX_STEPS = 8
 STEP_PAUSE_S = 0.8         # entre deux étapes : la fenêtre ouverte a le temps de passer devant
@@ -54,8 +54,8 @@ TOOLS = {
     "ferme_app": "ferme une application (arg : son nom)",
     "site": "ouvre un site par son nom ou son adresse (arg : ex. « mes mails », « leboncoin », « youtube.com »)",
     "recherche_web": "ouvre une recherche Google dans le navigateur (arg : les mots cherchés)",
-    "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche)",
-    "youtube_chaine": "ouvre directement la dernière vidéo publiée par une chaîne YouTube (arg : le nom de la chaîne)",
+    "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche ; pour une vidéo "
+               "précise d'une chaîne : le nom de la chaîne puis le sujet)",
     "touche": "appuie sur une touche ou un raccourci (arg : ex. « entrée », « ctrl+t », « alt+tab », « f5 »)",
     "ecris": "écrit un texte là où se trouve le curseur (arg : le texte)",
     "volume": "règle le son du PC (arg : « 40 », « plus fort », « moins fort », « coupe », « remets »)",
@@ -70,10 +70,8 @@ TOOLS = {
     "discord_pseudo": "change le pseudo d'un membre Discord (arg : « nom: nouveau pseudo »)",
     "discord_donne_role": "donne un rôle à un membre Discord (arg : « nom: rôle »)",
     "discord_retire_role": "retire un rôle à un membre Discord (arg : « nom: rôle »)",
-    "timer": "lance un compte à rebours (arg : la durée, ex. « 5 minutes »)",
     "rappel": "crée un rappel, à valider ensuite (arg : la demande, ex. « demain 9 h appeler le médecin »)",
     "traducteur": "allume ou éteint les sous-titres traduits du son du PC (arg vide)",
-    "chronometre": "démarre le chronomètre, ou l'arrête s'il tourne (arg vide)",
     "attends": "attend quelques secondes (arg : nombre de secondes, 10 au plus)",
     # routines : une suite d'étapes enregistrée sous un nom, rejouée ensuite
     "routine": "lance une routine enregistrée (arg : son nom, parmi les routines connues)",
@@ -110,7 +108,7 @@ SYSTEM = (
     "l'assistant d'un utilisateur qui ne peut pas se servir de ses mains. Tu ne peux utiliser QUE ces outils :\n"
     + "\n".join(f"- {k} : {v}" for k, v in TOOLS.items()) +
     "\nRègles :\n"
-    "- Pour une vidéo YouTube, utilise youtube ou youtube_chaine directement (ils ouvrent eux-mêmes le navigateur) : "
+    "- Pour une vidéo YouTube, utilise youtube directement (il ouvre eux-mêmes le navigateur) : "
     "jamais ouvrir Chrome puis taper dans la barre.\n"
     "- Pour une vidéo déjà vue, utilise historique_video ; pour ouvrir un site, site avec son nom.\n"
     "- « crée la routine X : … » -> cree_routine X puis les étapes de la routine.\n"
@@ -277,12 +275,11 @@ def check_step(outil, arg, app_names=None, ctx=None):
         if url is None:                      # inconnu : cherché sur internet au moment de l'ouvrir, puis retenu
             return outil, ("?", arg), f"Ouvrir {arg} (cherché sur internet)"
         return outil, url, f"Ouvrir {arg if ' ' in arg or '.' not in arg else url}"
-    if outil in ("recherche_web", "youtube", "youtube_chaine", "rappel"):
+    if outil in ("recherche_web", "youtube", "rappel"):
         if not arg:
             raise PlanError(f"{outil} sans texte")
         return outil, arg, {"recherche_web": f"Rechercher « {arg} » sur Google",
                             "youtube": f"YouTube : 1re vidéo pour « {arg} »",
-                            "youtube_chaine": f"YouTube : dernière vidéo de « {arg} »",
                             "rappel": f"Rappel « {arg} » (à valider)"}[outil]
     if outil == "touche":
         keys = parse_keys(arg)
@@ -308,15 +305,8 @@ def check_step(outil, arg, app_names=None, ctx=None):
         if act is None:
             raise PlanError(f"discord : {arg} ?")
         return outil, act, f"Discord : {arg.lower()}"
-    if outil == "timer":
-        from .timers import parse_duration
-        if not parse_duration(arg):
-            raise PlanError(f"durée incomprise : {arg}")
-        return outil, arg, f"Timer {arg}"
     if outil == "traducteur":
         return outil, "", "Traducteur (allume / éteint)"
-    if outil == "chronometre":
-        return outil, "", "Chronomètre (démarre / arrête)"
     r = _check_more(outil, arg, app_names, ctx or {})
     if r is not None:
         return r
