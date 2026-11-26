@@ -14,10 +14,4 @@ models/
 reminders.json*
 routines.json*
 favoris.json*
-pointeur.txt
-voix_basse.txt
-volume_iris.txt
-quota.txt
-conversation.txt
-lecture.txt
-accueil_section.txt
+parametres.json

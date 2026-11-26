@@ -1,7 +1,7 @@
 """« iris quota » : pourcentage utilisé de la session Claude de 5 heures, et l'heure du reset.
 
 Affiché en permanence dans le coin haut gauche, centré sur le bandeau, tant qu'il est allumé ; « iris quota »
-l'allume ou l'éteint, et le choix est gardé dans quota.txt (non versionné).
+l'allume ou l'éteint, et le choix est gardé dans parametres.json (non versionné).
 
 Source : l'adresse que Claude Code lit lui-même pour /usage (non documentée), avec le jeton de connexion
 de ~/.claude/.credentials.json, lu seulement, envoyé seulement à Anthropic. Si quoi que ce soit échoue
@@ -81,19 +81,11 @@ JOURS = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"
 
 
 def read_shown(path):
-    try:
-        with open(path, encoding="utf-8") as f:
-            return f.read().strip() == "oui"
-    except OSError:
-        return False
+    return path.read() == "oui"
 
 
 def write_shown(path, shown):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("oui" if shown else "non")
-    except OSError:
-        _log.warning("choix du quota non enregistre")
+    path.write("oui" if shown else "non")
 
 
 class Quota:

@@ -1,5 +1,6 @@
 """Petites issues du 14/11 : undo / redo (#36), « ferme » en Chrome (#34), Iris et pas Claude (#37),
 effets d'animation de Windows (#11), volume d'Iris dans l'accueil (#28)."""
+from motionzero.parametres import Param
 import queue
 from types import SimpleNamespace
 
@@ -88,13 +89,13 @@ def test_volume_de_l_accueil(tmp_path, monkeypatch):
     import motionzero.app as app
     from motionzero.reglages import tile_text
     assert [app.next_volume(v) for v in (0.3, 0.5, 0.7, 1.0, 0.42)] == [0.5, 0.7, 1.0, 0.3, 0.5]
-    assert app.read_volume(str(tmp_path / "absent"), 0.5) == 0.5
-    bad = tmp_path / "v.txt"
-    bad.write_text("fort", encoding="utf-8")
-    assert app.read_volume(str(bad), 0.5) == 0.5
-    bad.write_text("7", encoding="utf-8")
-    assert app.read_volume(str(bad), 0.5) == 0.5                    # hors de 0..1
-    monkeypatch.setattr("motionzero.app_ecoute.VOLUME_FILE", str(tmp_path / "vol.txt"))
+    assert app.read_volume(Param("absent", str(tmp_path / "p.json")), 0.5) == 0.5
+    bad = Param("v", str(tmp_path / "p.json"))
+    bad.write("fort")
+    assert app.read_volume(bad, 0.5) == 0.5
+    bad.write("7")
+    assert app.read_volume(bad, 0.5) == 0.5                    # hors de 0..1
+    monkeypatch.setattr("motionzero.app_ecoute.VOLUME_FILE", Param("vol", str(tmp_path / "p.json")))
     played, emitted = [], []
     d = SimpleNamespace(volume_requests=queue.Queue(),
                         sounds=SimpleNamespace(mixer=SimpleNamespace(volume=0.5), play=played.append),
@@ -104,7 +105,8 @@ def test_volume_de_l_accueil(tmp_path, monkeypatch):
     d.volume_requests.put(1)
     eng._volume()
     assert d.sounds.mixer.volume == 0.7 and emitted == [0.7] and played == ["OK"]
-    assert app.read_volume(app.VOLUME_FILE, 0.5) == 0.7
+    import motionzero.app_ecoute as ecoute
+    assert app.read_volume(ecoute.VOLUME_FILE, 0.5) == 0.7
     assert tile_text("volume", 0.7)[0] == "70 %"
     eng.d = SimpleNamespace()                                       # sans file : rien ne plante
     eng._volume()

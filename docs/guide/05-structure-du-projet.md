@@ -13,7 +13,7 @@ motionzero/
 ├── motionzero.md             besoins et décisions d'origine
 ├── plan-*.md                 plans (overlay, voix-claude, navigation-chrome, sons)
 ├── pyproject.toml            dépendances, pytest
-├── pointeur.txt              dernier choix main / tête
+├── parametres.json           tous les choix gardés (souris, voix, volume, accueil…)
 ├── reminders.json            rappels enregistrés
 ├── assets/                   sons, icônes, polices, images d'Iris
 ├── calibration/poses.json    repères des poses de la main (clic main ouverte)

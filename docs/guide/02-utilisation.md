@@ -17,18 +17,20 @@
 
 ## Page d'accueil
 
-Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gardée d'un démarrage à l'autre (`accueil_section.txt`). En bas du menu, **Fermer** (rouge).
+Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gardée d'un démarrage à l'autre (`parametres.json`). En bas du menu, **Fermer** (rouge).
 - **Maintenant** : image de la caméra, dernières commandes, mots utiles ici, capteurs, consommation sur une ligne.
 - **Réglages** : une carte par réglage, rangée par groupe (Entrées, Voix et sons, Dépannage). Un clic passe au choix suivant. Les réglages sont décrits dans `reglages.py` : en ajouter un = une entrée du registre, son texte et son effet dans la boucle principale.
-- **Conso** : des graphes, un chiffre clé par carte : processeur et carte graphique (courbes Iris / PC sur la dernière minute), mémoire (barres, part d'Iris en vert), cœurs du processeur (une colonne chacun), fils les plus occupés ; état des modèles en haut. Rien n'est mesuré tant que la fenêtre est réduite.
+- **Conso** : des graphes, un chiffre clé par carte : processeur et carte graphique (courbes Iris / PC sur la dernière minute), mémoire (barres, part d'Iris en vert), cœurs du processeur (une colonne chacun), fils les plus occupés ; état des modèles en haut. Rien n'est mesuré tant que la fenêtre est réduite ou cachée.
+
+La croix de l'accueil ne ferme jamais Iris : la fenêtre se cache et l'icône d'Iris reste dans la zone de notification (en bas à droite, près de l'heure). Un clic sur l'icône ou « iris accueil » la rouvre. Seul le bouton **Fermer** du menu arrête Iris.
 
 ## Lecture à voix haute
 
-Carte **Lecture à voix haute** (Réglages), **désactivée par défaut**. Activée : la voix de Windows lit les rappels, les messages Discord, les réponses de « iris question » et le résultat de « iris instruction » (faite, interrompue ou impossible) (« iris silence » / « iris lis » ne concernent que Discord). Désactivée : rien n'est lu, rappels compris, et la phrase en cours s'arrête. Choix gardé dans `lecture.txt`.
+Carte **Lecture à voix haute** (Réglages), **désactivée par défaut**. Activée : la voix de Windows lit les rappels, les messages Discord, les réponses de « iris question » et le résultat de « iris instruction » (faite, interrompue ou impossible) (« iris silence » / « iris lis » ne concernent que Discord). Désactivée : rien n'est lu, rappels compris, et la phrase en cours s'arrête. Choix gardé dans `parametres.json`.
 
 ## Volume d'Iris
 
-La carte **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `volume_iris.txt`.
+La carte **Volume d'Iris** de l'accueil règle les sons d'Iris seulement (pas le volume de Windows) : 30, 50, 70 puis 100 %. Un son est joué à chaque clic pour l'entendre. Choix gardé dans `parametres.json`.
 
 ## Le bandeau en haut
 
@@ -48,7 +50,7 @@ La carte **Caméra** de l'accueil rend la webcam aux autres applis (appel vidéo
 
 ## Mode conversation
 
-Carte **Mode conversation** de l'accueil, coché par défaut. Coché : un mot dit au milieu d'une conversation est ignoré (2e vérification par reconnaissance libre). Décoché : tout mot reconnu agit, sans cette vérification ; « iris » reste demandé là où il l'est. Choix gardé dans `conversation.txt`.
+Carte **Mode conversation** de l'accueil, coché par défaut. Coché : un mot dit au milieu d'une conversation est ignoré (2e vérification par reconnaissance libre). Décoché : tout mot reconnu agit, sans cette vérification ; « iris » reste demandé là où il l'est. Choix gardé dans `parametres.json`.
 
 ## Fermer Iris
 
@@ -109,7 +111,7 @@ Le mode Chrome suit Chrome au premier plan (contrôlé toutes les 0,3 s), sans s
 
 ### Main ou tête
 
-- « iris tête » / « iris main », ou la carte **Souris** de l'accueil. Le choix est gardé d'une session à l'autre (`pointeur.txt`).
+- « iris tête » / « iris main », ou la carte **Souris** de l'accueil. Le choix est gardé d'une session à l'autre (`parametres.json`).
 - À la tête, seul le visage est détecté. « iris centre » : la tête de face devient le centre.
 
 ## Défilement

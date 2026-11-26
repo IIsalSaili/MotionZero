@@ -1,4 +1,5 @@
 """« iris quota » : quota Claude de la session de 5 h, en haut à droite, allumé / éteint à la voix."""
+from motionzero.parametres import Param
 import datetime
 import json
 import urllib.error
@@ -120,13 +121,13 @@ def test_mot_connu_de_la_voix_et_de_l_aide():
 
 
 def test_choix_garde(tmp_path):
-    p = str(tmp_path / "quota.txt")
+    p = Param("quota", str(tmp_path / "p.json"))
     assert quota.read_shown(p) is False        # fichier absent : masqué
     quota.write_shown(p, True)
     assert quota.read_shown(p) is True
     quota.write_shown(p, False)
     assert quota.read_shown(p) is False
-    quota.write_shown(str(tmp_path / "absent" / "q.txt"), True)   # écriture impossible : pas d'exception
+    quota.write_shown(Param("q", str(tmp_path / "absent" / "p.json")), True)   # écriture impossible : pas d'exception
 
 
 def test_quota_masque_efface_toute_la_pastille():

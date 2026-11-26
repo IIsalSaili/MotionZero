@@ -306,8 +306,18 @@ def _title_of(hwnd):
     return buf.value
 
 
+HOME_HOOK = None   # posé par l'appli : rouvre l'accueil par Qt (il peut être caché par la croix, pas seulement réduit)
+
+
 def open_home():
     """« iris accueil » : la fenêtre d'aperçu de motionzero (caméra, commandes), au premier plan, à sa taille normale."""
+    if HOME_HOOK is not None:
+        try:
+            HOME_HOOK()
+            log.info("accueil rouvert")
+            return None
+        except Exception:
+            log.exception("accueil : reouverture par Qt")   # repli : par Windows, comme avant
     u = ctypes.windll.user32
     found = []
 
