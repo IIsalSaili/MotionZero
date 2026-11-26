@@ -141,9 +141,9 @@ def test_plan_affiche_puis_execute_apres_envoie():
     assert ran == []                                         # rien fait avant la confirmation
     assert core.confirm_kind == "instruction" and core.confirming(1.0)
     st = instr.state(1.0)
-    assert st["lines"][0].startswith("1. YouTube") and "envoie" in st["title"]
+    assert st["lines"][0].startswith("1. YouTube") and "oui" in st["title"]
     assert reminder_view({"plan": st})[0] == "plan"
-    assert "envoie" in reminder_texts("plan", st)[2]
+    assert "oui" in reminder_texts("plan", st)[2]
     rest = instr.actions([("instruction_ok",), ("autre",)], core, 1.0)
     assert rest == [("autre",)]
     _pump(instr, core, 2.0, lambda: not instr.busy)
@@ -253,7 +253,8 @@ def test_core_envoie_annule():
     from motionzero.core import Core
     core = Core.__new__(Core)
     core.confirm_until, core.confirm_kind, core.type_erase_until = 10.0, "instruction", -1e9
-    assert core._v_confirm("envoie", 1.0, 1.0, []) == [("instruction_ok",)]
+    assert core._v_confirm("envoie", 1.0, 1.0, []) is None      # 26/11 : plus « envoie », seulement « oui »
+    assert core._v_confirm("oui", 1.0, 1.0, []) == [("instruction_ok",)]
     core.confirm_until = 10.0
     assert core._v_confirm("annule", 2.0, 2.0, []) == [("instruction_non",)]
     assert not core.confirming(3.0)

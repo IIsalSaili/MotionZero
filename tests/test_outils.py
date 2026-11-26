@@ -17,10 +17,10 @@ def test_aucun_nouveau_mot_guette():
     from motionzero.voice import GRAMMARS, WORDS
     # 17/11 : 7 mots passés dans « instruction », « bypass » ajouté ; puis « candidature » (+1 partout). Les mots
     # du mode candidature (cherche, état, offres) ne sont guettés que mode allumé.
-    assert len(WORDS) == 109   # 26/11 aussi réveil, aujourd'hui ; « espace », « muet », « activation », « favori », « lecture », puis 26/11 agrandis, réduis, gauche, droite, centre retirés (#50)
+    assert len(WORDS) == 110   # 26/11 : « oui » (valide une instruction) ;   # 26/11 aussi réveil, aujourd'hui ; « espace », « muet », « activation », « favori », « lecture », puis 26/11 agrandis, réduis, gauche, droite, centre retirés (#50)
     assert {k: len(json.loads(v)) for k, v in GRAMMARS.items()} == \
-        {"base": 65, "souris": 65, "chrome": 75, "calendrier": 116, "candidature": 43, "candidature_souris": 49,
-         "alttab": 70, "alttab_souris": 70, "alttab_chrome": 80}   # 25/11 (#75) : « tab » -> « alt tab » + « alt tab deux…six » ; chiffres seuls liste affichée
+        {"base": 66, "souris": 66, "chrome": 76, "calendrier": 117, "candidature": 43, "candidature_souris": 49,
+         "alttab": 71, "alttab_souris": 71, "alttab_chrome": 81}   # 25/11 (#75) : « tab » -> « alt tab » + « alt tab deux…six » ; chiffres seuls liste affichée
     for g in GRAMMARS.values():
         assert not [t for t in TOOLS if t in json.loads(g) and "_" in t]
 
@@ -240,6 +240,38 @@ def test_discord_salon_et_message():
                 SimpleNamespace(connected=True, send=lambda m: None)):
         with pytest.raises(RuntimeError):
             Instructeur(lambda a: "", bot=bad)._run_tool("discord_salon", "Gaming")
+
+
+def test_discord_membres():
+    """26/11 : raccrocher, muet, sourd, déconnecter, kick, pseudo, rôles ; toujours après « oui »."""
+    from types import SimpleNamespace
+    from motionzero.instruction import DIRECT, Instructeur
+    assert not any(k.startswith("discord") for k in DIRECT)          # Discord : jamais sans « oui »
+    assert check_step("discord_raccroche", "")[1] == {"action": "hangup"}
+    assert check_step("discord_kick", "Paul.")[1] == {"action": "kick", "who": "Paul", "value": ""}
+    assert check_step("discord_muet", "Paul")[1]["action"] == "mute"
+    step = check_step("discord_donne_role", "Paul: chef")
+    assert step[1] == {"action": "role_add", "who": "Paul", "value": "chef"} and "chef" in step[2]
+    assert check_step("discord_pseudo", "Paul = le roi")[1]["value"] == "le roi"
+    for outil, arg in (("discord_kick", ""), ("discord_pseudo", "Paul"), ("discord_retire_role", "Paul:"),
+                       ("discord_donne_role", ": chef")):
+        with pytest.raises(PlanError):
+            check_step(outil, arg)
+    sent = []
+    bot = SimpleNamespace(connected=True, send=lambda m: sent.append(m) or 1)
+    Instructeur(lambda a: "", bot=bot)._run_tool("discord_kick", {"action": "kick", "who": "Paul", "value": ""})
+    assert sent == [{"t": "member", "action": "kick", "who": "Paul", "value": ""}]
+    for bad in (None, SimpleNamespace(connected=False, send=lambda m: 1),
+                SimpleNamespace(connected=True, send=lambda m: None)):
+        with pytest.raises(RuntimeError):
+            Instructeur(lambda a: "", bot=bad)._run_tool("discord_raccroche", {"action": "hangup"})
+
+
+def test_discord_resultat_membre():
+    from motionzero.discord_link import result_label
+    assert result_label({"ok": True, "label": "Paul expulsé"}, "member") == "DISCORD : PAUL EXPULSÉ"
+    assert result_label({"ok": False, "error": "membre_inconnu", "suggestions": ["Paula"]}, "member") == \
+        "MEMBRE INCONNU (PAULA ?)"
 
 
 # ---- texte jamais coupé : la police rapetisse

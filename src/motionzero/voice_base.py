@@ -51,6 +51,7 @@ WORDS = {
     "claude": "Claude",   # « iris » puis « claude » : allume le micro de Claude dans VS Code
     "envoie": "envoie",   # après la dictée : envoie le message (Entrée)
     "envoyé": "envoyé",   # synonyme d'« envoie » (même effet partout)
+    "oui": "oui",         # valide une instruction (« iris instruction ») ; sans effet ailleurs
     "pause": "pause",
     "aide": "aide",       # « iris aide » : toutes les commandes, celles du mode en cours en tête
     "guide": "guide",     # « iris guide » : la documentation sur GitHub
@@ -197,7 +198,7 @@ IRIS_MIN_CONF = 0.3
 # vérification, sauf pour les mots qui font une action définitive (fermer, envoyer, effacer…).
 BYPASS_MIN_CONF = 0.4       # commande après « iris » (normal : 0,6)
 BYPASS_LONE_CONF = 0.55     # mot dit seul, en focus (normal : 0,8)
-BYPASS_EXCLUDED = {"ferme", "envoie", "envoyé", "annule", "efface", "coupe", "recharge", "stop", "agrippe",
+BYPASS_EXCLUDED = {"ferme", "envoie", "envoyé", "oui", "annule", "efface", "coupe", "recharge", "stop", "agrippe",
                    "instruction", "bypass"}
 
 

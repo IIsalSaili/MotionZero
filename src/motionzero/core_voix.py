@@ -63,7 +63,7 @@ class VoixMixin:
         elif self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
             # aucun verrou : toutes les autres commandes « iris + … » restent utilisables
             return self._confirm(word, t)
-        elif self.confirm_kind == "instruction" and word in ("envoie", "envoyé", "annule"):
+        elif self.confirm_kind == "instruction" and word in ("oui", "annule"):   # « oui » (26/11) : plus « envoie »
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
             return [("instruction_non",)] if word == "annule" else [("instruction_ok",)]

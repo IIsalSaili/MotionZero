@@ -215,7 +215,8 @@ def _line(msg):
 ERRORS = {"salon_inconnu": "SALON INCONNU", "pas_en_vocal": "TU N'ES PAS EN VOCAL",
           "permission_manquante": "PERMISSION MANQUANTE", "message_vide": "MESSAGE VIDE",
           "commande_inconnue": "BOT A METTRE A JOUR", "pas_compris": "PAS COMPRIS",
-          "vocal_impossible": "VOCAL IMPOSSIBLE"}
+          "vocal_impossible": "VOCAL IMPOSSIBLE", "membre_inconnu": "MEMBRE INCONNU",
+          "role_inconnu": "ROLE INCONNU", "pas_toi": "PAS SUR TOI", "membre_pas_en_vocal": "IL N'EST PAS EN VOCAL"}
 
 
 def result_label(msg, kind="send"):
@@ -226,6 +227,8 @@ def result_label(msg, kind="send"):
         return "IRIS A QUITTE LE VOCAL"
     if msg.get("ok") and kind == "activate":
         return "BOT VOCAL PRET : DIS IRIS VIENS"
+    if msg.get("ok") and msg.get("label"):        # membres, raccrocher : le bot dit ce qu'il a fait
+        return f"DISCORD : {msg['label']}".upper()[:60]
     if msg.get("ok"):
         done = "ENVOYE DANS #" if kind == "send" else "SALON "
         return f"DISCORD : {done}{msg.get('channel', '?')}".upper()[:60]

@@ -101,7 +101,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "tête": "pointer", "main": "pointer",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
-            "traducteur": "translator", "bypass": "bypass", "candidature": "candidature"}
+            "traducteur": "translator", "bypass": "bypass", "candidature": "candidature", "oui": "oui"}
 
 
 

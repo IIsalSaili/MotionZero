@@ -139,6 +139,12 @@ class OutilsMixin:
             msg = {"t": "move", "channel": arg} if outil == "discord_salon" else {"t": "send", "text": arg}
             if bot.send(msg) is None:
                 raise RuntimeError("bot Discord occupé")
+        elif outil.startswith("discord_"):            # membres, raccrocher (MEMBER_TOOLS)
+            bot = self.bot
+            if bot is None or not bot.connected:
+                raise RuntimeError("bot Discord absent")
+            if bot.send({"t": "member", **arg}) is None:
+                raise RuntimeError("bot Discord occupé")
         else:
             raise RuntimeError(f"outil sans action : {outil}")
         return None
