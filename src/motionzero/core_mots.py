@@ -81,7 +81,6 @@ SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partou
                   "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
                   "alt-tab": (("alt_tab", 2), None),   # (voir core_voix : « alt-tab trois », liste en haut)
-                  "réveil": (("wake",), "ECRAN RALLUME"),
                   "chronomètre": (("chrono",), "CHRONOMETRE"),
                   "plus tard": (("rappel_tard",), None),
                   "viens": (("bot_join",), "IRIS : J'ARRIVE EN VOCAL"),

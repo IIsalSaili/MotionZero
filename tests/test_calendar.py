@@ -58,8 +58,9 @@ def test_commandes():
     cal.command("précédent", TODAY)
     cal.command("précédent", TODAY)
     assert cal.week == date(2026, 11, 2)
-    cal.command("aujourd'hui", TODAY)
-    assert cal.week == date(2026, 11, 9) and cal.focus == TODAY
+    assert not cal.command("aujourd'hui", TODAY)       # retiré (#50) : rien ne change
+    assert cal.week == date(2026, 11, 2)
+    cal.show(TODAY)
     cal.command("dix-huit", TODAY)
     assert cal.week == date(2026, 11, 16) and cal.focus == date(2026, 11, 18)
     cal.command("samedi", TODAY)

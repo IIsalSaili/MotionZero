@@ -1,4 +1,4 @@
-"""Aiguillage des mots reconnus : confirmation, calendrier, aide, stop, candidature, sans « iris », réveil. Méthodes de Core (découpé de core.py, #52) : seulement boucle principale."""
+"""Aiguillage des mots reconnus : confirmation, calendrier, aide, stop, candidature, sans « iris ». Méthodes de Core (découpé de core.py, #52) : seulement boucle principale."""
 
 from .cvgen import WORDS as CAND_WORDS
 from .alttab import ALTTAB_NUMBERS, ALTTAB_S, number_of

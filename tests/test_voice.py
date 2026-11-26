@@ -492,7 +492,7 @@ def test_mots_du_calendrier_seulement_calendrier_ouvert():
     import json
     from motionzero.voice import GRAMMARS
     base, cal, chrome = (json.loads(GRAMMARS[k]) for k in ("base", "calendrier", "chrome"))
-    for w in ("août", "mai", "vingt-six", "lundi", "deuxième", "aujourd'hui"):
+    for w in ("août", "mai", "vingt-six", "lundi", "deuxième"):
         assert w not in base and w not in chrome and w in cal
     for w in ("iris", "suivant", "précédent", "stop", "ferme", "merci"):
         assert w in base and w in cal

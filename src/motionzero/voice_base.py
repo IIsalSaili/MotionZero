@@ -76,7 +76,7 @@ WORDS = {
     "back": "back",       # « iris back » : flèche gauche (YouTube : -10 s)
     "merci": "merci",     # « iris merci » : retire ce qui est affiché en haut (rappel, réponse…) ; « ok » retiré le 14/11
     "plus tard": "plus tard",  # « iris plus tard » : le rappel revient dans 10 min
-    "réveil": "réveil",   # « iris réveil » : rallume l'écran éteint (« wake » retiré le 14/11 : jamais utilisé)
+    # « réveil » retiré le 26/11 (#50) : jamais utilisé
     "calendrier": "calendrier",   # « iris calendrier » : la semaine en 7 cartes (#21)
     "heure": "heure",     # « iris heure » / « iris date » : jour, date et heure affichés quelques secondes
     "date": "date",

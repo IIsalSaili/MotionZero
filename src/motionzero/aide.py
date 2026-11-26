@@ -37,7 +37,6 @@ GROUPS = [
         ("discord", "Discord devant"),
         ("studio", "VS Code devant"),
         ("accueil", "accueil d'Iris"),
-        ("réveil", "rallume l'écran"),
         ("traducteur", "sous-titres du son, oui / non"),
     ]),
     ("Claude", [
@@ -93,7 +92,7 @@ def now_block(mode, calendar_open=False, confirming=False):
     if calendar_open:
         return "Calendrier ouvert, sans « iris »", [
             ("suivant / précédent", "semaine ou jour"), ("lundi … dimanche", "ce jour en grand"),
-            ("aujourd'hui", "retour à aujourd'hui"), ("un jour, un mois", "« dix-huit », « mars »"),
+            ("un jour, un mois", "« dix-huit », « mars »"),
             ("ferme / merci", "ferme le calendrier")]
     if confirming:
         return "Après la dictée, sans « iris »", [("envoie", "envoie le texte"), ("annule", "l'efface")]

@@ -85,7 +85,6 @@ Mode : « tous » sauf mention.
 | `discord` / `studio` / `accueil` | Discord / VS Code (sans micro) / fenêtre d'accueil d'Iris (le mode Chrome s'arrête quand Discord ou VS Code passe devant ; l'accueil ne le quitte pas) | non | tous |
 | `ouvre` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « ouvre Spotify ». Ancien fonctionnement : puis le nom d'une appli (Whisper, menu Démarrer) | non | tous |
 | `ferme` | retire la réponse affichée, puis écoute un nom d'appli à fermer | oui si quelque chose est affiché en haut | hors Chrome (en Chrome : ferme l'onglet) |
-| `réveil` | rallume l'écran éteint | non | tous |
 | `volume` | **Depuis le 17/11, par « iris instruction » seulement** (plus guetté seul ; fait directement, sans `envoie`, si le plan ne contient que ces commandes) : « volume à 40 ». Ancien fonctionnement : puis « 40 », « à fond », « plus fort », « coupe », « remets le son »… | non | tous |
 
 ## Claude
@@ -187,7 +186,6 @@ Rien entendu, Haiku indisponible ou pas compris : l'île l'affiche et un son « 
 |---|---|
 | `suivant` / `précédent` | semaine (ou jour ouvert) suivante / précédente |
 | `lundi` … `dimanche` | ce jour en grand |
-| `aujourd'hui` | retour à aujourd'hui |
 | `premier`, `deux` … `trente-et-un`, `deuxième` | la semaine de ce jour du mois |
 | `janvier` … `décembre` | ce mois (seul ou après un jour) |
 | `ferme`, `merci`, `stop` | ferme le calendrier |

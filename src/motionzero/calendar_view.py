@@ -25,7 +25,7 @@ MONTH_OF = {m: i + 1 for i, m in enumerate(MONTHS_FR)}
 RECENT_DAYS = 90        # une date passée de moins de 3 mois reste dans le passé
 WITH_DAY_S = 3.0        # « dix-huit … janvier » : le mois suit le jour de moins de 3 s
 WEEKDAY_OF = {d: i for i, d in enumerate(DAYS_FR)}
-WORDS = ["suivant", "précédent", "aujourd'hui", "deuxième"] + DAYS_FR + NUMBERS + MONTHS_FR   # calendrier ouvert
+WORDS = ["suivant", "précédent", "deuxième"] + DAYS_FR + NUMBERS + MONTHS_FR   # calendrier ouvert
 MAX_ITEMS = 3            # rendez-vous par carte ; au-delà : « + N autres »
 
 
@@ -126,9 +126,6 @@ class Calendar:
             else:
                 self.week += timedelta(weeks=step)
                 self.focus = None
-            return True
-        if word == "aujourd'hui":
-            self.show(today)
             return True
         if word in WEEKDAY_OF:
             self.detail = self.week + timedelta(days=WEEKDAY_OF[word])
