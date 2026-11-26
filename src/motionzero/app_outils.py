@@ -228,3 +228,29 @@ def pick_toast(*items):
     return max(items, key=lambda i: i[1]) if items else None
 
 
+
+
+APP_ID = "Iris.motionzero"
+ICON_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                         "assets", "iris", "iris.ico")
+
+
+def set_app_identity(app_id=APP_ID, shell32=None):
+    """Barre des tâches : Iris à son nom et son logo, pas celui de Python. À appeler avant la 1re fenêtre.
+    Renvoie False si Windows refuse (Iris continue, avec le logo de Python)."""
+    try:
+        if shell32 is None:
+            import ctypes
+            shell32 = ctypes.windll.shell32
+        return shell32.SetCurrentProcessExplicitAppUserModelID(app_id) == 0
+    except Exception:
+        return False
+
+
+def set_app_icon(qt, path=ICON_PATH):
+    """Logo d'Iris sur toutes ses fenêtres (barre des tâches, Alt+Tab). Fichier absent : rien, sans erreur."""
+    if not os.path.isfile(path):
+        return False
+    from PySide6.QtGui import QIcon
+    qt.setWindowIcon(QIcon(path))
+    return True

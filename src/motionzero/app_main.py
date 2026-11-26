@@ -163,7 +163,10 @@ def main(argv=None):
     log.info("demarrage (simulation=%s) camera=%s", args.simulation, cam.info)
 
     # Qt : l'interface tourne dans le fil principal, caméra + MediaPipe + Core dans un fil à part.
+    from .app_outils import set_app_icon, set_app_identity
+    set_app_identity()                         # barre des tâches : « Iris » et son logo, pas Python
     qt = QApplication.instance() or QApplication([])
+    set_app_icon(qt)
     from .reglages import LECTURE_FILE, SECTION_FILE, read_flag
     lecture = read_flag(LECTURE_FILE, False)   # lecture à voix haute : décochée par défaut
     speaker.allowed = lecture
