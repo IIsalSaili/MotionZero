@@ -75,6 +75,8 @@ def main(argv=None):
 
     set_dpi_aware()
     cfg = load_config(args.config)
+    from .parametres import migrate
+    migrate()                                                # anciens fichiers .txt repris dans parametres.json
     cfg.pointer = read_pointer(POINTER_FILE, cfg.pointer)    # main ou tête : le dernier choix est gardé
     core = Core(cfg, primary_screen())
     core.quota_shown = read_shown(QUOTA_FILE)                # « iris quota » : le dernier choix est gardé

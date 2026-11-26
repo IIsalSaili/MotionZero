@@ -1,3 +1,4 @@
+from motionzero.parametres import Param
 import pytest
 """Souris à la tête : orientation de la tête (matrice MediaPipe) -> point virtuel -> même pavé tactile que la main.
 Sans caméra : visage et matrice simulés."""
@@ -180,11 +181,11 @@ def test_pause_la_tete_ne_fait_rien():
 
 def test_choix_garde_au_redemarrage(tmp_path):
     from motionzero.app import read_pointer, write_pointer
-    f = str(tmp_path / "pointeur.txt")
+    f = Param("pointeur", str(tmp_path / "p.json"))
     assert read_pointer(f) == "main"                        # rien d'enregistré
     write_pointer(f, "tete")
     assert read_pointer(f) == "tete"
-    (tmp_path / "pointeur.txt").write_text("n'importe quoi")
+    f.write("n'importe quoi")
     assert read_pointer(f) == "main"
 
 

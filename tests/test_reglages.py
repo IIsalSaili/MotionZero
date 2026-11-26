@@ -1,4 +1,5 @@
 """Refonte de l'accueil (plan-accueil.md) : registre des réglages, lecture à voix haute, sections."""
+from motionzero.parametres import Param
 import queue
 from types import SimpleNamespace
 
@@ -31,17 +32,17 @@ def test_valeurs_inattendues_sans_plantage():
 
 
 def test_lecture_decochee_par_defaut(tmp_path):
-    p = tmp_path / "lecture.txt"
-    assert read_flag(str(p)) is False           # absent
-    p.write_text("n'importe quoi", encoding="utf-8")
-    assert read_flag(str(p)) is False           # illisible
-    write_flag(str(p), True)
-    assert read_flag(str(p)) is True
-    write_flag(str(tmp_path / "absent" / "x.txt"), True)   # dossier absent : avertissement, pas d'exception
+    p = Param("lecture", str(tmp_path / "p.json"))
+    assert read_flag(p) is False           # absent
+    p.write("n'importe quoi")
+    assert read_flag(p) is False           # illisible
+    write_flag(p, True)
+    assert read_flag(p) is True
+    write_flag(Param("x", str(tmp_path / "absent" / "p.json")), True)   # dossier absent : avertissement, pas d'exception
 
 
 def test_section_gardee(tmp_path):
-    p = str(tmp_path / "s.txt")
+    p = Param("s", str(tmp_path / "p.json"))
     assert read_section(p) == "maintenant"
     write_section("conso", p)
     assert read_section(p) == "conso"
@@ -68,7 +69,7 @@ def test_voix_coupee_ne_lit_rien_meme_force():
 
 def _engine(tmp_path, monkeypatch, speaker):
     from motionzero.app_ecoute import EcouteMixin
-    monkeypatch.setattr(reglages, "LECTURE_FILE", str(tmp_path / "lecture.txt"))
+    monkeypatch.setattr(reglages, "LECTURE_FILE", Param("lecture", str(tmp_path / "p.json")))
     shown = []
     d = SimpleNamespace(lecture_requests=queue.Queue(), lecture=False, speaker=speaker,
                         bridge=SimpleNamespace(lecture=SimpleNamespace(emit=shown.append)))
@@ -115,7 +116,7 @@ def test_textes_des_cartes_tiennent(qt):
 def test_page_trois_sections_et_etats(qt, tmp_path):
     import numpy as np
     from motionzero.ui import PreviewWindow
-    f = str(tmp_path / "sec.txt")
+    f = Param("sec", str(tmp_path / "p.json"))
     w = PreviewWindow(section_file=f)
     assert w.section == "maintenant"
     for name in ("reglages", "conso", "maintenant"):

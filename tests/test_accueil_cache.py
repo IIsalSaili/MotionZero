@@ -1,4 +1,5 @@
 """La croix de l'accueil cache la fenêtre sans arrêter Iris ; « iris accueil » ou l'icône la rouvre."""
+from motionzero.parametres import Param
 from motionzero import vscode
 from motionzero.app_outils import make_tray
 
@@ -6,7 +7,7 @@ from motionzero.app_outils import make_tray
 def _win(tmp_path):
     from motionzero.ui import PreviewWindow, QApplication
     QApplication.instance() or QApplication([])
-    return PreviewWindow(section_file=str(tmp_path / "s.txt"))
+    return PreviewWindow(section_file=Param("s", str(tmp_path / "p.json")))
 
 
 def test_croix_cache_sans_quitter(tmp_path):

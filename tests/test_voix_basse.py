@@ -1,4 +1,5 @@
 """Voix basse (13/11) : le soir, parlé doucement, les mots étaient « ignorés : pas sûr de l'avoir entendu »."""
+from motionzero.parametres import Param
 import queue
 from types import SimpleNamespace
 
@@ -37,15 +38,15 @@ def test_conversation_toujours_refusee_en_voix_basse():
 
 def test_choix_de_l_accueil(tmp_path):
     assert [next_quiet("auto"), next_quiet("oui"), next_quiet("non"), next_quiet("??")] == ["oui", "non", "auto", "auto"]
-    assert read_quiet(str(tmp_path / "absent.txt")) == "auto"         # fichier absent
-    bad = tmp_path / "v.txt"
-    bad.write_text("n'importe quoi", encoding="utf-8")
-    assert read_quiet(str(bad)) == "auto"                              # contenu illisible
+    assert read_quiet(Param("absent", str(tmp_path / "p.json"))) == "auto"         # fichier absent
+    bad = Param("v", str(tmp_path / "p.json"))
+    bad.write("n'importe quoi")
+    assert read_quiet(bad) == "auto"                              # contenu illisible
 
 
 def test_bouton_previent_le_micro(tmp_path, monkeypatch):
     import motionzero.app as app
-    monkeypatch.setattr("motionzero.app_ecoute.QUIET_FILE", str(tmp_path / "v.txt"))
+    monkeypatch.setattr("motionzero.app_ecoute.QUIET_FILE", Param("v", str(tmp_path / "p.json")))
     emitted = []
     d = SimpleNamespace(quiet_requests=queue.Queue(), quiet_choice="non",
                         listener=SimpleNamespace(quiet=False),
@@ -58,7 +59,7 @@ def test_bouton_previent_le_micro(tmp_path, monkeypatch):
     d.quiet_requests.put(1)                     # -> « toujours »
     eng._quiet(1.1)
     assert eng.quiet_choice == "oui" and emitted == ["auto", "oui"] and d.listener.quiet is True
-    assert read_quiet(str(tmp_path / "v.txt")) == "oui"
+    assert read_quiet(Param("v", str(tmp_path / "p.json"))) == "oui"
 
 
 def test_sans_micro_rien_ne_plante():

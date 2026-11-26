@@ -336,12 +336,15 @@ def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
     from motionzero.app import Engine, read_conversation
     import motionzero.app_ecoute as app   # #52 : _conversation vit dans app_ecoute
     from motionzero.voice import VoiceListener
-    assert read_conversation(str(tmp_path / "absent.txt")) is True       # coché par défaut
-    (tmp_path / "c.txt").write_text("non", encoding="utf-8")
-    assert read_conversation(str(tmp_path / "c.txt")) is False
+    from motionzero.parametres import Param
+    import motionzero.app_ecoute as ecoute
+    assert read_conversation(Param("absent", str(tmp_path / "p.json"))) is True       # coché par défaut
+    c = Param("c", str(tmp_path / "p.json"))
+    c.write("non")
+    assert read_conversation(c) is False
     # bouton : bascule, enregistre, prévient le micro
-    app_conv = tmp_path / "conv.txt"
-    old, app.CONV_FILE = app.CONV_FILE, str(app_conv)
+    app_conv = Param("conv", str(tmp_path / "p.json"))
+    old, ecoute.CONV_FILE = ecoute.CONV_FILE, app_conv   # le module qui écrit (avant : app, donc le vrai fichier)
     try:
         shown, lis = [], SimpleNamespace(conversation=True)
         d = SimpleNamespace(conversation_requests=queue.Queue(), conversation=True, listener=lis,
@@ -350,13 +353,13 @@ def test_mode_conversation_decoche_plus_de_2e_verification(tmp_path):
         e.d = d
         d.conversation_requests.put(1)
         e._conversation()
-        assert lis.conversation is False and shown == [False] and app_conv.read_text(encoding="utf-8") == "non"
+        assert lis.conversation is False and shown == [False] and app_conv.read() == "non"
         d.listener = None                     # sans la voix : le bouton marche quand même
         d.conversation_requests.put(1)
         e._conversation()
-        assert d.conversation is True and app_conv.read_text(encoding="utf-8") == "oui"
+        assert d.conversation is True and app_conv.read() == "oui"
     finally:
-        app.CONV_FILE = old
+        ecoute.CONV_FILE = old
     # micro : mot noyé dans une phrase -> ignoré si coché, accepté si décoché
     got = []
     v = VoiceListener.__new__(VoiceListener)

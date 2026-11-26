@@ -70,10 +70,8 @@ def drain(q):
             return items
 
 
-POINTER_FILE = os.path.join(ROOT, "pointeur.txt")   # « main » ou « tete » (non versionné)
-QUOTA_FILE = os.path.join(ROOT, "quota.txt")        # « oui » : quota Claude affiché (non versionné)
-CONV_FILE = os.path.join(ROOT, "conversation.txt")   # « oui » (défaut) ou « non » : bouton de l'accueil
-QUIET_FILE = os.path.join(ROOT, "voix_basse.txt")   # « auto », « oui » ou « non » (non versionné)
+from . import parametres as _p                     # tous les choix dans parametres.json (26/11)
+POINTER_FILE, QUOTA_FILE, CONV_FILE, QUIET_FILE = _p.POINTER, _p.QUOTA, _p.CONVERSATION, _p.QUIET
 
 
 def top_shown(d, t):
@@ -122,15 +120,14 @@ def reminder_shown(d):
         return False
 
 
-VOLUME_FILE = os.path.join(ROOT, "volume_iris.txt")   # volume des sons d'Iris, choisi dans l'accueil (#28)
+VOLUME_FILE = _p.VOLUME   # volume des sons d'Iris, choisi dans l'accueil (#28)
 VOLUME_STEPS = (0.3, 0.5, 0.7, 1.0)
 
 
 def read_volume(path, default):
     try:
-        with open(path, encoding="utf-8") as f:
-            value = float(f.read().strip())
-    except (OSError, ValueError):
+        value = float(path.read())
+    except (TypeError, ValueError):
         return default
     return value if 0.0 <= value <= 1.0 else default
 
@@ -151,20 +148,12 @@ def last_tab(n):
 
 def read_conversation(path):
     """Mode conversation enregistré ; coché par défaut (fichier absent ou illisible). Pur sauf la lecture."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            return f.read().strip() != "non"
-    except OSError:
-        return True
+    return path.read() != "non"
 
 
 def read_quiet(path):
     from .voice import QUIET_CHOICES
-    try:
-        with open(path, encoding="utf-8") as f:
-            value = f.read().strip()
-    except OSError:
-        return "auto"
+    value = path.read()
     return value if value in QUIET_CHOICES else "auto"
 
 
@@ -175,20 +164,12 @@ def next_quiet(choice):
 
 
 def read_pointer(path, default="main"):
-    try:
-        with open(path, encoding="utf-8") as f:
-            value = f.read().strip()
-    except OSError:
-        return default
+    value = path.read()
     return value if value in ("main", "tete") else default
 
 
 def write_pointer(path, value):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(value)
-    except OSError:
-        logging.getLogger("motionzero").warning("choix du pointeur non enregistre")
+    path.write(value)   # échec : avertissement au journal, sans exception
 
 
 def detect_period(disabled, last_hand_t, t):

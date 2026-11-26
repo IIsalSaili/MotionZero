@@ -8,8 +8,9 @@ import os
 from dataclasses import dataclass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LECTURE_FILE = os.path.join(ROOT, "lecture.txt")       # « oui » : rappels et messages lus (non versionné)
-SECTION_FILE = os.path.join(ROOT, "accueil_section.txt")   # dernière section ouverte (non versionné)
+from . import parametres as _p   # tous les choix dans parametres.json (26/11)
+LECTURE_FILE = _p.LECTURE         # « oui » : rappels, messages et réponses lus
+SECTION_FILE = _p.SECTION         # dernière section ouverte de l'accueil
 SECTIONS = ("maintenant", "reglages", "conso")
 
 GROUPES = ("Entrées", "Voix et sons", "Dépannage")
@@ -71,34 +72,17 @@ def tile_text(rid, value):
 
 def read_flag(path, default=False):
     """« oui » / « non » enregistré ; défaut si absent ou illisible."""
-    try:
-        with open(path, encoding="utf-8") as f:
-            v = f.read().strip()
-    except OSError:
-        return default
-    return {"oui": True, "non": False}.get(v, default)
+    return {"oui": True, "non": False}.get(path.read(), default)
 
 
 def write_flag(path, on):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write("oui" if on else "non")
-    except OSError:
-        logging.getLogger("motionzero").warning("reglage non enregistre : %s", path)
+    path.write("oui" if on else "non")
 
 
 def read_section(path=SECTION_FILE):
-    try:
-        with open(path, encoding="utf-8") as f:
-            v = f.read().strip()
-    except OSError:
-        return SECTIONS[0]
+    v = path.read()
     return v if v in SECTIONS else SECTIONS[0]
 
 
 def write_section(name, path=SECTION_FILE):
-    try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(name)
-    except OSError:
-        logging.getLogger("motionzero").warning("section de l'accueil non enregistree")
+    path.write(name)
