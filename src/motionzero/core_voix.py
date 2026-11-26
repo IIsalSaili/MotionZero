@@ -293,7 +293,7 @@ class VoixMixin:
             self._arm_repeat(word, t, [("editor_tab", EDITOR_TABS[word])])
             return acts
         if word in CHROME_KEYS and word != "ferme" and word not in VOICE_HOTKEYS and word not in SIMPLE_ACTIONS:
-            # hors mode Chrome : « ferme » garde son sens habituel, « agrandis / réduis » gèrent la fenêtre
+            # hors mode Chrome : « ferme » garde son sens habituel
             self.last_word = (word, t, False)
             self.last_gesture = (f"{word.upper()} : seulement en mode Chrome", t)
             return acts

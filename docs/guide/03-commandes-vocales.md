@@ -45,7 +45,6 @@ Mode : « tous » sauf mention.
 | `pause` | relâche tout, mode DÉSACTIVÉ (« iris reprise » pour revenir ; « iris » seul ne réactive plus) | non | tous |
 | `souris` | allume / éteint la souris (le mode reste) | non | tous |
 | `tête` / `main` | la souris suit la tête / la main | non | tous |
-| `centre` | curseur au centre ; tête de face = nouvelle référence | non | tous |
 | `aide` | toutes les commandes à l'écran, celles du mode en cours en tête ; « ferme », « merci » ou « stop » la ferment (sans « iris »), sinon seule après 90 s ; redit : fermée | « ferme » / « merci » quand elle est ouverte | tous |
 | `guide` | ouvre cette documentation sur GitHub dans le navigateur | non | tous |
 
@@ -80,9 +79,6 @@ Mode : « tous » sauf mention.
 | Mot | Effet | Sans iris ? | Mode |
 |---|---|---|---|
 | `plein écran` | fenêtre active en plein écran (API Windows) | non | tous, Chrome compris |
-| `agrandis` | plein écran | non | hors Chrome (en Chrome : zoom +) |
-| `réduis` | fenêtre réduite (Win+Bas) | non | hors Chrome (en Chrome : zoom −) |
-| `gauche` / `droite` | fenêtre ancrée à gauche / droite (Win+flèche) | non | tous |
 | `alt-tab` | fenêtre d'avant ; la liste des fenêtres suivantes s'affiche en haut, numérotées : « deux » … « six » (sans « iris », 8 s) va à celle-ci ; « iris alt-tab trois » d'un trait aussi | non | tous |
 | `suivant` / `précédent` | onglet suivant / précédent de VS Code (par exemple les onglets Claude), par l'extension « Iris (pont) » : commande de VS Code, pas de touche, marche où que soit le focus ; l'île dit « ECHEC » si l'onglet n'a pas changé. Sans l'extension : Ctrl+Page suivante / précédente, VS Code devant seulement. Installer : `tools/installer_pont.py` | oui VS Code devant ; répétable | hors Chrome (en Chrome : onglets de Chrome ; calendrier : semaine) |
 | `chrome` | Chrome devant (ou lancé) + mode CHROME | non | tous |
@@ -211,7 +207,6 @@ Ces mots ne sont écoutés **qu'en mode CHROME** (grammaire Vosk à part) et mar
 | `rouvre` | Ctrl+Maj+T | rouvre l'onglet fermé |
 | `recharge` | F5 | recharge |
 | `monte` / `descends` | Page haut / Page bas | une page |
-| `agrandis` / `réduis` | Ctrl+plus / Ctrl+moins | zoom |
 | `zoom` / `dézoom` | Ctrl+plus / Ctrl+moins | zoom (mots dédiés ; « dézoom » est écouté sous la forme « dé zoom ») |
 | `recherche` | Ctrl+L puis dictée | barre d'adresse |
 

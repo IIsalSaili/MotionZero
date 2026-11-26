@@ -15,7 +15,6 @@ GROUPS = [
         ("scroll", "monte / descends la main"),
         ("souris", "allume / éteint"),
         ("tête / main", "qui guide la souris"),
-        ("centre", "curseur au centre"),
     ]),
     ("Texte", [
         ("type", "dictée au curseur"),
@@ -30,9 +29,7 @@ GROUPS = [
         ("skip / back", "flèches"),
     ]),
     ("Fenêtres et applis", [
-        ("plein écran", "aussi « agrandis »"),
-        ("réduis", "fenêtre réduite"),
-        ("gauche / droite", "sur une moitié"),
+        ("plein écran", "partout, Chrome compris"),
         ("alt-tab", "fenêtre d'avant, puis 2, 3… : liste en haut"),
         ("ferme", "puis le nom"),
         ("chrome", "Chrome et ses mots"),
@@ -77,7 +74,7 @@ CHROME_HELP = {"retour": "page précédente", "avance": "page suivante", "suivan
                "précédent": "onglet précédent", "onglet": "nouvel onglet", "ferme": "ferme l'onglet",
                "rouvre": "onglet rouvert", "recharge": "recharge",
                "descends": "une page plus bas", "monte": "une page plus haut",
-               "agrandis": "zoom +", "réduis": "zoom −", "zoom": "zoom +", "dézoom": "zoom −", "recherche": "barre d'adresse"}
+               "zoom": "zoom +", "dézoom": "zoom −", "recherche": "barre d'adresse"}
 
 
 def said_words():

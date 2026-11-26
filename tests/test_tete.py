@@ -163,13 +163,11 @@ def test_bouton_de_l_accueil_bascule():
     assert core.pointer == "main"
 
 
-def test_iris_centre():
+def test_iris_centre_retire():
+    """« centre » retiré le 26/11 (#50) : plus aucune action."""
     core = _tete_souris()
-    lms, m = turned(yaw=0.1)
-    core.step_head(lms, 1.0, m)
     core.voice("iris", 2.0)
-    acts = core.voice("centre", 2.1)
-    assert core.head.base is None and any(a[0] == "move" for a in acts)
+    assert core.voice("centre", 2.1) == []
 
 
 def test_pause_la_tete_ne_fait_rien():

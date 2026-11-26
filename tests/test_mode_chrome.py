@@ -336,7 +336,7 @@ def test_chrome_lance_par_l_explorateur(monkeypatch):
 
 
 def test_zoom_et_dezoom_seulement_dans_chrome():
-    """24/11 : « zoom » / « dézoom » en mode Chrome ; ailleurs, rien (agrandis / réduis gardent leur sens)."""
+    """24/11 : « zoom » / « dézoom » en mode Chrome ; ailleurs, rien."""
     import json
     from motionzero.voice import GRAMMARS, _join_demute
     core = _chrome()

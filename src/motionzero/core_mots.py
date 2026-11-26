@@ -16,11 +16,9 @@ MENU_LABELS = {"left": "CLIC GAUCHE", "right": "CLIC DROIT", "up": "DOUBLE CLIC"
 WAKE_WORD = "iris"
 VOICE_HOTKEYS = {"entrée": ["enter"], "space": ["space"], "copie": ["ctrl", "c"], "colle": ["ctrl", "v"],
                  "skip": ["right"], "back": ["left"],   # flèches : ±10 s sur YouTube
-                 # texte et fenêtres (check-up du 13/11) ; en mode Chrome, « agrandis / réduis » restent le zoom
+                 # texte et fenêtres (check-up du 13/11)
                  "sélection": ["ctrl", "a"], "coupe": ["ctrl", "x"], "efface": ["ctrl", "backspace"],
-                 "réduis": ["win", "down"],
-                 "undo": ["ctrl", "z"], "redo": ["ctrl", "y"],   # annuler / rétablir (#36) ; Ctrl+Y : Windows, VS Code
-                 "gauche": ["win", "left"], "droite": ["win", "right"]}
+                 "undo": ["ctrl", "z"], "redo": ["ctrl", "y"]}   # annuler / rétablir (#36) ; Ctrl+Y : Windows, VS Code
 
 # mode CHROME : mot dit (après « iris ») -> touches envoyées à Chrome, seulement s'il est au premier plan
 CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
@@ -28,14 +26,13 @@ CHROME_KEYS = {"retour": ["alt", "left"], "avance": ["alt", "right"],
                "onglet": ["ctrl", "t"], "ferme": ["ctrl", "w"], "rouvre": ["ctrl", "shift", "t"],
                "recharge": ["f5"],
                "descends": ["pagedown"], "monte": ["pageup"],
-               "agrandis": ["ctrl", "plus"], "réduis": ["ctrl", "minus"],
                "zoom": ["ctrl", "plus"], "dézoom": ["ctrl", "minus"],     # 24/11 : mots dédiés, Chrome seulement
                "recherche": ["ctrl", "l"]}   # recherche : barre d'adresse puis dictée (comme « type »)
 CHROME_LABELS = {"retour": "PAGE PRECEDENTE", "avance": "PAGE SUIVANTE", "suivant": "ONGLET SUIVANT",
                  "précédent": "ONGLET PRECEDENT", "onglet": "NOUVEL ONGLET", "ferme": "ONGLET FERME",
                  "rouvre": "ONGLET ROUVERT", "recharge": "PAGE RECHARGEE",
                  "descends": "PAGE BAS", "monte": "PAGE HAUT",
-                 "agrandis": "ZOOM +", "réduis": "ZOOM -", "zoom": "ZOOM +", "dézoom": "ZOOM -", "recherche": "RECHERCHE : parle"}
+                 "zoom": "ZOOM +", "dézoom": "ZOOM -", "recherche": "RECHERCHE : parle"}
 CHROME_GRACE_S = 5.0      # « iris chrome » : le temps que Chrome s'ouvre avant de juger qu'il n'est pas devant
 # fenêtres d'Iris (fenêtre invisible des raccourcis Discord, accueil, aide…) : ne comptent jamais comme
 # « une autre appli devant » (14/11 : « iris mute » faisait quitter le mode Chrome, 53 « iris chrome » redits en 4 jours)
@@ -67,8 +64,6 @@ VOICE_LABELS = {"clic": "CLIC GAUCHE", "double": "DOUBLE CLIC", "menu": "CLIC DR
                 "skip": "AVANCE (fleche droite)", "back": "RECULE (fleche gauche)",
                 "sélection": "TOUT SELECTIONNE (Ctrl+A)", "coupe": "COUPER (Ctrl+X)", "efface": "MOT EFFACE",
                 "undo": "ANNULE (Ctrl+Z)", "redo": "RETABLI (Ctrl+Y)",
-"réduis": "FENETRE REDUITE",
-                "gauche": "FENETRE A GAUCHE", "droite": "FENETRE A DROITE",
                 "rappel": "RAPPEL : dis quand et quoi", "merci": "RAPPEL VALIDE",
                 "plus tard": "RAPPEL DANS 10 MIN", "volume": "VOLUME : dis le niveau", "heure": "HEURE", "date": "DATE", "quota": "QUOTA CLAUDE", "focus": "FOCUS", "traducteur": "TRADUCTEUR"}
 # « iris ouvre / ferme / message / salon » : ce qui est enregistré puis transcrit par Whisper
@@ -83,7 +78,6 @@ OPEN_WAIT = {"candq": "QUESTION : je prépare la réponse…", "open": "OUVRE : 
 
 # « iris + mot » sans état : une action, et un libellé (None = celui de VOICE_LABELS)
 SIMPLE_ACTIONS = {"plein écran": (("window", "max"), "PLEIN ECRAN"),   # partout, Chrome compris
-                  "agrandis": (("window", "max"), "PLEIN ECRAN"),      # hors mode Chrome (là : zoom)
                   "envoie": (("hotkey", ["enter"]), "TOUCHE ENTREE"),   # Entrée dans la fenêtre active
                   "annule": (("annule",), "ANNULE"),   # vide le message de Claude si VS Code est devant, sinon Échap
                   "alt-tab": (("alt_tab", 2), None),   # (voir core_voix : « alt-tab trois », liste en haut)
@@ -105,7 +99,7 @@ COMMANDS = {"clic": "click", "double": "click", "menu": "click", "agrippe": "gri
             "heure": "clock", "date": "clock", "merci": "thanks",
             "message": "listen", "salon": "listen", "rappel": "listen", "volume": "listen",
             "instruction": "listen",   # « iris instruction » puis une demande libre (#45)
-            "tête": "pointer", "main": "pointer", "centre": "center",
+            "tête": "pointer", "main": "pointer",
             "discord": "app", "chrome": "app", "studio": "app", "accueil": "app", "pause": "pause",
             "aide": "help", "guide": "guide", "quota": "quota", "focus": "focus",
             "traducteur": "translator", "bypass": "bypass", "candidature": "candidature"}
