@@ -67,6 +67,7 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 
 
 REMINDER_W = 560
+CORNER_MARGIN = 16      # coin haut droit : timer, chronomètre, rappel déclenché (26/11)
 PANEL_W = 452            # « iris candidature » : panneau à droite (maquette A1, 21/11)
 PANEL_MARGIN = 16
 PANEL_BOTTOM = 64        # au-dessus de la barre des tâches
@@ -113,11 +114,12 @@ def clock_text(now):
     return f"{DAYS[now.weekday()]} {now:%d/%m/%Y · %H:%M}"
 
 
-def reminder_view(st):
+def reminder_view(st, corner=False):
     """Ce que l'île montre pour les rappels : ("current", dict) | ("list", lignes) | None. Pur : testable.
-    Le rappel déclenché passe avant tout (il reste jusqu'à « iris merci »), puis la liste demandée."""
+    Le rappel déclenché passe avant tout (il reste jusqu'à « iris merci »), puis la liste demandée.
+    corner : le rappel déclenché est dessiné dans le coin haut droit (26/11), il ne cache plus le centre."""
     rem = st.get("reminders") or {}
-    if rem.get("current"):
+    if rem.get("current") and not corner:
         return "current", rem["current"]
     if st.get("plan"):                       # « iris instruction » : ce qu'Iris va faire, avant de le faire
         return "plan", st["plan"]

@@ -46,6 +46,7 @@ GROUPS = [
         ("instruction", "puis : ouvre, rappel, volume, Discord, YouTube…"),
         ("timer", "puis la durée ; redit : annulé"),
         ("chronomètre", "démarre ; redit : arrête"),
+        ("ok iris", "comme « iris instruction », puis la demande"),
         ("oui", "valide l'instruction affichée (sans « iris »)"),
         ("quota", "quota affiché, oui / non"),
         ("candidature", "pilote CVGEN : cherche, état, offres, liste, garde, écarte, lien, prépare, montre, relis, mail, cv, postulé, aide ; redit, éteint"),

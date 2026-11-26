@@ -25,13 +25,13 @@ class Reglage:
 
 
 REGLAGES = (
-    Reglage("souris", "Entrées", "Souris"),
+    Reglage("souris", "Entrées", "Mode de la souris"),
     Reglage("camera", "Entrées", "Caméra"),
     Reglage("conversation", "Voix et sons", "Mode conversation"),
-    Reglage("voix_basse", "Voix et sons", "Voix basse"),
+    Reglage("voix_basse", "Voix et sons", "Mode voix basse"),
     Reglage("volume", "Voix et sons", "Volume d'Iris"),
     Reglage("lecture", "Voix et sons", "Lecture à voix haute"),
-    Reglage("son", "Dépannage", "Son"),
+    Reglage("son", "Dépannage", "Micro ou son bloqué"),
 )
 IDS = tuple(r.id for r in REGLAGES)
 
@@ -66,7 +66,7 @@ def tile_text(rid, value):
                ("Désactivée", "rien n'est lu à voix haute", "neutre")
     if rid == "son":                    # value : True = réparation en cours
         return ("En cours…", "micro et sortie rouverts", "neutre") if value else \
-               ("Réparer", "rouvre micro et sortie", "neutre")
+               ("Tout rouvrir", "sans redémarrer le PC", "neutre")
     return ("?", "", "neutre")
 
 

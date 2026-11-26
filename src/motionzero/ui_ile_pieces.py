@@ -2,7 +2,7 @@
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
 from PySide6.QtGui import QColor, QFontMetrics
-from .ui_ile_base import CLOCK_BIG, CLOCK_GAP, ICON, ISLAND_H, ISLAND_TOP, ISLET, ISLET_GAP, TICKER_H, TICKER_W, clock_anim
+from .ui_ile_base import CORNER_MARGIN, PANEL_MARGIN, PANEL_W, REMINDER_W, CLOCK_BIG, CLOCK_GAP, ICON, ISLAND_H, ISLAND_TOP, ISLET, ISLET_GAP, TICKER_H, TICKER_W, clock_anim
 from .ui_ile_base2 import paint_logo, ticker_offset
 
 
@@ -19,7 +19,7 @@ class PiecesMixin:
 
     def _paint_main(self, p):
         mode, msg = self.content[0], self.content[1]
-        if self.help and not (self.rem and self.rem[0] == "current"):   # une alarme qui sonne passe devant
+        if self.help:
             self._paint_help(p, self.help)
             return
         if self.rem and self.rem[0] == "calendar":
@@ -65,12 +65,23 @@ class PiecesMixin:
         self._paint_clock(p, x, ty)
         if self.next_rem:
             ty += ISLAND_H + CLOCK_GAP
-        tx = x
-        pills = getattr(self, "timer_pills", [])
-        for text, countdown in pills:
-            tx += self._paint_timer_pill(p, tx, ty, text, countdown) + CLOCK_GAP
         if getattr(self, "alttab", None):
-            self._paint_alttab(p, ty + (ISLAND_H + CLOCK_GAP if pills else 0))
+            self._paint_alttab(p, ty)
+
+    def _paint_corner(self, p):
+        """Coin haut droit (26/11) : timer, chronomètre, puis le rappel déclenché ; à gauche du panneau
+        candidature s'il est ouvert. Rien ici ne cache l'instruction ou la réponse du centre."""
+        right = self.width - CORNER_MARGIN - (PANEL_W + 2 * PANEL_MARGIN if getattr(self, "panel", None) else 0)
+        y = ISLAND_TOP + (ISLET - ISLAND_H) / 2
+        for text, countdown in getattr(self, "timer_pills", []):
+            w = self._pill_width(text)
+            self._paint_timer_pill(p, right - w, y, text, countdown)
+            y += ISLAND_H + CLOCK_GAP
+        if getattr(self, "corner_rem", None):
+            self._paint_reminder(p, "current", self.corner_rem, at=(right - REMINDER_W, y))
+
+    def _pill_width(self, text):
+        return 2 * 18 + ICON + 10 + QFontMetrics(self.font_msg).horizontalAdvance(text)
 
     def _paint_alttab(self, p, y):
         """« iris alt-tab » : bandeau des fenêtres numérotées, centré sur l'écran, sans animation du logo."""

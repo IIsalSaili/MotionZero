@@ -129,12 +129,14 @@ class CartesMixin:
                            fm.elidedText(what, Qt.TextElideMode.ElideRight, room))
         p.restore()
 
-    def _paint_reminder(self, p, kind, data):
+    def _paint_reminder(self, p, kind, data, at=None):
         """Carte du rappel déclenché (rouge qui pulse si l'alarme sonne) ou liste des rappels."""
         import time as _t
         pad, top = 22, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         gx = (self.width - (ISLET + ISLET_GAP + REMINDER_W)) / 2
         x = gx + ISLET + ISLET_GAP
+        if at is not None:                     # coin haut droit : le logo reste au centre, dessiné à part
+            x, top = at
         inner = REMINDER_W - 2 * pad
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
         title, body, meta = reminder_texts(kind, data)
@@ -157,7 +159,8 @@ class CartesMixin:
         else:
             bg = QColor(0, 0, 0, 240)
         p.save()
-        self._paint_islet(p, gx, ISLAND_TOP)
+        if at is None:
+            self._paint_islet(p, gx, ISLAND_TOP)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(bg)
         p.drawRoundedRect(QRectF(x, top, REMINDER_W, h), 22, 22)

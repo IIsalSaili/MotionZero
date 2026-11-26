@@ -89,6 +89,7 @@ WORDS = {
     "pars": "pars",       # « iris pars » : il quitte le vocal
     "traducteur": "traducteur",   # « iris traducteur » : sous-titres traduits du son du PC ; redit, éteint
     "instruction": "instruction",
+    "ok iris": "ok iris", # « ok Iris » : comme « iris instruction » (« ok » ou « okay » dans Vosk)
     "bypass": "bypass",           # « iris bypass » : mots acceptés même mal dits (sauf les définitifs) ; redit, éteint  # « iris instruction » puis une demande libre : plan affiché, « envoie » le fait
     "candidature": "candidature",   # « iris candidature » : Iris pilote CVGEN (plan-cvgen.md) ; redit, éteint
     "stop": "stop",
@@ -111,7 +112,9 @@ SPLIT = {("des", "mute"): "démute",   # « un mute » retiré le 14/11 : « un 
          ("re", "do"): "redo",
          ("plein", "écran"): "plein écran",
          ("double", "clic"): "double",
-         ("alt", "tab"): "alt-tab"}
+         ("alt", "tab"): "alt-tab",
+         ("ok", "iris"): "ok iris",     # 26/11 : « ok Iris » = « iris instruction », dit seul puis la demande
+         ("okay", "iris"): "ok iris"}
 # mots en deux morceaux des modes (candidature, Chrome) : recollés, mais jamais ajoutés aux grammaires de base
 MODE_SPLIT = {("code", "postal"): "code postal", ("prépare", "tout"): "prépare tout",
               ("dé", "zoom"): "dézoom"}   # « dézoom » absent du modèle : « dé zoom », mode Chrome seulement
@@ -298,6 +301,9 @@ def confirmed(words, free_text, n_heard=None, after_iris=False, quiet=False, rel
     tokens = _dedupe(free_text.lower().split())
     if len(names) == 1 and names[0] in relaxed and len(tokens) <= FREE_MAX_WORDS:
         return True                   # attendu (après une dictée) : un texte libre vide confirme aussi (14/11)
+    if names == ["ok iris"]:          # « iris » doit vraiment avoir été prononcé (« ok » revient sans arrêt)
+        return len(tokens) <= FREE_MAX_WORDS and any(tok.startswith("iri") or (quiet and tok.endswith(("ris", "rise", "rice")))
+                                                     for tok in tokens)
     if names[0] == WAKE_WORD:
         sure = QUIET_IRIS_CONF if quiet else IRIS_SURE_CONF
         if n_heard is not None and n_heard <= SHORT_PHRASE and words[0].get("conf", 0) >= sure:

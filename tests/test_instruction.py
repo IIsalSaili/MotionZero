@@ -441,3 +441,23 @@ def test_warm_local_charge_le_modele_sans_question(monkeypatch):
     assert b2.warm_local() is True
     url, data = sent[0]
     assert url.endswith("/api/generate") and data["model"] == b2.MODEL and "prompt" not in data
+
+
+def test_ok_iris_lance_l_instruction():
+    """26/11 : « ok Iris » (ou « okay Iris ») dit seul = « iris instruction » ; en pause, ignoré."""
+    from motionzero.config import Config
+    from motionzero.core import Core, Mode
+    from motionzero.voice import accepted_words, confirmed
+    res = {"result": [{"word": "okay", "conf": 0.95, "start": 0.0, "end": 0.3},
+                      {"word": "iris", "conf": 0.95, "start": 0.3, "end": 0.6}]}
+    words = accepted_words(res)
+    assert [w["word"] for w in words] == ["ok iris"]
+    assert confirmed(words, "ok iris")
+    assert not confirmed(words, "ok merci")                       # « iris » pas vraiment prononcé
+    assert not confirmed(words, "ok iris tu as vu le match hier soir avec les potes au bar du coin")   # noyé
+    core = Core(Config())
+    acts = core.voice("ok iris", 1.0)
+    assert ("instruction_warm",) in acts and core.opening
+    core = Core(Config())
+    core.mode = Mode.DISABLED
+    assert core.voice("ok iris", 1.0) == [] and "PAUSE" in core.last_gesture[0]
