@@ -129,13 +129,16 @@ class CartesMixin:
                            fm.elidedText(what, Qt.TextElideMode.ElideRight, room))
         p.restore()
 
-    def _paint_reminder(self, p, kind, data):
-        """Carte du rappel déclenché (rouge qui pulse si l'alarme sonne) ou liste des rappels."""
+    def _paint_reminder(self, p, kind, data, at=None, width=REMINDER_W, flush=False, measure=False):
+        """Carte du rappel déclenché (rouge qui pulse si l'alarme sonne) ou liste des rappels.
+        flush : pas de fond propre (bloc du coin, 27/11) ; measure : renvoie (hauteur, couleur) sans dessiner."""
         import time as _t
         pad, top = 22, ISLAND_TOP + (ISLET - ISLAND_H) / 2
         gx = (self.width - (ISLET + ISLET_GAP + REMINDER_W)) / 2
         x = gx + ISLET + ISLET_GAP
-        inner = REMINDER_W - 2 * pad
+        if at is not None:                     # coin haut droit : le logo reste au centre, dessiné à part
+            x, top = at
+        inner = width - 2 * pad
         flags = int(Qt.AlignmentFlag.AlignLeft) | int(Qt.TextFlag.TextWordWrap)
         title, body, meta = reminder_texts(kind, data)
         font_body = fit_font(self.font_rem if kind == "current" else self.font_answer, body, inner,
@@ -156,11 +159,15 @@ class CartesMixin:
             bg = QColor(28, 38, 70, 245)       # bleu nuit : se distingue du noir habituel
         else:
             bg = QColor(0, 0, 0, 240)
+        if measure:
+            return h, bg
         p.save()
-        self._paint_islet(p, gx, ISLAND_TOP)
+        if at is None:
+            self._paint_islet(p, gx, ISLAND_TOP)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(bg)
-        p.drawRoundedRect(QRectF(x, top, REMINDER_W, h), 22, 22)
+        if not flush:
+            p.drawRoundedRect(QRectF(x, top, width, h), 22, 22)
         bell = self.icons.get("bell")
         if bell is not None:
             bell.render(p, QRectF(x + pad, top + 11, ICON, ICON))

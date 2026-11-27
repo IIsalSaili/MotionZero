@@ -125,3 +125,30 @@ def test_bandeau_se_dessine_sans_erreur():
         painter = QPainter(img)
         p.paint(painter)
         painter.end()
+
+
+def test_coin_haut_droit_timer_et_rappel():
+    """26/11 : timer, chronomètre et rappel déclenché en haut à droite ; l'instruction reste au centre."""
+    from PySide6.QtGui import QImage, QPainter
+    from motionzero.ui import QApplication, _IslandPainter
+    from motionzero.ui_ile_base import reminder_view
+    QApplication.instance() or QApplication([])
+    cur = {"text": "Appeler le médecin", "when": "14:00", "ringing": True}
+    plan = {"title": "Dis « oui » pour le faire", "lines": ["1. Discord : expulser Paul du serveur"]}
+    st = {"mode": "NEUTRE", "plan": plan,
+          "reminders": {"current": cur, "timers": {"timer": {"text": "4:59"}, "chrono": {"text": "0:12", "done": False}}}}
+    assert reminder_view(st) == ("current", cur)                    # ancien comportement, sans le coin
+    assert reminder_view(st, corner=True) == ("plan", plan)         # l'instruction n'est plus cachée
+    p = _IslandPainter(1920, 1080)
+    p.update(st, 1.0)
+    assert p.corner_rem == cur and len(p.timer_pills) == 2 and p.rect().right() >= 1919
+    img = QImage(1920, 1080, QImage.Format.Format_ARGB32)
+    img.fill(0xFF808080)
+    painter = QPainter(img)
+    p.paint(painter)
+    painter.end()
+    assert img.pixel(1920 - 30, 40) != 0xFF808080                   # quelque chose dans le coin
+    assert img.pixel(1919, 0) != 0xFF808080                         # 27/11 : collé aux bords, rien autour
+    assert img.pixel(1920 - 421, 5) == 0xFF808080
+    p.update({"mode": "NEUTRE"}, 2.0)                               # plus rien : zone du coin effacée une fois
+    assert p.rect().right() >= 1919 and p.corner_rem is None

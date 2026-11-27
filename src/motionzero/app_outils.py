@@ -179,7 +179,7 @@ def detect_period(disabled, last_hand_t, t):
     return 1.0 / DETECT_MAX_FPS
 
 
-CONFIRM_WORDS = frozenset({"envoie", "envoyé", "annule"})
+CONFIRM_WORDS = frozenset({"envoie", "envoyé", "annule", "oui"})
 
 
 # dernière erreur à montrer dans l'îlot (#51) : écrite par la boucle, les crochets d'erreur et les fils,

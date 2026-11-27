@@ -27,6 +27,13 @@ class VoixMixin:
             # disait « acceptee » (d'après le mot d'avant), ce qui faussait les comptes (14/11)
             self.last_word = (word, t, False)
             return []
+        if word == "ok iris":                  # 26/11 : « ok Iris » = « iris » + « instruction », d'un coup
+            if self.mode == Mode.DISABLED:
+                self.last_word = (word, t, False)
+                self.last_gesture = ("PAUSE : dis IRIS REPRISE", t)
+                return []
+            self.wake_t = t_start if t_start is not None else t
+            return self._v_command("instruction", t, [])
         acts = []
         for step in (self._v_confirm, self._v_alttab, self._v_calendar, self._v_help, self._v_stop, self._v_candidature, self._v_without_iris, self._v_wake, self._v_resume):
             done = step(word, t, t_start, acts)
@@ -63,7 +70,7 @@ class VoixMixin:
         elif self.confirm_kind == "claude" and word in ("envoie", "annule", "claude"):
             # aucun verrou : toutes les autres commandes « iris + … » restent utilisables
             return self._confirm(word, t)
-        elif self.confirm_kind == "instruction" and word in ("envoie", "envoyé", "annule"):
+        elif self.confirm_kind == "instruction" and word in ("oui", "annule"):   # « oui » (26/11) : plus « envoie »
             self.confirm_until = -1e9
             self.last_word = (word, t, True)
             return [("instruction_non",)] if word == "annule" else [("instruction_ok",)]

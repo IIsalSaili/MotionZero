@@ -89,17 +89,6 @@ def youtube_first(query, get=_get):
     return "https://www.youtube.com/watch?v=" + vid
 
 
-def youtube_latest(channel, get=_get):
-    html = get("https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(channel))
-    m = re.search(r'"canonicalBaseUrl":"(/@[^"]+)"', html)
-    if not m:
-        raise RuntimeError("chaîne introuvable")
-    vid = first_video_id(get("https://www.youtube.com" + m.group(1) + "/videos"))
-    if not vid:
-        raise RuntimeError("aucune vidéo sur la chaîne")
-    return "https://www.youtube.com/watch?v=" + vid
-
-
 def warm_local():
     """Démarre Ollama si besoin et charge le modèle sur la carte graphique, sans question (#76).
     Appelé dès « iris instruction » : le chargement (~4 s) se fait pendant que l'utilisateur parle. Ne lève jamais."""

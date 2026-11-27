@@ -143,7 +143,7 @@ def bot_events(bot, core, speaker, discord_voice, t, listener=None):
             if msg.get("channel") is not None and msg.get("self_mute") is not None:
                 discord_voice["mute"] = bool(msg["self_mute"])
                 discord_voice["deaf"] = bool(msg.get("self_deaf"))
-        elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave", "activate", "send", "move"):
+        elif kind == "result" and bot.kinds.get(msg.get("req")) in ("join", "leave", "activate", "send", "move", "member"):
             core.last_gesture = (result_label(msg, bot.kinds.pop(msg.get("req"))), t)
             from .discord_cmd import BOT_WORDS
             for p in bot.pending_cmds:        # une commande par MP attendait cette réponse du bot

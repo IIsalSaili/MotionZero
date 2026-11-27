@@ -1,7 +1,7 @@
 """« iris instruction » (#45) : une phrase libre -> Whisper -> modèle local (Ollama) -> plan d'actions d'Iris.
 
 Le modèle ne fait rien lui-même : il choisit dans un catalogue FERMÉ d'outils écrits ici. Le plan est vérifié
-(outil connu, argument valide), affiché en haut de l'écran, et exécuté seulement après « envoie ».
+(outil connu, argument valide), affiché en haut de l'écran, et exécuté seulement après « oui ».
 « annule » l'abandonne ; « stop » arrête un plan en cours entre deux étapes.
 
 Fils : la transcription et le modèle tournent dans le fil « instruction », l'exécution dans « instruction-exec ».
@@ -13,7 +13,7 @@ import queue
 import threading
 import time
 from .instruction_base import (BLOCKED_APPS, BLOCKED_TEXT, CLOSE_HINT, CONFIRM_S, DIRECT, EXPANDING, HELP_HINT, HELP_S, HELP_WORDS, KEEP_ALIVE, KEY_NAMES, LLM_TIMEOUT_S, MAX_STEPS, MODEL, OLLAMA, OLLAMA_FLAGS, PlanError, SAFE_COMBOS, SAFE_SINGLE, SCHEMA, SHOW_DONE_S, STEP_PAUSE_S, SYSTEM, TOOLS, UA, _app, _http, check_step, ensure_ollama, is_help, normalize_url, parse_keys)  # noqa: F401
-from .instruction_base2 import (ask_local, warm_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first, youtube_latest)  # noqa: F401
+from .instruction_base2 import (ask_local, warm_local, _check_more, _get, check_plan, check_plan_raw, expand, first_video_id, youtube_first)  # noqa: F401
 from .instruction_outils import OutilsMixin
 
 log = logging.getLogger("motionzero.instruction")
@@ -34,7 +34,7 @@ class Instructeur(OutilsMixin):
         self.runner = runner or self._run_tool
         self._q = queue.Queue()
         self.phrase = ""
-        self.plan = None          # [(outil, arg, libellé)] en attente d'« envoie »
+        self.plan = None          # [(outil, arg, libellé)] en attente de « oui »
         self.lines = None         # lignes de la carte en haut
         self.title = ""
         self.show_until = -1e9
@@ -131,9 +131,9 @@ class Instructeur(OutilsMixin):
                 self._pending_raw = msg[3] if len(msg) > 3 else None
                 self.lines = [f"{i + 1}. {lbl}" for i, (_, _, lbl) in enumerate(self.plan)]
                 if not self.busy and all(o in DIRECT for o, _, _ in self.plan):
-                    self._start(core, t)          # ouvre, timer, rappel, volume, message, salon, chrono : direct
+                    self._start(core, t)          # ouvre, timer, rappel, volume, chrono : direct
                     continue
-                self.title, self.meta = "Dis « envoie » pour le faire", None
+                self.title, self.meta = "Dis « oui » pour le faire", None
                 self.show_until = t + CONFIRM_S
                 core.ask_confirm("instruction", t, CONFIRM_S)
             elif kind == "step":

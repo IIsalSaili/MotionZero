@@ -99,6 +99,10 @@ class CommandesMixin:
     def bypass_on(self, t):
         return self.mode != Mode.DISABLED and t < self.bypass_until
 
+    def _cmd_oui(self, word, t, acts):
+        """« oui » ne sert qu'à valider une instruction en attente (_v_confirm) : ailleurs, rien."""
+        return "OUI : RIEN A VALIDER"
+
     def _cmd_bypass(self, word, t, acts):
         """« iris bypass » : reconnaissance plus permissive (voir voice.BYPASS_*) ; redit, éteint ; seul après
         10 min sans commande. S'ajoute au mode focus sans le changer."""

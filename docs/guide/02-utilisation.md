@@ -18,7 +18,7 @@
 ## Page d'accueil
 
 Un menu étroit à gauche mène à trois sections ; la dernière ouverte est gardée d'un démarrage à l'autre (`parametres.json`). En bas du menu, **Fermer** (rouge).
-- **Maintenant** : image de la caméra, dernières commandes, mots utiles ici, capteurs, consommation sur une ligne.
+- **Accueil** : image de la caméra, dernières commandes, mots utiles ici, capteurs, consommation sur une ligne.
 - **Réglages** : une carte par réglage, rangée par groupe (Entrées, Voix et sons, Dépannage). Un clic passe au choix suivant. Les réglages sont décrits dans `reglages.py` : en ajouter un = une entrée du registre, son texte et son effet dans la boucle principale.
 - **Conso** : des graphes, un chiffre clé par carte : processeur et carte graphique (courbes Iris / PC sur la dernière minute), mémoire (barres, part d'Iris en vert), cœurs du processeur (une colonne chacun), fils les plus occupés ; état des modèles en haut. Rien n'est mesuré tant que la fenêtre est réduite ou cachée.
 
@@ -42,7 +42,7 @@ Si les « Effets d'animation » sont coupés dans Windows (Accessibilité > Effe
 
 ## Voix basse
 
-De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. La carte **Voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
+De 22 h à 7 h, Iris accepte une voix plus faible : la vérification qui écarte les mots de conversation devient moins stricte, mais les phrases longues restent refusées. La carte **Mode voix basse** de l'accueil passe de « le soir » à « toujours » puis « jamais ».
 
 ## Caméra
 

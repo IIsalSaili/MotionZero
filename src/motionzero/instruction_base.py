@@ -33,11 +33,11 @@ def is_help(phrase):
     return any(w in p for w in HELP_WORDS) and len(p) < 60
 
 
-# Faits sans « envoie » quand le plan ne contient qu'eux (choix de l'utilisateur, 17/11) : les commandes qui
-# existaient seules avant (ouvre, timer, rappel, volume, message, salon, chronomètre). Tout autre outil dans le
-# plan : « envoie » obligatoire pour l'ensemble.
-DIRECT = {"ouvre_app", "site", "timer", "rappel", "volume", "discord_message", "discord_salon", "chronometre"}
-CONFIRM_S = 10.0          # sans « envoie » dans ce temps : plan annulé (jamais lancé seul)
+# Faits sans « oui » quand le plan ne contient qu'eux (choix de l'utilisateur, 17/11) : les commandes qui
+# existaient seules avant (ouvre, rappel, volume). Tout autre outil dans le plan, Discord
+# compris (26/11) : « oui » obligatoire pour l'ensemble.
+DIRECT = {"ouvre_app", "site", "rappel", "volume"}   # 26/11 : timer et chronomètre redevenus des mots à part
+CONFIRM_S = 10.0          # sans « oui » dans ce temps : plan annulé (jamais lancé seul)
 MAX_STEPS = 8
 STEP_PAUSE_S = 0.8         # entre deux étapes : la fenêtre ouverte a le temps de passer devant
 SHOW_DONE_S = 8.0          # le compte rendu reste affiché ce temps
@@ -54,18 +54,24 @@ TOOLS = {
     "ferme_app": "ferme une application (arg : son nom)",
     "site": "ouvre un site par son nom ou son adresse (arg : ex. « mes mails », « leboncoin », « youtube.com »)",
     "recherche_web": "ouvre une recherche Google dans le navigateur (arg : les mots cherchés)",
-    "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche)",
-    "youtube_chaine": "ouvre directement la dernière vidéo publiée par une chaîne YouTube (arg : le nom de la chaîne)",
+    "youtube": "ouvre directement la 1re vidéo YouTube trouvée pour une recherche (arg : la recherche ; pour une vidéo "
+               "précise d'une chaîne : le nom de la chaîne puis le sujet)",
     "touche": "appuie sur une touche ou un raccourci (arg : ex. « entrée », « ctrl+t », « alt+tab », « f5 »)",
     "ecris": "écrit un texte là où se trouve le curseur (arg : le texte)",
     "volume": "règle le son du PC (arg : « 40 », « plus fort », « moins fort », « coupe », « remets »)",
     "discord": "micro Discord (arg : « coupe », « allume » ou « sourdine »)",
     "discord_salon": "te déplace dans un salon vocal Discord (arg : le nom du salon)",
     "discord_message": "envoie un message Discord par le bot (arg : « dans <salon ou personne>, <le message> »)",
-    "timer": "lance un compte à rebours (arg : la durée, ex. « 5 minutes »)",
+    "discord_raccroche": "quitte le salon vocal Discord, raccroche (arg vide)",
+    "discord_muet": "coupe ou rend le micro d'un membre sur le serveur Discord (arg : son nom)",
+    "discord_sourd": "rend sourd un membre sur le serveur Discord, ou lui rend le son (arg : son nom)",
+    "discord_deconnecte": "déconnecte un membre du salon vocal Discord (arg : son nom)",
+    "discord_kick": "expulse (kick) un membre du serveur Discord (arg : son nom)",
+    "discord_pseudo": "change le pseudo d'un membre Discord (arg : « nom: nouveau pseudo »)",
+    "discord_donne_role": "donne un rôle à un membre Discord (arg : « nom: rôle »)",
+    "discord_retire_role": "retire un rôle à un membre Discord (arg : « nom: rôle »)",
     "rappel": "crée un rappel, à valider ensuite (arg : la demande, ex. « demain 9 h appeler le médecin »)",
     "traducteur": "allume ou éteint les sous-titres traduits du son du PC (arg vide)",
-    "chronometre": "démarre le chronomètre, ou l'arrête s'il tourne (arg vide)",
     "attends": "attend quelques secondes (arg : nombre de secondes, 10 au plus)",
     # routines : une suite d'étapes enregistrée sous un nom, rejouée ensuite
     "routine": "lance une routine enregistrée (arg : son nom, parmi les routines connues)",
@@ -102,7 +108,7 @@ SYSTEM = (
     "l'assistant d'un utilisateur qui ne peut pas se servir de ses mains. Tu ne peux utiliser QUE ces outils :\n"
     + "\n".join(f"- {k} : {v}" for k, v in TOOLS.items()) +
     "\nRègles :\n"
-    "- Pour une vidéo YouTube, utilise youtube ou youtube_chaine directement (ils ouvrent eux-mêmes le navigateur) : "
+    "- Pour une vidéo YouTube, utilise youtube directement (il ouvre eux-mêmes le navigateur) : "
     "jamais ouvrir Chrome puis taper dans la barre.\n"
     "- Pour une vidéo déjà vue, utilise historique_video ; pour ouvrir un site, site avec son nom.\n"
     "- « crée la routine X : … » -> cree_routine X puis les étapes de la routine.\n"
@@ -125,6 +131,9 @@ SYSTEM = (
     "\"refus\": \"\"}\n"
     "« dis dans le salon blabla que le film commence à 20 h 30 » -> {\"etapes\": [{\"outil\": \"discord_message\", "
     "\"arg\": \"dans blabla, le film commence à 20 h 30\"}], \"refus\": \"\"}\n"
+    "« kick Paul » -> {\"etapes\": [{\"outil\": \"discord_kick\", \"arg\": \"Paul\"}], \"refus\": \"\"}\n"
+    "« donne le rôle chef à Paul » -> {\"etapes\": [{\"outil\": \"discord_donne_role\", \"arg\": \"Paul: chef\"}], "
+    "\"refus\": \"\"}\n"
     "- Pour un message Discord : UNE seule étape discord_message, le message recopié en entier, rien d'autre "
     "(pas de timer, pas de salon vocal).\n"
     "Exemples de refus :\n"
@@ -266,12 +275,11 @@ def check_step(outil, arg, app_names=None, ctx=None):
         if url is None:                      # inconnu : cherché sur internet au moment de l'ouvrir, puis retenu
             return outil, ("?", arg), f"Ouvrir {arg} (cherché sur internet)"
         return outil, url, f"Ouvrir {arg if ' ' in arg or '.' not in arg else url}"
-    if outil in ("recherche_web", "youtube", "youtube_chaine", "rappel"):
+    if outil in ("recherche_web", "youtube", "rappel"):
         if not arg:
             raise PlanError(f"{outil} sans texte")
         return outil, arg, {"recherche_web": f"Rechercher « {arg} » sur Google",
                             "youtube": f"YouTube : 1re vidéo pour « {arg} »",
-                            "youtube_chaine": f"YouTube : dernière vidéo de « {arg} »",
                             "rappel": f"Rappel « {arg} » (à valider)"}[outil]
     if outil == "touche":
         keys = parse_keys(arg)
@@ -297,15 +305,8 @@ def check_step(outil, arg, app_names=None, ctx=None):
         if act is None:
             raise PlanError(f"discord : {arg} ?")
         return outil, act, f"Discord : {arg.lower()}"
-    if outil == "timer":
-        from .timers import parse_duration
-        if not parse_duration(arg):
-            raise PlanError(f"durée incomprise : {arg}")
-        return outil, arg, f"Timer {arg}"
     if outil == "traducteur":
         return outil, "", "Traducteur (allume / éteint)"
-    if outil == "chronometre":
-        return outil, "", "Chronomètre (démarre / arrête)"
     r = _check_more(outil, arg, app_names, ctx or {})
     if r is not None:
         return r
@@ -392,4 +393,36 @@ def _check_more(outil, arg, app_names, ctx):
         if not re.match(r"^(dans|à|a|pour)\s+\S.*,\s*\S", arg, re.I):
             raise PlanError(f"message incompris : {arg} (dans <salon>, <message>)")
         return outil, arg, f"Discord : envoyer « {arg} »"
+    if outil in MEMBER_TOOLS:
+        return _check_member(outil, arg)
     return None
+
+
+# outil -> (action envoyée au bot, libellé) ; {n} : le membre, {v} : la valeur (pseudo, rôle)
+MEMBER_TOOLS = {
+    "discord_raccroche": ("hangup", "Discord : raccrocher"),
+    "discord_muet": ("mute", "Discord : micro de {n} (coupe / rend)"),
+    "discord_sourd": ("deafen", "Discord : son de {n} (coupe / rend)"),
+    "discord_deconnecte": ("disconnect", "Discord : déconnecter {n} du vocal"),
+    "discord_kick": ("kick", "Discord : expulser {n} du serveur"),
+    "discord_pseudo": ("nick", "Discord : pseudo de {n} -> « {v} »"),
+    "discord_donne_role": ("role_add", "Discord : donner le rôle « {v} » à {n}"),
+    "discord_retire_role": ("role_remove", "Discord : retirer le rôle « {v} » à {n}"),
+}
+
+
+def _check_member(outil, arg):
+    """(outil, ordre pour le bot, libellé) ; le bot cherche lui-même le membre et le rôle."""
+    from .outils import split_pair
+    action, label = MEMBER_TOOLS[outil]
+    if action == "hangup":
+        return outil, {"action": action}, label
+    who, value = arg.strip(" ."), ""
+    if action in ("nick", "role_add", "role_remove"):
+        pair = split_pair(arg, (":", "=", "|"))
+        if not pair or not pair[0].strip() or not pair[1].strip():
+            raise PlanError(f"{outil} : il faut « nom: {'pseudo' if action == 'nick' else 'rôle'} »")
+        who, value = pair[0].strip(" ."), pair[1].strip(" .")
+    if not who:
+        raise PlanError(f"{outil} : il manque le nom")
+    return outil, {"action": action, "who": who, "value": value}, label.format(n=who, v=value)
