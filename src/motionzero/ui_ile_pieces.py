@@ -1,8 +1,8 @@
 """Île en haut de l'écran, panneau candidature, calendrier, aide, rappels : dessin et calculs purs (découpé de ui.py, #52) : méthodes de _IslandPainter (PiecesMixin, découpé de ui_ile.py, #52)."""
 
 from PySide6.QtCore import QPointF, QRect, QRectF, Qt
-from PySide6.QtGui import QColor, QFontMetrics
-from .ui_ile_base import CORNER_MARGIN, PANEL_MARGIN, PANEL_W, REMINDER_W, CLOCK_BIG, CLOCK_GAP, ICON, ISLAND_H, ISLAND_TOP, ISLET, ISLET_GAP, TICKER_H, TICKER_W, clock_anim
+from PySide6.QtGui import QColor, QFontMetrics, QPainterPath
+from .ui_ile_base import CORNER_PAD, CORNER_RADIUS, CORNER_ROW, CORNER_W, PANEL_MARGIN, PANEL_W, REMINDER_W, CLOCK_BIG, CLOCK_GAP, ICON, ISLAND_H, ISLAND_TOP, ISLET, ISLET_GAP, TICKER_H, TICKER_W, clock_anim
 from .ui_ile_base2 import paint_logo, ticker_offset
 
 
@@ -69,16 +69,57 @@ class PiecesMixin:
             self._paint_alttab(p, ty)
 
     def _paint_corner(self, p):
-        """Coin haut droit (26/11) : timer, chronomètre, puis le rappel déclenché ; à gauche du panneau
-        candidature s'il est ouvert. Rien ici ne cache l'instruction ou la réponse du centre."""
-        right = self.width - CORNER_MARGIN - (PANEL_W + 2 * PANEL_MARGIN if getattr(self, "panel", None) else 0)
-        y = ISLAND_TOP + (ISLET - ISLAND_H) / 2
-        for text, countdown in getattr(self, "timer_pills", []):
-            w = self._pill_width(text)
-            self._paint_timer_pill(p, right - w, y, text, countdown)
-            y += ISLAND_H + CLOCK_GAP
-        if getattr(self, "corner_rem", None):
-            self._paint_reminder(p, "current", self.corner_rem, at=(right - REMINDER_W, y))
+        """Coin haut droit (27/11) : un seul bloc collé aux bords de l'écran (angle carré contre le coin,
+        seul l'angle bas gauche arrondi) ; lignes timer et chronomètre, puis le rappel déclenché.
+        À gauche du panneau candidature s'il est ouvert. Rien ici ne cache le centre."""
+        pills = getattr(self, "timer_pills", [])
+        rem = getattr(self, "corner_rem", None)
+        if not pills and not rem:
+            return
+        panel = bool(getattr(self, "panel", None))
+        right = self.width - (PANEL_W + 2 * PANEL_MARGIN if panel else 0)
+        fm = QFontMetrics(self.font_msg)
+        cw = CORNER_W if rem else 22 + ICON + 10 + max(fm.horizontalAdvance(t) for t, _ in pills) + 28
+        x = right - cw
+        rows = len(pills) * CORNER_ROW + (CORNER_PAD if pills else 0)
+        rem_h, rem_bg = self._paint_reminder(p, "current", rem, width=CORNER_W, measure=True) if rem else (0, None)
+        h = rows + rem_h
+        r = CORNER_RADIUS
+        path = QPainterPath()
+        path.moveTo(x, 0)
+        path.lineTo(right, 0)
+        if panel:                       # pas contre le bord droit : les deux angles du bas arrondis
+            path.lineTo(right, h - r)
+            path.quadTo(right, h, right - r, h)
+        else:
+            path.lineTo(right, h)
+        path.lineTo(x + r, h)
+        path.quadTo(x, h, x, h - r)
+        path.closeSubpath()
+        p.save()
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QColor(0, 0, 0, 240))
+        p.drawPath(path)
+        p.setClipPath(path)
+        if rem:
+            p.fillRect(QRectF(x, rows, CORNER_W, rem_h), rem_bg)
+        y = CORNER_PAD / 2
+        for text, countdown in pills:
+            icon = self.icons.get("timer")
+            if icon is not None:
+                icon.render(p, QRectF(x + 22, y + (CORNER_ROW - ICON) / 2, ICON, ICON))
+            p.setPen(QColor(150, 180, 255) if countdown else QColor(255, 255, 255))
+            p.setFont(self.font_msg)
+            room = int(cw - 22 - ICON - 10 - 22)
+            p.drawText(QRectF(x + 22 + ICON + 10, y, room, CORNER_ROW), Qt.AlignmentFlag.AlignVCenter,
+                       fm.elidedText(text, Qt.TextElideMode.ElideRight, room))
+            y += CORNER_ROW
+        if pills and rem:
+            p.setPen(QColor(255, 255, 255, 40))
+            p.drawLine(QPointF(x, rows), QPointF(right, rows))
+        p.restore()
+        if rem:
+            self._paint_reminder(p, "current", rem, at=(x, rows), width=CORNER_W, flush=True)
 
     def _pill_width(self, text):
         return 2 * 18 + ICON + 10 + QFontMetrics(self.font_msg).horizontalAdvance(text)

@@ -5,7 +5,7 @@ import random as _random
 
 from PySide6.QtCore import QRect
 from PySide6.QtGui import QFont, QFontMetrics, QPixmap
-from .ui_ile_base import (ALARM_RED, ANSWER_MAX_H, ANSWER_W, BAND_HALF_W, BLINK_EVERY, BLINK_S, BLUE, CAL_H, CAL_W, CAND, CLOCK_ANIM_S, CLOCK_BIG, CLOCK_GAP, DAYS, DISCORD_RED, EYE_AT, EYE_IN_ISLET, EYE_W, GAUGE_MARGIN, GAUGE_W, GHOST_S, GREEN, HELP_H, HELP_W, ICON, ISLAND_FADED, ISLAND_FADE_S, ISLAND_H, ISLAND_MAX_W, ISLAND_TOP, ISLET, ISLET_GAP, MIN_PT, MODE_NAMES, CORNER_MARGIN, OK_FLASH_S, ORANGE, PANEL_BOTTOM, PANEL_MARGIN, PANEL_W, REMINDER_W, RING_BLINK_S, RING_BY_MODE, RING_DEFAULT, SUBS_BOTTOM, SUBS_H, SUBS_W_FRAC, TICKER_H, TICKER_PAUSE_S, TICKER_SPEED, TICKER_W, TOAST_S, VOL_H, VOL_MARGIN, VOL_W, _FONT_DIR, _ICON_DIR, _LOGO_DIR, _ease, _ghost_box, chip_rows, clock_anim, clock_text, discord_icons, fit_font, gauge_geometry, ghost_geometry, islet_logo, islet_ring, paint_subs, paint_volume, reminder_texts, reminder_view, subs_rect, subs_text, volume_fill, volume_rect, windows_animations)  # noqa: F401
+from .ui_ile_base import (ALARM_RED, ANSWER_MAX_H, ANSWER_W, BAND_HALF_W, BLINK_EVERY, BLINK_S, BLUE, CAL_H, CAL_W, CAND, CLOCK_ANIM_S, CLOCK_BIG, CLOCK_GAP, DAYS, DISCORD_RED, EYE_AT, EYE_IN_ISLET, EYE_W, GAUGE_MARGIN, GAUGE_W, GHOST_S, GREEN, HELP_H, HELP_W, ICON, ISLAND_FADED, ISLAND_FADE_S, ISLAND_H, ISLAND_MAX_W, ISLAND_TOP, ISLET, ISLET_GAP, MIN_PT, MODE_NAMES, CORNER_W, OK_FLASH_S, ORANGE, PANEL_BOTTOM, PANEL_MARGIN, PANEL_W, REMINDER_W, RING_BLINK_S, RING_BY_MODE, RING_DEFAULT, SUBS_BOTTOM, SUBS_H, SUBS_W_FRAC, TICKER_H, TICKER_PAUSE_S, TICKER_SPEED, TICKER_W, TOAST_S, VOL_H, VOL_MARGIN, VOL_W, _FONT_DIR, _ICON_DIR, _LOGO_DIR, _ease, _ghost_box, chip_rows, clock_anim, clock_text, discord_icons, fit_font, gauge_geometry, ghost_geometry, islet_logo, islet_ring, paint_subs, paint_volume, reminder_texts, reminder_view, subs_rect, subs_text, volume_fill, volume_rect, windows_animations)  # noqa: F401
 from .ui_ile_base2 import (APP_LABELS, CAM_BLINK_S, CAM_BOX, CAM_MARGIN, CLAUDE_ORANGE, FLAG_ORDER, HomeLogo, QUOTA_MARGIN, app_label, cam_blink, island_text, load_fonts, paint_claude_logo, paint_logo, ticker_offset)  # noqa: F401
 from .ui_ile_panneau import PanneauMixin
 from .ui_ile_cartes import CartesMixin
@@ -76,7 +76,7 @@ class _IslandPainter(PanneauMixin, CartesMixin, CalendrierMixin, PiecesMixin):
         corner = bool(getattr(self, "corner_rem", None) or getattr(self, "timer_pills", None))
         if corner or getattr(self, "corner_gone", False):      # coin haut droit (ou à effacer)
             self.corner_gone = corner
-            cw = REMINDER_W + 2 * CORNER_MARGIN + (PANEL_W + 2 * PANEL_MARGIN if getattr(self, "panel", None) else 0)
+            cw = CORNER_W + (PANEL_W + 2 * PANEL_MARGIN if getattr(self, "panel", None) else 0)
             r = r.united(QRect(int(self.width - cw), 0, int(cw), int(ISLAND_TOP + 3 * (ISLAND_H + CLOCK_GAP) + ANSWER_MAX_H)))
         if getattr(self, "panel", None) or getattr(self, "panel_gone", False):   # panneau candidature (ou à effacer)
             self.panel_gone = False

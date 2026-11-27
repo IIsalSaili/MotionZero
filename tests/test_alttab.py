@@ -148,5 +148,7 @@ def test_coin_haut_droit_timer_et_rappel():
     p.paint(painter)
     painter.end()
     assert img.pixel(1920 - 30, 40) != 0xFF808080                   # quelque chose dans le coin
+    assert img.pixel(1919, 0) != 0xFF808080                         # 27/11 : collé aux bords, rien autour
+    assert img.pixel(1920 - 421, 5) == 0xFF808080
     p.update({"mode": "NEUTRE"}, 2.0)                               # plus rien : zone du coin effacée une fois
     assert p.rect().right() >= 1919 and p.corner_rem is None

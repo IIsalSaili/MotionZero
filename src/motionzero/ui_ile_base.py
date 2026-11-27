@@ -67,7 +67,10 @@ EYE_IN_ISLET = 0.32      # zoom choisi (« B ») : la paume remplit le cercle, l
 
 
 REMINDER_W = 560
-CORNER_MARGIN = 16      # coin haut droit : timer, chronomètre, rappel déclenché (26/11)
+CORNER_W = 420          # coin haut droit : bloc collé aux bords (timer, chronomètre, rappel ; 27/11)
+CORNER_ROW = 40         # hauteur d'une ligne timer ou chronomètre
+CORNER_PAD = 12         # marge haute et basse des lignes
+CORNER_RADIUS = 24      # angle bas gauche arrondi
 PANEL_W = 452            # « iris candidature » : panneau à droite (maquette A1, 21/11)
 PANEL_MARGIN = 16
 PANEL_BOTTOM = 64        # au-dessus de la barre des tâches
