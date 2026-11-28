@@ -15,7 +15,10 @@ from .config import load_config
 from .core import Core
 from .hand import HandTracker
 from .output import Controller, FakeBackend, SendInputBackend, primary_screen, set_dpi_aware
+from PySide6.QtCore import QTimer
+
 from .sounds import Sounds
+from .ui_boutons import KEEP_ON_TOP_MS, raise_topmost
 from .quota import Quota, read_shown
 from .ui import (Bridge, EyeButton, RepairButton, GlassOverlay, KeySink, PreviewWindow, QApplication, StopButton, set_capture_visible)
 
@@ -267,6 +270,10 @@ def main(argv=None):
         log.info("overlay %s dans les partages d'ecran", "visible" if visible else "masque")
 
     eye_btn.toggled.connect(show_in_captures)
+    on_top = (glass, cursor_glass, stop_btn, eye_btn, repair_btn)
+    top_timer = QTimer()                       # l'overlay reste au-dessus de tout (Windows peut le faire redescendre)
+    top_timer.timeout.connect(lambda: raise_topmost(on_top))
+    top_timer.start(KEEP_ON_TOP_MS)
     bridge.done.connect(qt.quit)
 
     def hide_all():
@@ -306,6 +313,7 @@ def main(argv=None):
     from . import vscode as _vs
     from .app_outils import make_tray
     view_win.reopen_requested.connect(view_win.reopen)
+    view_win.reopen_requested.connect(lambda: QTimer.singleShot(200, lambda: raise_topmost(on_top)))   # l'accueil ne passe pas devant l'île
     _vs.HOME_HOOK = view_win.reopen_requested.emit       # signal Qt : sûr depuis le fil de la boucle principale
     tray = make_tray(qt, view_win.reopen)                # icône près de l'heure : un clic rouvre l'accueil
     stop_btn.triggered.connect(lambda: emergency("bouton STOP"))
