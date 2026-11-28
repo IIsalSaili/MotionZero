@@ -19,6 +19,10 @@ _u32.GetWindowLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int]
 _u32.SetWindowLongPtrW.restype = ctypes.c_ssize_t
 _u32.SetWindowLongPtrW.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_ssize_t]
 _u32.SetWindowDisplayAffinity.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+_u32.SetWindowPos.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint]
+_HWND_TOPMOST = ctypes.c_void_p(-1)
+_SWP_KEEP = 0x0001 | 0x0002 | 0x0010 | 0x0200   # ni taille, ni position, ni activation, ni ordre du propriétaire
+KEEP_ON_TOP_MS = 1500   # Windows peut faire redescendre l'overlay : on le remonte à ce rythme
 
 LOUPE_D = 200      # diamètre de la loupe (px), toujours affichée en mode souris
 LOUPE_ZOOM = 2.5
@@ -38,11 +42,28 @@ def apply_overlay_style(widget, click_through, in_captures=True):
     dans les captures et partages (par défaut visible, demande de l'utilisateur)."""
     hwnd = ctypes.c_void_p(int(widget.winId()))
     ex = _u32.GetWindowLongPtrW(hwnd, _GWL_EXSTYLE)
-    ex |= _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW | _WS_EX_TOPMOST
+    ex |= _WS_EX_LAYERED | _WS_EX_NOACTIVATE | _WS_EX_TOOLWINDOW
     if click_through:
         ex |= _WS_EX_TRANSPARENT
     _u32.SetWindowLongPtrW(hwnd, _GWL_EXSTYLE, ex)
     set_capture_visible(widget, in_captures)
+    raise_topmost([widget])
+
+
+def raise_topmost(widgets):
+    """Remet les fenêtres visibles au-dessus de tout, sans focus. Le style WS_EX_TOPMOST seul ne suffit pas :
+    Windows peut les faire redescendre parmi les fenêtres normales (vu le 28/11 : VS Code devant l'île).
+    Renvoie le nombre de fenêtres remontées ; un échec n'arrête jamais Iris."""
+    n = 0
+    for w in widgets:
+        try:
+            if not w.isVisible():
+                continue
+            if _u32.SetWindowPos(ctypes.c_void_p(int(w.winId())), _HWND_TOPMOST, 0, 0, 0, 0, _SWP_KEEP):
+                n += 1
+        except Exception:                  # fenêtre détruite, appel Windows refusé : on réessaie au tour suivant
+            pass
+    return n
 
 
 # --- Étape 3 : bouton STOP, petit overlay cliquable en bas à droite -----------------------------
